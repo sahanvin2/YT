@@ -1,0 +1,36 @@
+.app {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.app-content {
+  display: flex;
+  margin-top: 60px;
+  min-height: calc(100vh - 60px);
+}
+
+.main-content {
+  flex: 1;
+  transition: margin-left 0.3s ease;
+  overflow-x: hidden;
+}
+
+.main-content.sidebar-open {
+  margin-left: 240px;
+}
+
+.main-content.sidebar-closed {
+  margin-left: 72px;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .main-content.sidebar-open {
+    margin-left: 200px;
+  }
+
+  .main-content.sidebar-closed {
+    margin-left: 0;
+  }
+}

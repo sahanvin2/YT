@@ -1,0 +1,33 @@
+{
+  "name": "movia-video-platform",
+  "version": "1.0.0",
+  "description": "A full-featured video hosting platform like YouTube",
+  "main": "server.js",
+  "scripts": {
+    "start": "node backend/server.js",
+    "server": "nodemon backend/server.js",
+    "client": "npm start --prefix client",
+    "dev": "concurrently \"npm run server\" \"npm run client\"",
+    "build": "npm install && cd client && npm install && npm run build"
+  },
+  "keywords": ["video", "streaming", "mern", "youtube-clone"],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "express": "^4.18.2",
+    "mongoose": "^7.5.0",
+    "dotenv": "^16.3.1",
+    "bcryptjs": "^2.4.3",
+    "jsonwebtoken": "^9.0.2",
+    "cors": "^2.8.5",
+    "multer": "^1.4.5-lts.1",
+    "express-fileupload": "^1.4.0",
+    "express-validator": "^7.0.1",
+    "cookie-parser": "^1.4.6",
+    "morgan": "^1.10.0"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.1",
+    "concurrently": "^8.2.1"
+  }
+}

@@ -1,0 +1,28 @@
+.subscribe-btn {
+  padding: 10px 16px;
+  background-color: var(--primary-color);
+  color: white;
+  border-radius: 20px;
+  font-weight: 600;
+  font-size: 14px;
+  transition: all 0.2s;
+  min-width: 110px;
+}
+
+.subscribe-btn:hover {
+  background-color: #cc0000;
+}
+
+.subscribe-btn.subscribed {
+  background-color: rgba(255, 255, 255, 0.1);
+  color: var(--text-primary);
+}
+
+.subscribe-btn.subscribed:hover {
+  background-color: rgba(255, 255, 255, 0.2);
+}
+
+.subscribe-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
