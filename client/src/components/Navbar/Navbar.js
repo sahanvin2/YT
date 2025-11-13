@@ -1,12 +1,13 @@
 import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { FiSearch, FiMenu, FiVideo, FiUser, FiLogOut } from 'react-icons/fi';
+import { FiSearch, FiMenu, FiVideo, FiUser, FiLogOut, FiX } from 'react-icons/fi';
 import { useAuth } from '../../context/AuthContext';
 import './Navbar.css';
 
 const Navbar = ({ toggleSidebar }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [showUserMenu, setShowUserMenu] = useState(false);
+  const [mobileSearchOpen, setMobileSearchOpen] = useState(false);
   const { user, isAuthenticated, logout } = useAuth();
   const navigate = useNavigate();
 
@@ -36,7 +37,7 @@ const Navbar = ({ toggleSidebar }) => {
         </Link>
       </div>
 
-      <form className="navbar-search" onSubmit={handleSearch}>
+      <form className={`navbar-search ${mobileSearchOpen ? 'open' : ''}`} onSubmit={handleSearch}>
         <input
           type="text"
           placeholder="Search videos..."
@@ -46,9 +47,24 @@ const Navbar = ({ toggleSidebar }) => {
         <button type="submit" className="search-btn">
           <FiSearch size={20} />
         </button>
+        <button
+          type="button"
+          className="search-close"
+          onClick={() => setMobileSearchOpen(false)}
+          aria-label="Close search"
+        >
+          <FiX size={18} />
+        </button>
       </form>
 
       <div className="navbar-right">
+        <button
+          className="search-toggle"
+          onClick={() => setMobileSearchOpen(!mobileSearchOpen)}
+          aria-label="Open search"
+        >
+          <FiSearch size={20} />
+        </button>
         {isAuthenticated ? (
           <>
             <Link to="/upload" className="upload-btn btn btn-primary">

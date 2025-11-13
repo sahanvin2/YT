@@ -9,6 +9,10 @@ import Login from './pages/Auth/Login';
 import Register from './pages/Auth/Register';
 import Upload from './pages/Upload/Upload';
 import Channel from './pages/Channel/Channel';
+import Profile from './pages/Profile/Profile';
+import History from './pages/Library/History';
+import Liked from './pages/Library/Liked';
+import Subscriptions from './pages/Library/Subscriptions';
 import './App.css';
 
 function App() {
@@ -33,12 +37,13 @@ function App() {
                 <Route path="/register" element={<Register />} />
                 <Route path="/upload" element={<Upload />} />
                 <Route path="/channel/:id" element={<Channel />} />
-                <Route path="/trending" element={<Home />} />
-                <Route path="/category/:category" element={<Home />} />
-                <Route path="/search" element={<Home />} />
-                <Route path="/history" element={<Home />} />
-                <Route path="/liked" element={<Home />} />
-                <Route path="/subscriptions" element={<Home />} />
+                <Route path="/trending" element={<Home mode="trending" />} />
+                <Route path="/category/:category" element={<Home mode="category" />} />
+                <Route path="/search" element={<Home mode="search" />} />
+                <Route path="/history" element={<History />} />
+                <Route path="/liked" element={<Liked />} />
+                <Route path="/subscriptions" element={<Subscriptions />} />
+                <Route path="/profile" element={<Profile />} />
               </Routes>
             </main>
           </div>

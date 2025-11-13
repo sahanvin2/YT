@@ -29,3 +29,5 @@ export const getUserVideos = (id, params) => axios.get(`${API_URL}/users/${id}/v
 export const getSubscriptions = () => axios.get(`${API_URL}/users/subscriptions`);
 export const getWatchHistory = () => axios.get(`${API_URL}/users/history`);
 export const addToHistory = (videoId) => axios.post(`${API_URL}/users/history/${videoId}`);
+export const getLikedVideos = () => axios.get(`${API_URL}/users/liked`);
+export const getSubscriptionVideos = (params) => axios.get(`${API_URL}/users/subscriptions/videos`, { params });

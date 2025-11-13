@@ -4,10 +4,12 @@ import { getUserProfile, getUserVideos } from '../../utils/api';
 import { formatViews } from '../../utils/helpers';
 import VideoCard from '../../components/VideoCard/VideoCard';
 import SubscribeButton from '../../components/SubscribeButton/SubscribeButton';
+import { useAuth } from '../../context/AuthContext';
 import './Channel.css';
 
 const Channel = () => {
   const { id } = useParams();
+  const { user, isAuthenticated } = useAuth();
   const [channel, setChannel] = useState(null);
   const [videos, setVideos] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -74,10 +76,13 @@ const Channel = () => {
               <p className="channel-description">{channel.channelDescription}</p>
             )}
           </div>
-          <SubscribeButton
-            channelId={id}
-            subscriberCount={channel.subscribers?.length || 0}
-          />
+          {isAuthenticated && user.id !== id && (
+            <SubscribeButton
+              channelId={id}
+              initialSubscribed={channel.subscribers?.some(s => s._id === user.id)}
+              subscriberCount={channel.subscribers?.length || 0}
+            />
+          )}
         </div>
       </div>
 

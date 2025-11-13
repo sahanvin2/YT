@@ -1,0 +1,8 @@
+.library-page { padding: 20px; }
+.library-page h2 { margin-bottom: 16px; }
+.videos-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 16px; }
+.channels-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 16px; }
+.channel-card { display: flex; align-items: center; gap: 12px; padding: 12px; border: 1px solid var(--border-color); border-radius: 10px; background: var(--secondary-color); text-decoration: none; color: var(--text-primary); }
+.channel-card img { width: 48px; height: 48px; border-radius: 50%; object-fit: cover; }
+.channel-info { display: flex; flex-direction: column; }
+.no-content { padding: 20px; text-align: center; color: var(--text-secondary); }

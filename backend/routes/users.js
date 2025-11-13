@@ -6,14 +6,18 @@ const {
   getUserVideos,
   getSubscriptions,
   getWatchHistory,
-  addToHistory
+  addToHistory,
+  getLikedVideos
+  getSubscriptionVideos
 } = require('../controllers/userController');
 const { protect } = require('../middleware/auth');
 
 const router = express.Router();
 
 router.get('/subscriptions', protect, getSubscriptions);
+router.get('/subscriptions/videos', protect, getSubscriptionVideos);
 router.get('/history', protect, getWatchHistory);
+router.get('/liked', protect, getLikedVideos);
 router.post('/history/:videoId', protect, addToHistory);
 
 router.route('/:id')

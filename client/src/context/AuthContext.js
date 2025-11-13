@@ -28,7 +28,11 @@ export const AuthProvider = ({ children }) => {
   const loadUser = async () => {
     try {
       const res = await axios.get('/api/auth/me');
-      setUser(res.data.data);
+      const raw = res.data.data;
+      if (raw) {
+        const normalized = { ...raw, id: raw.id || raw._id };
+        setUser(normalized);
+      }
     } catch (error) {
       console.error('Error loading user:', error);
       localStorage.removeItem('token');
@@ -45,7 +49,7 @@ export const AuthProvider = ({ children }) => {
       localStorage.setItem('token', res.data.token);
       axios.defaults.headers.common['Authorization'] = `Bearer ${res.data.token}`;
       setToken(res.data.token);
-      setUser(res.data.user);
+      setUser({ ...res.data.user, id: res.data.user.id || res.data.user._id });
       return { success: true };
     } catch (error) {
       return {
@@ -61,7 +65,7 @@ export const AuthProvider = ({ children }) => {
       localStorage.setItem('token', res.data.token);
       axios.defaults.headers.common['Authorization'] = `Bearer ${res.data.token}`;
       setToken(res.data.token);
-      setUser(res.data.user);
+      setUser({ ...res.data.user, id: res.data.user.id || res.data.user._id });
       return { success: true };
     } catch (error) {
       return {
@@ -84,7 +88,8 @@ export const AuthProvider = ({ children }) => {
     register,
     login,
     logout,
-    isAuthenticated: !!user
+    isAuthenticated: !!user,
+    refreshUser: loadUser
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

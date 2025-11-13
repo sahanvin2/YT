@@ -75,6 +75,16 @@
   background-color: var(--border-color);
 }
 
+.search-close {
+  display: none;
+  margin-left: 8px;
+  padding: 8px;
+  background: none;
+  color: var(--text-primary);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+}
+
 .navbar-right {
   display: flex;
   align-items: center;
@@ -167,9 +177,19 @@
 @media (max-width: 480px) {
   .navbar-search {
     display: none;
+    position: absolute;
+    left: 0; right: 0; top: 60px;
+    padding: 10px;
+    background: var(--secondary-color);
+    border-bottom: 1px solid var(--border-color);
+    z-index: 1001;
   }
+  .navbar-search.open { display: flex; }
+  .search-close { display: inline-flex; }
 
   .navbar-left {
     gap: 10px;
   }
+
+  .search-toggle { display: inline-flex; background: none; color: var(--text-primary); }
 }

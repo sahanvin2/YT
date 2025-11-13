@@ -1,26 +1,48 @@
 import React, { useState, useEffect } from 'react';
+import { useLocation, useParams } from 'react-router-dom';
 import VideoCard from '../../components/VideoCard/VideoCard';
-import { getVideos } from '../../utils/api';
+import { getVideos, getTrendingVideos, searchVideos } from '../../utils/api';
 import './Home.css';
 
-const Home = () => {
+const Home = ({ mode }) => {
   const [videos, setVideos] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [page, setPage] = useState(1);
   const [hasMore, setHasMore] = useState(true);
+  const location = useLocation();
+  const { category } = useParams();
 
   useEffect(() => {
-    fetchVideos();
+    // Reset when mode or params change
+    setVideos([]);
+    setPage(1);
+    setHasMore(true);
+    fetchVideos(1, true);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [mode, category, location.search]);
 
-  const fetchVideos = async () => {
+  const fetchVideos = async (pageToLoad = page, replace = false) => {
     try {
       setLoading(true);
-      const res = await getVideos({ page, limit: 12 });
-      setVideos(res.data.data);
-      setHasMore(res.data.currentPage < res.data.totalPages);
+      let res;
+      if (mode === 'trending') {
+        res = await getTrendingVideos();
+      } else if (mode === 'category') {
+        res = await getVideos({ page: pageToLoad, limit: 12, category });
+      } else if (mode === 'search') {
+        const q = new URLSearchParams(location.search).get('q') || '';
+        res = await searchVideos(q, { page: pageToLoad, limit: 12 });
+      } else {
+        res = await getVideos({ page: pageToLoad, limit: 12 });
+      }
+      const nextVideos = res.data.data || res.data; // trending returns data only
+      setVideos(replace ? nextVideos : [...videos, ...nextVideos]);
+      if (res.data?.currentPage && res.data?.totalPages) {
+        setHasMore(res.data.currentPage < res.data.totalPages);
+      } else {
+        setHasMore(false);
+      }
       setError('');
     } catch (err) {
       setError('Failed to load videos');
@@ -33,10 +55,8 @@ const Home = () => {
   const loadMore = async () => {
     try {
       const nextPage = page + 1;
-      const res = await getVideos({ page: nextPage, limit: 12 });
-      setVideos([...videos, ...res.data.data]);
+      await fetchVideos(nextPage);
       setPage(nextPage);
-      setHasMore(res.data.currentPage < res.data.totalPages);
     } catch (err) {
       console.error(err);
     }

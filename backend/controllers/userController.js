@@ -176,6 +176,39 @@ exports.getSubscriptions = async (req, res, next) => {
   }
 };
 
+// @desc    Get videos from subscribed channels
+// @route   GET /api/users/subscriptions/videos
+// @access  Private
+exports.getSubscriptionVideos = async (req, res, next) => {
+  try {
+    const user = await User.findById(req.user.id).select('subscribedTo');
+    const { page = 1, limit = 12 } = req.query;
+    const videos = await Video.find({
+      user: { $in: user.subscribedTo },
+      visibility: 'public'
+    })
+      .populate('user', 'username avatar channelName')
+      .sort({ createdAt: -1 })
+      .limit(limit * 1)
+      .skip((page - 1) * limit);
+
+    const count = await Video.countDocuments({
+      user: { $in: user.subscribedTo },
+      visibility: 'public'
+    });
+
+    res.status(200).json({
+      success: true,
+      data: videos,
+      totalPages: Math.ceil(count / limit),
+      currentPage: page,
+      total: count
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
 // @desc    Get watch history
 // @route   GET /api/users/history
 // @access  Private
@@ -228,6 +261,25 @@ exports.addToHistory = async (req, res, next) => {
     res.status(200).json({
       success: true,
       data: {}
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+// @desc    Get liked videos for current user
+// @route   GET /api/users/liked
+// @access  Private
+exports.getLikedVideos = async (req, res, next) => {
+  try {
+    const user = await User.findById(req.user.id).select('likedVideos');
+    const videos = await Video.find({ _id: { $in: user.likedVideos } })
+      .populate('user', 'username avatar channelName')
+      .sort({ createdAt: -1 });
+
+    res.status(200).json({
+      success: true,
+      data: videos
     });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
