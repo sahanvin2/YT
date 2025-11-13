@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { getSubscriptions, getSubscriptionVideos } from '../../utils/api';
+import VideoCard from '../../components/VideoCard/VideoCard';
 import { Link } from 'react-router-dom';
 import './Library.css';
 
