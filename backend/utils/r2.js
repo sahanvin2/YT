@@ -1,5 +1,11 @@
-const { S3Client, DeleteObjectCommand } = require('@aws-sdk/client-s3');
-const { Upload } = require('@aws-sdk/lib-storage');
+let S3Client, DeleteObjectCommand; // lazy require to allow startup without SDK present
+let Upload;
+try {
+  ({ S3Client, DeleteObjectCommand } = require('@aws-sdk/client-s3'));
+  ({ Upload } = require('@aws-sdk/lib-storage'));
+} catch (e) {
+  console.warn('R2 SDK modules missing; R2 features disabled until dependencies installed.');
+}
 const fs = require('fs');
 const path = require('path');
 
@@ -20,14 +26,24 @@ const R2_PUBLIC_APPEND_BUCKET = process.env.R2_PUBLIC_APPEND_BUCKET; // 'true' |
 // - or custom domain via CF; for S3 API we use the r2.cloudflarestorage.com endpoint
 const R2_ENDPOINT = process.env.R2_ENDPOINT || (R2_ACCOUNT_ID ? `https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com` : undefined);
 
-const s3 = new S3Client({
-  region: 'auto',
-  endpoint: required('R2_ENDPOINT', R2_ENDPOINT),
-  credentials: {
-    accessKeyId: required('R2_ACCESS_KEY_ID', R2_ACCESS_KEY_ID),
-    secretAccessKey: required('R2_SECRET_ACCESS_KEY', R2_SECRET_ACCESS_KEY)
+let s3;
+function initClient() {
+  if (s3 || !S3Client) return s3;
+  // Ensure all required env vars exist before creating client
+  if (!R2_ENDPOINT || !R2_ACCESS_KEY_ID || !R2_SECRET_ACCESS_KEY || !R2_BUCKET || !R2_PUBLIC_BASE) {
+    console.warn('R2 environment incomplete; uploads will be skipped.');
+    return undefined;
   }
-});
+  s3 = new S3Client({
+    region: 'auto',
+    endpoint: R2_ENDPOINT,
+    credentials: {
+      accessKeyId: R2_ACCESS_KEY_ID,
+      secretAccessKey: R2_SECRET_ACCESS_KEY
+    }
+  });
+  return s3;
+}
 
 function publicUrl(key) {
   const base = required('R2_PUBLIC_BASE', R2_PUBLIC_BASE).replace(/\/$/, '');
@@ -41,10 +57,12 @@ function publicUrl(key) {
 }
 
 async function uploadBuffer(buffer, key, contentType = 'application/octet-stream') {
+  initClient();
+  if (!s3 || !Upload) throw new Error('R2 not configured');
   const upload = new Upload({
     client: s3,
     params: {
-      Bucket: required('R2_BUCKET', R2_BUCKET),
+      Bucket: R2_BUCKET,
       Key: key,
       Body: buffer,
       ContentType: contentType,
@@ -56,11 +74,13 @@ async function uploadBuffer(buffer, key, contentType = 'application/octet-stream
 }
 
 async function uploadFilePath(filePath, key, contentType = undefined) {
+  initClient();
+  if (!s3 || !Upload) throw new Error('R2 not configured');
   const stream = fs.createReadStream(filePath);
   const upload = new Upload({
     client: s3,
     params: {
-      Bucket: required('R2_BUCKET', R2_BUCKET),
+      Bucket: R2_BUCKET,
       Key: key,
       Body: stream,
       ContentType: contentType,
@@ -72,8 +92,10 @@ async function uploadFilePath(filePath, key, contentType = undefined) {
 }
 
 async function deleteObject(key) {
+  initClient();
+  if (!s3 || !DeleteObjectCommand) throw new Error('R2 not configured');
   const cmd = new DeleteObjectCommand({
-    Bucket: required('R2_BUCKET', R2_BUCKET),
+    Bucket: R2_BUCKET,
     Key: key
   });
   await s3.send(cmd);

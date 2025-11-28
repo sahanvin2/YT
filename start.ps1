@@ -19,7 +19,7 @@ try {
 # Check MongoDB
 Write-Host "`nChecking MongoDB connection..." -ForegroundColor Yellow
 try {
-    $mongoTest = mongosh --eval "db.version()" --quiet 2>&1
+    mongosh --eval "db.version()" --quiet 2>&1 | Out-Null
     if ($LASTEXITCODE -eq 0) {
         Write-Host "✓ MongoDB is running" -ForegroundColor Green
     } else {

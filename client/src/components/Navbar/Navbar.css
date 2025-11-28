@@ -95,6 +95,9 @@
   font-size: 14px;
 }
 
+/* Hide the extra search toggle on desktop; used only on mobile */
+.search-toggle { display: none; }
+
 .user-menu-container {
   position: relative;
 }

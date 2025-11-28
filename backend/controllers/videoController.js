@@ -1,6 +1,39 @@
 const Video = require('../models/Video');
 const User = require('../models/User');
 const path = require('path');
+const fs = require('fs');
+const ffmpeg = require('fluent-ffmpeg');
+const ffmpegPath = require('ffmpeg-static');
+const ffprobePath = require('ffprobe-static').path;
+// Use CJS-friendly mime-types package to avoid ESM interop issues
+const mime = require('mime-types');
+const { uploadFilePath, deleteFile } = require('../utils/b2');
+
+const axios = require('axios');
+
+// Configure ffmpeg/ffprobe paths (use static binaries)
+if (ffmpegPath) {
+  ffmpeg.setFfmpegPath(ffmpegPath);
+}
+if (ffprobePath) {
+  ffmpeg.setFfprobePath(ffprobePath);
+}
+
+// Extract R2 object key from a public URL (supports r2.dev and cloudflarestorage.com forms)
+function r2KeyFromUrl(url) {
+  if (!url) return null;
+  try {
+    const u = new URL(url);
+    if (u.hostname.endsWith('.b2.dev')) {
+      return decodeURIComponent(u.pathname.slice(1)); // remove leading '/'
+    }
+    const parts = u.pathname.split('/').filter(Boolean);
+    // For cloudflarestorage.com/<bucket>/<key..>
+    return decodeURIComponent(parts.slice(1).join('/'));
+  } catch {
+    return null;
+  }
+}
 
 // @desc    Get all videos
 // @route   GET /api/videos
@@ -26,6 +59,8 @@ exports.getVideos = async (req, res, next) => {
     res.status(200).json({
       success: true,
       data: videos,
+      // Backwards compatibility: some clients expect 'videos'
+      videos: videos,
       totalPages: Math.ceil(count / limit),
       currentPage: page,
       total: count
@@ -64,7 +99,7 @@ exports.getVideo = async (req, res, next) => {
   }
 };
 
-// @desc    Upload video
+// @desc    Upload video (R2 storage)
 // @route   POST /api/videos
 // @access  Private
 exports.uploadVideo = async (req, res, next) => {
@@ -72,59 +107,108 @@ exports.uploadVideo = async (req, res, next) => {
     const { title, description, category, tags, visibility } = req.body;
 
     if (!req.files || !req.files.video) {
-      return res.status(400).json({ 
-        success: false, 
-        message: 'Please upload a video file' 
-      });
+      return res.status(400).json({ success: false, message: 'Please upload a video file' });
     }
 
     const videoFile = req.files.video;
     const thumbnailFile = req.files.thumbnail;
 
-    // Check file size (max 500MB for video)
-    if (videoFile.size > 500000000) {
-      return res.status(400).json({ 
-        success: false, 
-        message: 'Video file size should be less than 500MB' 
+    const maxSizeBytes = parseInt(process.env.MAX_VIDEO_SIZE_MB || '500') * 1024 * 1024;
+    if (videoFile.size > maxSizeBytes) {
+      return res.status(400).json({
+        success: false,
+        message: `Video file exceeds maximum size of ${Math.round(maxSizeBytes / (1024*1024))}MB`
       });
     }
 
-    // Create custom filename
-    videoFile.name = `video_${Date.now()}${path.parse(videoFile.name).ext}`;
-    const videoPath = `${process.env.FILE_UPLOAD_PATH}/${videoFile.name}`;
+    // Use temp directory for staging before R2 upload
+    const tmpDir = '/tmp/movia';
+    try { fs.mkdirSync(tmpDir, { recursive: true }); } catch {}
+    const ts = Date.now();
+    const videoExt = path.parse(videoFile.name).ext || '.mp4';
+    const tmpVideoPath = path.join(tmpDir, `video_${ts}${videoExt}`);
+    await videoFile.mv(tmpVideoPath);
 
-    let thumbnailPath = '';
+    // Upload to R2
+    const videoKey = `videos/${req.user.id}/${ts}_${path.basename(tmpVideoPath)}`;
+    const videoCT = mime.lookup(tmpVideoPath) || 'application/octet-stream';
+    const videoUrl = await uploadFilePath(tmpVideoPath, videoKey, videoCT);
+
+    // Optional thumbnail upload (if provided)
+    let thumbnailUrl;
     if (thumbnailFile) {
-      thumbnailFile.name = `thumb_${Date.now()}${path.parse(thumbnailFile.name).ext}`;
-      thumbnailPath = `${process.env.FILE_UPLOAD_PATH}/${thumbnailFile.name}`;
-      await thumbnailFile.mv(thumbnailPath);
+      const thumbExt = path.parse(thumbnailFile.name).ext || '.jpg';
+      const tmpThumbPath = path.join(tmpDir, `thumb_${ts}${thumbExt}`);
+      await thumbnailFile.mv(tmpThumbPath);
+      const thumbKey = `thumbnails/${req.user.id}/${ts}_${path.basename(tmpThumbPath)}`;
+      const thumbCT = mime.lookup(tmpThumbPath) || 'image/jpeg';
+      thumbnailUrl = await uploadFilePath(tmpThumbPath, thumbKey, thumbCT);
+      try { await fs.promises.unlink(tmpThumbPath); } catch {}
     }
 
-    // Move file to upload directory
-    await videoFile.mv(videoPath);
+    // Duration probing (best-effort)
+    let duration = 0;
+    try {
+      duration = await new Promise((resolve, reject) => {
+        ffmpeg.ffprobe(tmpVideoPath, (err, data) => {
+          if (err) return reject(err);
+          try {
+            const d = Math.round(data.format.duration || 0);
+            resolve(isNaN(d) ? 0 : d);
+          } catch { resolve(0); }
+        });
+      });
+    } catch { duration = 0; }
+
+    // Cleanup temp video file
+    fs.unlink(tmpVideoPath, () => {});
 
     const video = await Video.create({
       title,
       description,
-      videoUrl: `/uploads/${videoFile.name}`,
-      thumbnailUrl: thumbnailPath ? `/uploads/${thumbnailFile.name}` : undefined,
+      videoUrl,
+      thumbnailUrl,
+      duration,
       category,
-      tags: tags ? tags.split(',').map(tag => tag.trim()) : [],
+      tags: tags ? tags.split(',').map(t => t.trim()) : [],
       visibility: visibility || 'public',
-      user: req.user.id
+      user: req.user.id,
+      sources: []
     });
 
-    // Add video to user's videos array
-    await User.findByIdAndUpdate(req.user.id, {
-      $push: { videos: video._id }
-    });
+    await User.findByIdAndUpdate(req.user.id, { $push: { videos: video._id } });
 
-    res.status(201).json({
-      success: true,
-      data: video
-    });
+    res.status(201).json({ success: true, data: video, video });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+// @desc    Create video record from an existing R2 URL (client uploaded via presign)
+// @route   POST /api/videos/create
+// @access  Private
+exports.createVideoFromUrl = async (req, res) => {
+  try {
+    const { title, description, category, tags, visibility, videoUrl, thumbnailUrl, duration } = req.body;
+    if (!title || !videoUrl) {
+      return res.status(400).json({ success: false, message: 'title and videoUrl are required' });
+    }
+    const video = await Video.create({
+      title,
+      description,
+      videoUrl,
+      thumbnailUrl,
+      duration: duration ? parseInt(duration) : 0,
+      category,
+      tags: typeof tags === 'string' ? tags.split(',').map(t => t.trim()) : (Array.isArray(tags) ? tags : []),
+      visibility: visibility || 'public',
+      user: req.user.id,
+      sources: []
+    });
+    await User.findByIdAndUpdate(req.user.id, { $push: { videos: video._id } });
+    res.status(201).json({ success: true, data: video, video });
+  } catch (e) {
+    res.status(500).json({ success: false, message: e.message });
   }
 };
 
@@ -161,7 +245,8 @@ exports.updateVideo = async (req, res, next) => {
 
     res.status(200).json({
       success: true,
-      data: video
+      data: video,
+      video
     });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
@@ -174,33 +259,48 @@ exports.updateVideo = async (req, res, next) => {
 exports.deleteVideo = async (req, res, next) => {
   try {
     const video = await Video.findById(req.params.id);
-
     if (!video) {
-      return res.status(404).json({ 
-        success: false, 
-        message: 'Video not found' 
-      });
+      return res.status(404).json({ success: false, message: 'Video not found' });
+    }
+    if (video.user.toString() !== req.user.id) {
+      return res.status(401).json({ success: false, message: 'Not authorized to delete this video' });
     }
 
-    // Make sure user is video owner
-    if (video.user.toString() !== req.user.id) {
-      return res.status(401).json({ 
-        success: false, 
-        message: 'Not authorized to delete this video' 
-      });
+    // Helper to safely derive key "<folder>/<filename>"
+    function deriveKey(url) {
+      if (!url || typeof url !== 'string') return null;
+      const parts = url.split('/').filter(Boolean);
+      if (parts.length < 2) return null;
+      return parts.slice(-2).join('/');
+    }
+
+    // Delete main video file
+    const mainKey = deriveKey(video.videoUrl);
+    if (mainKey) {
+      try { await deleteFile(mainKey); } catch {}
+    }
+
+    // Delete thumbnail
+    if (video.thumbnailUrl) {
+      const thumbKey = deriveKey(video.thumbnailUrl);
+      if (thumbKey) {
+        try { await deleteFile(thumbKey); } catch {}
+      }
+    }
+
+    // Delete variant files if present (supports video.variants or video.sources)
+    const variantList = Array.isArray(video.variants) ? video.variants : (Array.isArray(video.sources) ? video.sources : []);
+    for (const variant of variantList) {
+      const vKey = deriveKey(variant.url || variant.videoUrl || variant.sourceUrl);
+      if (vKey) {
+        try { await deleteFile(vKey); } catch {}
+      }
     }
 
     await video.deleteOne();
+    await User.findByIdAndUpdate(req.user.id, { $pull: { videos: video._id } });
 
-    // Remove video from user's videos array
-    await User.findByIdAndUpdate(req.user.id, {
-      $pull: { videos: video._id }
-    });
-
-    res.status(200).json({
-      success: true,
-      data: {}
-    });
+    res.status(200).json({ success: true, data: {} });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }
@@ -297,28 +397,34 @@ exports.dislikeVideo = async (req, res, next) => {
   }
 };
 
-// @desc    Increment view count
+const View = require('../models/View');
+
+// @desc    Increment view count (records individual view event)
 // @route   PUT /api/videos/:id/view
 // @access  Public
 exports.addView = async (req, res, next) => {
   try {
-    const video = await Video.findByIdAndUpdate(
-      req.params.id,
-      { $inc: { views: 1 } },
-      { new: true }
-    );
-
+    const video = await Video.findById(req.params.id);
     if (!video) {
-      return res.status(404).json({ 
-        success: false, 
-        message: 'Video not found' 
-      });
+      return res.status(404).json({ success: false, message: 'Video not found' });
     }
 
-    res.status(200).json({
-      success: true,
-      data: { views: video.views }
-    });
+    // Always increment (counts multiple watches by same user)
+    video.views += 1;
+    await video.save();
+
+    // Record a view event
+    try {
+      await View.create({
+        video: video._id,
+        user: req.user ? req.user.id : undefined,
+        ip: req.headers['x-forwarded-for'] || req.socket.remoteAddress
+      });
+    } catch (e) {
+      // Silently ignore view logging errors
+    }
+
+    res.status(200).json({ success: true, data: { views: video.views } });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }
@@ -355,6 +461,7 @@ exports.searchVideos = async (req, res, next) => {
     res.status(200).json({
       success: true,
       data: videos,
+      videos: videos,
       totalPages: Math.ceil(count / limit),
       currentPage: page,
       total: count
@@ -378,9 +485,69 @@ exports.getTrendingVideos = async (req, res, next) => {
 
     res.status(200).json({
       success: true,
-      data: videos
+      data: videos,
+      videos: videos
     });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+// @desc    Generate signed URL to stream a private B2 video
+// @route   GET /api/videos/:id/stream
+// @access  Public
+
+
+
+exports.streamVideo = async (req, res) => {
+  try {
+    const videoId = req.params.id;
+
+    const video = await Video.findById(videoId);
+    if (!video) {
+      return res.status(404).json({ success: false, message: "Video not found" });
+    }
+
+    // the S3 URL of Backblaze B2 is already stored in video.videoUrl
+    const fileUrl = video.videoUrl;
+
+    const range = req.headers.range;
+
+    if (!range) {
+      return res.status(416).json({ success: false, message: "Range header required" });
+    }
+
+    const videoSizeReq = await axios.head(fileUrl);
+    const videoSize = Number(videoSizeReq.headers['content-length']);
+
+    const CHUNK_SIZE = 5 * 1024 * 1024; // 5MB
+    const start = Number(range.replace(/\D/g, ""));
+    const end = Math.min(start + CHUNK_SIZE, videoSize - 1);
+
+    const contentLength = end - start + 1;
+
+    const headers = {
+      "Content-Range": `bytes ${start}-${end}/${videoSize}`,
+      "Accept-Ranges": "bytes",
+      "Content-Length": contentLength,
+      "Content-Type": "video/mp4"
+    };
+
+    res.writeHead(206, headers);
+
+    const stream = await axios({
+      url: fileUrl,
+      method: "GET",
+      responseType: "stream",
+      headers: {
+        Range: `bytes=${start}-${end}`
+      }
+    });
+
+    stream.data.pipe(res);
+
+  } catch (err) {
+    console.error("STREAM ERROR:", err.message);
+    res.status(500).json({ success: false, error: "Stream failed" });
   }
 };

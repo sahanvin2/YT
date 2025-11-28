@@ -1,71 +1,40 @@
 const mongoose = require('mongoose');
 
-const VideoSchema = new mongoose.Schema({
-  title: {
-    type: String,
-    required: [true, 'Please add a title'],
-    trim: true,
-    maxlength: [100, 'Title cannot be more than 100 characters']
-  },
-  description: {
-    type: String,
-    required: [true, 'Please add a description'],
-    maxlength: [5000, 'Description cannot be more than 5000 characters']
-  },
-  videoUrl: {
-    type: String,
-    required: [true, 'Please add a video URL']
-  },
-  thumbnailUrl: {
-    type: String,
-    default: 'https://via.placeholder.com/640x360?text=Video+Thumbnail'
-  },
-  duration: {
-    type: Number,
-    default: 0
-  },
-  views: {
-    type: Number,
-    default: 0
-  },
-  likes: [{
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'User'
-  }],
-  dislikes: [{
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'User'
-  }],
-  tags: [{
-    type: String,
-    trim: true
-  }],
-  category: {
-    type: String,
-    enum: ['Music', 'Gaming', 'Education', 'Entertainment', 'News', 'Sports', 'Technology', 'Vlogs', 'Other'],
-    default: 'Other'
-  },
-  visibility: {
-    type: String,
-    enum: ['public', 'private', 'unlisted'],
-    default: 'public'
-  },
-  user: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'User',
-    required: true
-  },
-  comments: [{
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'Comment'
-  }],
-  createdAt: {
-    type: Date,
-    default: Date.now
-  }
+const VariantSchema = new mongoose.Schema({
+  quality: String,  // '720p', '480p'
+  url: String,
+  size: Number
 });
 
-// Create index for search
-VideoSchema.index({ title: 'text', description: 'text', tags: 'text' });
+const VideoSchema = new mongoose.Schema({
+  title: { type: String, required: true, trim: true, maxlength: 100 },
+  description: { type: String, required: true, maxlength: 2000 },
+  videoUrl: { type: String, required: true },
+  thumbnailUrl: { type: String, default: '' },
+  duration: { type: Number, default: 0 },
+  views: { type: Number, default: 0 },
+  likes: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
+  user: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
+  category: { type: String, default: 'Other' },
+  tags: [String],
+  variants: [VariantSchema],
+  hlsUrl: String,
+  originalName: String,
+  checksum: String,
+  storageProvider: { type: String, default: 'b2' },
+
+  visibility: { 
+    type: String, 
+    enum: ['public', 'private', 'unlisted'], 
+    default: 'public'
+  },
+
+  createdAt: { type: Date, default: Date.now },
+  comments: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Comment' }],
+
+});
+
+// Index for search
+VideoSchema.index({ title: 'text', description: 'text' });
 
 module.exports = mongoose.model('Video', VideoSchema);

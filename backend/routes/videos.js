@@ -9,7 +9,9 @@ const {
   dislikeVideo,
   addView,
   searchVideos,
-  getTrendingVideos
+  getTrendingVideos,
+  createVideoFromUrl,
+  streamVideo
 } = require('../controllers/videoController');
 const { protect } = require('../middleware/auth');
 
@@ -23,8 +25,14 @@ router.route('/')
   .get(getVideos)
   .post(protect, uploadVideo);
 
+// Create a video from an already uploaded R2 URL (via presigned PUT)
+router.post('/create', protect, createVideoFromUrl);
+
+
 router.get('/search', searchVideos);
 router.get('/trending', getTrendingVideos);
+router.get('/:id/stream', streamVideo);
+
 
 router.route('/:id')
   .get(getVideo)

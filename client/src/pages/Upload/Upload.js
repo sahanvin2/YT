@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
+import axios from 'axios';
 import { useNavigate } from 'react-router-dom';
 import { FiUpload } from 'react-icons/fi';
-import { uploadVideo } from '../../utils/api';
+import { uploadVideo, presignPut, createVideoFromUrl } from '../../utils/api';
 import { useAuth } from '../../context/AuthContext';
 import './Upload.css';
 
@@ -18,6 +19,7 @@ const Upload = () => {
   const [videoFile, setVideoFile] = useState(null);
   const [thumbnailFile, setThumbnailFile] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [usePresigned, setUsePresigned] = useState(false);
   const [error, setError] = useState('');
 
   if (!isAuthenticated) {
@@ -66,10 +68,32 @@ const Upload = () => {
 
     try {
       setLoading(true);
-      const res = await uploadVideo(data);
-      navigate(`/watch/${res.data.data._id}`);
+      if (!usePresigned) {
+        const res = await uploadVideo(data);
+        navigate(`/watch/${res.data.data._id}`);
+        return;
+      }
+      const presignRes = await presignPut(videoFile.name, videoFile.type || 'application/octet-stream');
+      if (!presignRes.data?.url) {
+        throw new Error('Presign did not return a URL');
+      }
+      const putUrl = presignRes.data.url;
+      const publicUrl = presignRes.data.publicUrl;
+      // Use axios to PUT raw file to presigned URL for better error handling
+      await axios.put(putUrl, videoFile, {
+        headers: { 'Content-Type': videoFile.type || 'application/octet-stream' }
+      });
+      const createRes = await createVideoFromUrl({
+        title,
+        description,
+        category,
+        tags,
+        visibility,
+        videoUrl: publicUrl
+      });
+      navigate(`/watch/${createRes.data.data._id}`);
     } catch (err) {
-      setError(err.response?.data?.message || 'Failed to upload video');
+      setError(err.response?.data?.message || err.message || 'Failed to upload video');
     } finally {
       setLoading(false);
     }
@@ -193,6 +217,16 @@ const Upload = () => {
             />
           </div>
 
+          <div className="form-group">
+            <label>
+              <input
+                type="checkbox"
+                checked={usePresigned}
+                onChange={(e) => setUsePresigned(e.target.checked)}
+              />{' '}
+              Use direct browser upload (presigned) for large files
+            </label>
+          </div>
           <div className="form-actions">
             <button
               type="button"

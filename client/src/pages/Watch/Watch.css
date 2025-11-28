@@ -127,6 +127,26 @@
   border-radius: 12px;
 }
 
+.quality-select {
+  display: flex;
+  justify-content: flex-end;
+  margin: 4px 0 8px 0;
+}
+
+.quality-select select {
+  background: var(--secondary-color);
+  color: var(--text-primary);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  padding: 6px 10px;
+}
+
+.quality-select .quality-label {
+  margin-right: 8px;
+  font-size: 14px;
+  color: var(--text-secondary);
+}
+
 .video-description p {
   font-size: 14px;
   line-height: 1.6;
@@ -137,6 +157,7 @@
 
 .video-description p:not(.expanded) {
   display: -webkit-box;
+  line-clamp: 3;
   -webkit-line-clamp: 3;
   -webkit-box-orient: vertical;
   overflow: hidden;

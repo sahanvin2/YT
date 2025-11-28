@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import ReactPlayer from 'react-player';
 import { FiThumbsUp, FiThumbsDown, FiShare2 } from 'react-icons/fi';
@@ -12,6 +12,7 @@ import './Watch.css';
 const Watch = () => {
   const { id } = useParams();
   const { isAuthenticated } = useAuth();
+  const historyPostedRef = useRef({});
   const [video, setVideo] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -19,6 +20,7 @@ const Watch = () => {
   const [isLiked, setIsLiked] = useState(false);
   const [isDisliked, setIsDisliked] = useState(false);
   const [likesCount, setLikesCount] = useState(0);
+  const [selectedSource, setSelectedSource] = useState(null);
   const [dislikesCount, setDislikesCount] = useState(0);
 
   useEffect(() => {
@@ -32,6 +34,7 @@ const Watch = () => {
     loadVideo();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
+  
 
   const fetchVideo = async () => {
     try {
@@ -41,6 +44,14 @@ const Watch = () => {
       setLikesCount(res.data.data.likes.length);
       setDislikesCount(res.data.data.dislikes.length);
       setError('');
+      // Prefer a selected quality if exists, else choose highest available, else original
+      const sources = res.data.data.sources || [];
+      if (sources.length > 0) {
+        const sorted = [...sources].sort((a,b)=>a.quality-b.quality);
+        setSelectedSource(sorted[sorted.length-1]);
+      } else {
+        setSelectedSource(null);
+      }
     } catch (err) {
       setError('Failed to load video');
       console.error(err);
@@ -59,7 +70,9 @@ const Watch = () => {
 
   const addVideoToHistory = async () => {
     try {
+      if (historyPostedRef.current[id]) return;
       await addToHistory(id);
+      historyPostedRef.current[id] = true;
     } catch (err) {
       console.error(err);
     }
@@ -120,7 +133,10 @@ const Watch = () => {
         <div className="video-player-section">
           <div className="video-player">
             <ReactPlayer
-              url={video.videoUrl}
+              url={selectedSource
+                ? `https://movia-prod.s3.us-east-005.backblazeb2.com/${selectedSource.filePath}`
+                : `https://movia-prod.s3.us-east-005.backblazeb2.com/${video.filePath}`
+              }
               controls
               width="100%"
               height="100%"
@@ -178,6 +194,30 @@ const Watch = () => {
             </div>
 
             <SubscribeButton channelId={video.user._id} />
+          </div>
+
+          <div className="quality-select">
+            {(video.sources && video.sources.length > 0) && (
+              <label>
+                <span className="quality-label">Quality:</span>
+                <select
+                  value={selectedSource ? selectedSource.quality : 'orig'}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    if (val === 'orig') setSelectedSource(null);
+                    else {
+                      const match = video.sources.find(s => String(s.quality) === String(val));
+                      setSelectedSource(match || null);
+                    }
+                  }}
+                >
+                  <option value="orig">Auto / Original</option>
+                  {[...video.sources].sort((a,b)=>b.quality-a.quality).map(s => (
+                    <option key={s.quality} value={s.quality}>{s.quality}p</option>
+                  ))}
+                </select>
+              </label>
+            )}
           </div>
 
           <div className="video-description">

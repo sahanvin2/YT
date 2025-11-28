@@ -4,6 +4,7 @@ const morgan = require('morgan');
 const cors = require('cors');
 const cookieParser = require('cookie-parser');
 const fileUpload = require('express-fileupload');
+const fs = require('fs');
 const path = require('path');
 const connectDB = require('./config/db');
 const errorHandler = require('./middleware/error');
@@ -11,20 +12,19 @@ const errorHandler = require('./middleware/error');
 // Load env vars
 dotenv.config();
 
-// Connect to database
-connectDB();
-
 // Route files
 const auth = require('./routes/auth');
 const videos = require('./routes/videos');
 const users = require('./routes/users');
 const comments = require('./routes/comments');
+const admin = require('./routes/admin');
+const uploads = require('./routes/uploads');
+const health = require('./routes/health');
 
 const app = express();
 
 // Body parser
 app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
 
 // Cookie parser
 app.use(cookieParser());
@@ -35,8 +35,14 @@ if (process.env.NODE_ENV === 'development') {
 }
 
 // File uploading
+const maxSizeMb = parseInt(process.env.MAX_VIDEO_SIZE_MB || '500');
+const tempDir = path.join(__dirname, '../tmp');
+if (!fs.existsSync(tempDir)) fs.mkdirSync(tempDir, { recursive: true });
 app.use(fileUpload({
-  createParentPath: true
+  createParentPath: true,
+  useTempFiles: true,
+  tempFileDir: tempDir,
+  limits: { fileSize: maxSizeMb * 1024 * 1024 }
 }));
 
 // Enable CORS
@@ -45,28 +51,61 @@ app.use(cors({
   credentials: true
 }));
 
-// Set static folder for uploads
+// Set static folder
 app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
 
 // Mount routers
+app.use('/api/health', health);
 app.use('/api/auth', auth);
 app.use('/api/videos', videos);
 app.use('/api/users', users);
 app.use('/api/comments', comments);
+app.use('/api/admin', admin);
+app.use('/api/uploads', uploads);
 
 // Error handler
 app.use(errorHandler);
 
 const PORT = process.env.PORT || 5000;
 
-const server = app.listen(
-  PORT,
-  console.log(`Server running in ${process.env.NODE_ENV} mode on port ${PORT}`)
-);
+// Connect to database and start server
+let server;
+
+(async () => {
+  try {
+    console.log('Attempting to connect to MongoDB...');
+    console.log('MongoDB URI:', process.env.MONGO_URI ? 'Set (hidden for security)' : 'NOT SET!');
+    
+    await connectDB();
+    
+    console.log('Starting Express server...');
+    server = app.listen(PORT, () => {
+      console.log(`✅ Server running in ${process.env.NODE_ENV} mode on port ${PORT}`);
+      console.log(`✅ MongoDB connected successfully`);
+      console.log(`🔗 Frontend URL: ${process.env.CLIENT_URL}`);
+    });
+
+    server.on('error', (err) => {
+      if (err.code === 'EADDRINUSE') {
+        console.error(`❌ Port ${PORT} already in use. Kill the process or change PORT in .env`);
+        process.exit(1);
+      } else {
+        console.error('❌ Server error:', err);
+      }
+    });
+  } catch (err) {
+    console.error('❌ Failed to start server:', err.message);
+    console.error('Full error:', err);
+    process.exit(1);
+  }
+})();
 
 // Handle unhandled promise rejections
-process.on('unhandledRejection', (err, promise) => {
-  console.log(`Error: ${err.message}`);
-  // Close server & exit process
-  server.close(() => process.exit(1));
+process.on('unhandledRejection', (err) => {
+  console.error(`❌ Unhandled Rejection: ${err.message}`);
+  if (server) {
+    server.close(() => process.exit(1));
+  } else {
+    process.exit(1);
+  }
 });

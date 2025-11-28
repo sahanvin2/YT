@@ -1,11 +1,14 @@
 import axios from 'axios';
 
-const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000/api';
+// Use relative base so Create React App dev proxy forwards to backend without CORS issues
+const API_URL = process.env.REACT_APP_API_URL || '/api';
 
 // Videos
 export const getVideos = (params) => axios.get(`${API_URL}/videos`, { params });
 export const getVideo = (id) => axios.get(`${API_URL}/videos/${id}`);
 export const uploadVideo = (formData) => axios.post(`${API_URL}/videos`, formData);
+export const presignPut = (fileName, contentType) => axios.post(`${API_URL}/uploads/presign`, { fileName, contentType });
+export const createVideoFromUrl = (data) => axios.post(`${API_URL}/videos/create`, data);
 export const updateVideo = (id, data) => axios.put(`${API_URL}/videos/${id}`, data);
 export const deleteVideo = (id) => axios.delete(`${API_URL}/videos/${id}`);
 export const likeVideo = (id) => axios.put(`${API_URL}/videos/${id}/like`);

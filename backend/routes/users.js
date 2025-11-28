@@ -7,7 +7,7 @@ const {
   getSubscriptions,
   getWatchHistory,
   addToHistory,
-  getLikedVideos
+  getLikedVideos,
   getSubscriptionVideos
 } = require('../controllers/userController');
 const { protect } = require('../middleware/auth');

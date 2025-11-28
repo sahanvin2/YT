@@ -80,12 +80,14 @@ const Navbar = ({ toggleSidebar }) => {
               </button>
               {showUserMenu && (
                 <div className="user-menu">
-                  <Link
-                    to={`/channel/${user.id}`}
-                    onClick={() => setShowUserMenu(false)}
-                  >
-                    <FiUser /> Your Channel
-                  </Link>
+                  {user?.id && (
+                    <Link
+                      to={`/channel/${user.id}`}
+                      onClick={() => setShowUserMenu(false)}
+                    >
+                      <FiUser /> Your Channel
+                    </Link>
+                  )}
                   <Link
                     to="/profile"
                     onClick={() => setShowUserMenu(false)}

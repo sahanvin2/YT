@@ -8,26 +8,42 @@
     "server": "nodemon backend/server.js",
     "client": "npm start --prefix client",
     "dev": "concurrently \"npm run server\" \"npm run client\"",
-    "build": "npm install && cd client && npm install && npm run build"
+    "build": "npm install && cd client && npm install && npm run build",
+    "db:check": "node scripts/check_db.js",
+    "user:reset": "node scripts/reset_password.js"
   },
-  "keywords": ["video", "streaming", "mern", "youtube-clone"],
+  "keywords": [
+    "video",
+    "streaming",
+    "mern",
+    "youtube-clone"
+  ],
   "author": "",
   "license": "MIT",
   "dependencies": {
-    "express": "^4.18.2",
-    "mongoose": "^7.5.0",
-    "dotenv": "^16.3.1",
+    "@aws-sdk/client-s3": "^3.937.0",
+    "@aws-sdk/lib-storage": "^3.598.0",
+    "@aws-sdk/s3-request-presigner": "^3.937.0",
+    "axios": "^1.13.2",
     "bcryptjs": "^2.4.3",
-    "jsonwebtoken": "^9.0.2",
+    "cookie-parser": "^1.4.6",
     "cors": "^2.8.5",
-    "multer": "^1.4.5-lts.1",
+    "dotenv": "^16.3.1",
+    "express": "^4.18.2",
     "express-fileupload": "^1.4.0",
     "express-validator": "^7.0.1",
-    "cookie-parser": "^1.4.6",
-    "morgan": "^1.10.0"
+    "ffmpeg-static": "^5.3.0",
+    "ffprobe-static": "^3.1.0",
+    "fluent-ffmpeg": "^2.1.3",
+    "jsonwebtoken": "^9.0.2",
+    "mime-types": "^2.1.35",
+    "mongodb": "^7.0.0",
+    "mongoose": "^7.5.0",
+    "morgan": "^1.10.0",
+    "multer": "^1.4.5-lts.1"
   },
   "devDependencies": {
-    "nodemon": "^3.0.1",
-    "concurrently": "^8.2.1"
+    "concurrently": "^8.2.1",
+    "nodemon": "^3.0.1"
   }
 }
