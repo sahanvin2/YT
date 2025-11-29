@@ -1,9 +1,9 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import ReactPlayer from 'react-player';
-import { FiThumbsUp, FiThumbsDown, FiShare2 } from 'react-icons/fi';
-import { getVideo, likeVideo, dislikeVideo, addView, addToHistory } from '../../utils/api';
-import { formatViews, formatDate } from '../../utils/helpers';
+import { FiThumbsUp, FiThumbsDown, FiShare2, FiDownload } from 'react-icons/fi';
+import { getVideo, likeVideo, dislikeVideo, addView, addToHistory, getDownloadUrl } from '../../utils/api';
+import { formatViews, formatDate, formatFileSize } from '../../utils/helpers';
 import { useAuth } from '../../context/AuthContext';
 import CommentSection from '../../components/CommentSection/CommentSection';
 import SubscribeButton from '../../components/SubscribeButton/SubscribeButton';
@@ -22,6 +22,10 @@ const Watch = () => {
   const [likesCount, setLikesCount] = useState(0);
   const [selectedSource, setSelectedSource] = useState(null);
   const [dislikesCount, setDislikesCount] = useState(0);
+  const [showDownloadMenu, setShowDownloadMenu] = useState(false);
+  const [downloading, setDownloading] = useState(false);
+  const downloadMenuRef = useRef(null);
+  const playerRef = useRef(null);
 
   useEffect(() => {
     const loadVideo = async () => {
@@ -34,18 +38,57 @@ const Watch = () => {
     loadVideo();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
+
+  // Close download menu when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (downloadMenuRef.current && !downloadMenuRef.current.contains(event.target)) {
+        setShowDownloadMenu(false);
+      }
+    };
+
+    if (showDownloadMenu) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [showDownloadMenu]);
+
+  // Update player when quality changes
+  useEffect(() => {
+    if (playerRef.current && video) {
+      // Force player to reload with new URL
+      const newUrl = selectedSource
+        ? (selectedSource.url || selectedSource.videoUrl || video.videoUrl)
+        : video.videoUrl;
+      
+      // ReactPlayer will automatically update when url prop changes
+    }
+  }, [selectedSource, video]);
   
 
   const fetchVideo = async () => {
     try {
       setLoading(true);
       const res = await getVideo(id);
-      setVideo(res.data.data);
-      setLikesCount(res.data.data.likes.length);
-      setDislikesCount(res.data.data.dislikes.length);
+      const videoData = res.data.data;
+      
+      // Validate video URL exists
+      if (!videoData.videoUrl) {
+        setError('Video URL is missing');
+        setLoading(false);
+        return;
+      }
+      
+      setVideo(videoData);
+      setLikesCount(videoData.likes?.length || 0);
+      setDislikesCount(videoData.dislikes?.length || 0);
       setError('');
       // Prefer a selected quality if exists, else choose highest available, else original
-      const sources = res.data.data.sources || [];
+      // Check both sources and variants arrays
+      const sources = videoData.sources || videoData.variants || [];
       if (sources.length > 0) {
         const sorted = [...sources].sort((a,b)=>a.quality-b.quality);
         setSelectedSource(sorted[sorted.length-1]);
@@ -54,7 +97,7 @@ const Watch = () => {
       }
     } catch (err) {
       setError('Failed to load video');
-      console.error(err);
+      console.error('Error loading video:', err);
     } finally {
       setLoading(false);
     }
@@ -111,6 +154,33 @@ const Watch = () => {
     alert('Link copied to clipboard!');
   };
 
+  const handleDownload = async (quality = 'orig') => {
+    try {
+      setDownloading(true);
+      const res = await getDownloadUrl(id, quality);
+      
+      if (res.data.success) {
+        const { downloadUrl, filename } = res.data.data;
+        
+        // Create a temporary link and trigger download
+        const link = document.createElement('a');
+        link.href = downloadUrl;
+        link.download = filename;
+        link.target = '_blank';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        
+        setShowDownloadMenu(false);
+      }
+    } catch (err) {
+      console.error('Error downloading video:', err);
+      alert('Failed to download video. Please try again.');
+    } finally {
+      setDownloading(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="loading-container">
@@ -133,14 +203,27 @@ const Watch = () => {
         <div className="video-player-section">
           <div className="video-player">
             <ReactPlayer
+              ref={playerRef}
               url={selectedSource
-                ? `https://movia-prod.s3.us-east-005.backblazeb2.com/${selectedSource.filePath}`
-                : `https://movia-prod.s3.us-east-005.backblazeb2.com/${video.filePath}`
+                ? (selectedSource.url || selectedSource.videoUrl || video.videoUrl)
+                : video.videoUrl
               }
               controls
               width="100%"
               height="100%"
               playing
+              key={selectedSource ? selectedSource.quality : 'original'} // Force re-render on quality change
+              config={{
+                file: {
+                  attributes: {
+                    controlsList: 'nodownload'
+                  }
+                }
+              }}
+              onError={(e) => {
+                console.error('ReactPlayer error:', e);
+                setError('Failed to play video. Please check if the video URL is accessible.');
+              }}
             />
           </div>
 
@@ -174,6 +257,57 @@ const Watch = () => {
                 <FiShare2 size={20} />
                 <span>Share</span>
               </button>
+
+              <div className="download-menu-container" ref={downloadMenuRef}>
+                <button 
+                  className="action-btn" 
+                  onClick={() => setShowDownloadMenu(!showDownloadMenu)}
+                  disabled={downloading}
+                >
+                  <FiDownload size={20} />
+                  <span>{downloading ? 'Downloading...' : 'Download'}</span>
+                </button>
+                {showDownloadMenu && (
+                  <div className="download-quality-menu">
+                    <div className="download-menu-header">
+                      <span>Choose Quality</span>
+                      <button 
+                        className="close-download-menu"
+                        onClick={() => setShowDownloadMenu(false)}
+                      >
+                        ×
+                      </button>
+                    </div>
+                    <div className="download-options">
+                      <button
+                        className="download-option"
+                        onClick={() => handleDownload('orig')}
+                        disabled={downloading}
+                      >
+                        <span className="quality-name">Original</span>
+                        <span className="quality-size">
+                          {video.videoUrl ? 'Full quality' : 'N/A'}
+                        </span>
+                      </button>
+                      {[...(video.sources || video.variants || [])]
+                        .sort((a, b) => parseInt(b.quality) - parseInt(a.quality))
+                        .map(variant => (
+                          <button
+                            key={variant.quality}
+                            className="download-option"
+                            onClick={() => handleDownload(variant.quality)}
+                            disabled={downloading}
+                          >
+                            <span className="quality-name">{variant.quality}p</span>
+                            <span className="quality-size">
+                              {variant.size ? formatFileSize(variant.size) : 'N/A'}
+                            </span>
+                          </button>
+                        ))}
+                    </div>
+                  </div>
+                )}
+              </div>
             </div>
           </div>
 
@@ -197,26 +331,38 @@ const Watch = () => {
           </div>
 
           <div className="quality-select">
-            {(video.sources && video.sources.length > 0) && (
-              <label>
+            {((video.sources && video.sources.length > 0) || (video.variants && video.variants.length > 0)) && (
+              <div className="quality-selector">
                 <span className="quality-label">Quality:</span>
                 <select
+                  className="quality-dropdown"
                   value={selectedSource ? selectedSource.quality : 'orig'}
                   onChange={(e) => {
                     const val = e.target.value;
-                    if (val === 'orig') setSelectedSource(null);
-                    else {
-                      const match = video.sources.find(s => String(s.quality) === String(val));
+                    if (val === 'orig') {
+                      setSelectedSource(null);
+                    } else {
+                      const sources = video.sources || video.variants || [];
+                      const match = sources.find(s => String(s.quality) === String(val));
                       setSelectedSource(match || null);
                     }
                   }}
                 >
-                  <option value="orig">Auto / Original</option>
-                  {[...video.sources].sort((a,b)=>b.quality-a.quality).map(s => (
-                    <option key={s.quality} value={s.quality}>{s.quality}p</option>
-                  ))}
+                  <option value="orig">Auto (Recommended)</option>
+                  {[...(video.sources || video.variants || [])]
+                    .sort((a, b) => parseInt(b.quality) - parseInt(a.quality))
+                    .map(s => (
+                      <option key={s.quality} value={s.quality}>
+                        {s.quality}p {s.size ? `(${formatFileSize(s.size)})` : ''}
+                      </option>
+                    ))}
                 </select>
-              </label>
+                {selectedSource && (
+                  <span className="current-quality">
+                    Currently playing: {selectedSource.quality}p
+                  </span>
+                )}
+              </div>
             )}
           </div>
 

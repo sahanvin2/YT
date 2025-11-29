@@ -8,6 +8,7 @@ const ffprobePath = require('ffprobe-static').path;
 // Use CJS-friendly mime-types package to avoid ESM interop issues
 const mime = require('mime-types');
 const { uploadFilePath, deleteFile } = require('../utils/b2');
+const { generateVideoVariants, getVideoResolution } = require('../utils/videoTranscoder');
 
 const axios = require('axios');
 
@@ -121,8 +122,8 @@ exports.uploadVideo = async (req, res, next) => {
       });
     }
 
-    // Use temp directory for staging before R2 upload
-    const tmpDir = '/tmp/movia';
+    // Use temp directory for staging before B2 upload
+    const tmpDir = path.join(__dirname, '../../tmp');
     try { fs.mkdirSync(tmpDir, { recursive: true }); } catch {}
     const ts = Date.now();
     const videoExt = path.parse(videoFile.name).ext || '.mp4';
@@ -146,23 +147,28 @@ exports.uploadVideo = async (req, res, next) => {
       try { await fs.promises.unlink(tmpThumbPath); } catch {}
     }
 
-    // Duration probing (best-effort)
+    // Duration and resolution probing
     let duration = 0;
+    let videoHeight = 720; // Default height
     try {
-      duration = await new Promise((resolve, reject) => {
+      const probeData = await new Promise((resolve, reject) => {
         ffmpeg.ffprobe(tmpVideoPath, (err, data) => {
           if (err) return reject(err);
-          try {
-            const d = Math.round(data.format.duration || 0);
-            resolve(isNaN(d) ? 0 : d);
-          } catch { resolve(0); }
+          resolve(data);
         });
       });
-    } catch { duration = 0; }
+      
+      duration = Math.round(probeData.format.duration || 0);
+      const videoStream = probeData.streams.find(s => s.codec_type === 'video');
+      if (videoStream && videoStream.height) {
+        videoHeight = videoStream.height;
+      }
+    } catch (err) {
+      console.error('Error probing video:', err);
+      duration = 0;
+    }
 
-    // Cleanup temp video file
-    fs.unlink(tmpVideoPath, () => {});
-
+    // Create video record first (without variants)
     const video = await Video.create({
       title,
       description,
@@ -173,12 +179,40 @@ exports.uploadVideo = async (req, res, next) => {
       tags: tags ? tags.split(',').map(t => t.trim()) : [],
       visibility: visibility || 'public',
       user: req.user.id,
+      variants: [],
       sources: []
     });
 
     await User.findByIdAndUpdate(req.user.id, { $push: { videos: video._id } });
 
-    res.status(201).json({ success: true, data: video, video });
+    // Generate video variants in background (non-blocking)
+    generateVideoVariants(tmpVideoPath, req.user.id, video._id.toString(), videoHeight)
+      .then(async (variants) => {
+        if (variants.length > 0) {
+          // Update video with variants
+          await Video.findByIdAndUpdate(video._id, {
+            variants: variants,
+            sources: variants // Also populate sources for compatibility
+          });
+          console.log(`✓ Video ${video._id} variants generated: ${variants.length} qualities`);
+        }
+      })
+      .catch((err) => {
+        console.error(`Error generating variants for video ${video._id}:`, err);
+        // Don't fail the upload if variant generation fails
+      })
+      .finally(() => {
+        // Cleanup temp video file after processing
+        fs.unlink(tmpVideoPath, () => {});
+      });
+
+    // Return immediately (variants will be generated in background)
+    res.status(201).json({ 
+      success: true, 
+      data: video, 
+      video,
+      message: 'Video uploaded successfully. Quality variants are being generated in the background.'
+    });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }
@@ -430,33 +464,43 @@ exports.addView = async (req, res, next) => {
   }
 };
 
-// @desc    Search videos
+// @desc    Search videos (supports partial matching)
 // @route   GET /api/videos/search
 // @access  Public
 exports.searchVideos = async (req, res, next) => {
   try {
     const { q, page = 1, limit = 12 } = req.query;
 
-    if (!q) {
+    if (!q || q.trim() === '') {
       return res.status(400).json({ 
         success: false, 
         message: 'Please provide a search query' 
       });
     }
 
-    const videos = await Video.find({
-      $text: { $search: q },
-      visibility: 'public'
-    })
+    const searchQuery = q.trim();
+    
+    // Use regex for partial matching (case-insensitive)
+    // This allows searching by title, description, or tags
+    const regexQuery = new RegExp(searchQuery, 'i');
+    
+    const query = {
+      visibility: 'public',
+      $or: [
+        { title: regexQuery },
+        { description: regexQuery },
+        { tags: { $in: [regexQuery] } }
+      ]
+    };
+
+    const videos = await Video.find(query)
       .populate('user', 'username avatar channelName')
+      .sort({ createdAt: -1 })
       .limit(limit * 1)
       .skip((page - 1) * limit)
       .exec();
 
-    const count = await Video.countDocuments({
-      $text: { $search: q },
-      visibility: 'public'
-    });
+    const count = await Video.countDocuments(query);
 
     res.status(200).json({
       success: true,
@@ -465,6 +509,54 @@ exports.searchVideos = async (req, res, next) => {
       totalPages: Math.ceil(count / limit),
       currentPage: page,
       total: count
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+// @desc    Get search suggestions (autocomplete)
+// @route   GET /api/videos/search/suggestions
+// @access  Public
+exports.getSearchSuggestions = async (req, res, next) => {
+  try {
+    const { q, limit = 5 } = req.query;
+
+    if (!q || q.trim() === '') {
+      return res.status(200).json({
+        success: true,
+        data: [],
+        suggestions: []
+      });
+    }
+
+    const searchQuery = q.trim();
+    const regexQuery = new RegExp(searchQuery, 'i');
+    
+    // Get matching video titles and descriptions for suggestions
+    const videos = await Video.find({
+      visibility: 'public',
+      $or: [
+        { title: regexQuery },
+        { description: regexQuery }
+      ]
+    })
+      .select('title _id thumbnailUrl')
+      .limit(parseInt(limit))
+      .sort({ views: -1 })
+      .exec();
+
+    // Extract unique titles as suggestions
+    const suggestions = videos.map(video => ({
+      title: video.title,
+      id: video._id,
+      thumbnailUrl: video.thumbnailUrl
+    }));
+
+    res.status(200).json({
+      success: true,
+      data: suggestions,
+      suggestions: suggestions
     });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
@@ -496,25 +588,33 @@ exports.getTrendingVideos = async (req, res, next) => {
 // @desc    Generate signed URL to stream a private B2 video
 // @route   GET /api/videos/:id/stream
 // @access  Public
-
-
-
 exports.streamVideo = async (req, res) => {
   try {
     const videoId = req.params.id;
+    const { quality } = req.query; // Optional quality parameter
 
     const video = await Video.findById(videoId);
     if (!video) {
       return res.status(404).json({ success: false, message: "Video not found" });
     }
 
-    // the S3 URL of Backblaze B2 is already stored in video.videoUrl
-    const fileUrl = video.videoUrl;
+    // Determine which video URL to use
+    let fileUrl = video.videoUrl; // Default to original
+    
+    // If quality is specified, find matching variant
+    if (quality && quality !== 'orig' && quality !== 'auto') {
+      const variants = video.variants || video.sources || [];
+      const variant = variants.find(v => String(v.quality) === String(quality));
+      if (variant && variant.url) {
+        fileUrl = variant.url;
+      }
+    }
 
     const range = req.headers.range;
 
     if (!range) {
-      return res.status(416).json({ success: false, message: "Range header required" });
+      // If no range header, redirect to direct URL for download
+      return res.redirect(fileUrl);
     }
 
     const videoSizeReq = await axios.head(fileUrl);
@@ -549,5 +649,48 @@ exports.streamVideo = async (req, res) => {
   } catch (err) {
     console.error("STREAM ERROR:", err.message);
     res.status(500).json({ success: false, error: "Stream failed" });
+  }
+};
+
+// @desc    Get download URL for video (with quality selection)
+// @route   GET /api/videos/:id/download
+// @access  Public
+exports.getDownloadUrl = async (req, res) => {
+  try {
+    const videoId = req.params.id;
+    const { quality } = req.query; // Quality parameter: '144', '240', '360', etc. or 'orig' for original
+
+    const video = await Video.findById(videoId);
+    if (!video) {
+      return res.status(404).json({ success: false, message: "Video not found" });
+    }
+
+    let downloadUrl = video.videoUrl; // Default to original
+    let qualityLabel = 'Original';
+
+    // If quality is specified and not 'orig', find matching variant
+    if (quality && quality !== 'orig' && quality !== 'auto') {
+      const variants = video.variants || video.sources || [];
+      const variant = variants.find(v => String(v.quality) === String(quality));
+      if (variant && variant.url) {
+        downloadUrl = variant.url;
+        qualityLabel = `${quality}p`;
+      }
+    }
+
+    // Get video title for filename
+    const safeTitle = video.title.replace(/[^a-z0-9]/gi, '_').toLowerCase();
+    const filename = `${safeTitle}_${qualityLabel}.mp4`;
+
+    res.status(200).json({
+      success: true,
+      data: {
+        downloadUrl: downloadUrl,
+        filename: filename,
+        quality: qualityLabel
+      }
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
   }
 };

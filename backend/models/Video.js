@@ -1,9 +1,10 @@
 const mongoose = require('mongoose');
 
 const VariantSchema = new mongoose.Schema({
-  quality: String,  // '720p', '480p'
+  quality: String,  // '144', '240', '360', '480', '720', '1080', '1440'
   url: String,
-  size: Number
+  size: Number,
+  filePath: String  // B2 storage path
 });
 
 const VideoSchema = new mongoose.Schema({
@@ -14,6 +15,7 @@ const VideoSchema = new mongoose.Schema({
   duration: { type: Number, default: 0 },
   views: { type: Number, default: 0 },
   likes: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
+  dislikes: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
   user: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
   category: { type: String, default: 'Other' },
   tags: [String],

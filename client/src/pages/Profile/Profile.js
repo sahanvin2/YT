@@ -1,6 +1,7 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { useAuth } from '../../context/AuthContext';
-import { updateProfile } from '../../utils/api';
+import { updateProfile, uploadAvatar } from '../../utils/api';
+import { FiUpload, FiX } from 'react-icons/fi';
 import './Profile.css';
 
 const avatarOptions = [
@@ -14,6 +15,7 @@ const avatarOptions = [
 
 const Profile = () => {
   const { user, isAuthenticated, refreshUser } = useAuth();
+  const fileInputRef = useRef(null);
   const [form, setForm] = useState({
     username: '',
     email: '',
@@ -22,17 +24,25 @@ const Profile = () => {
     avatar: ''
   });
   const [saving, setSaving] = useState(false);
+  const [uploadingAvatar, setUploadingAvatar] = useState(false);
   const [message, setMessage] = useState('');
+  const [avatarPreview, setAvatarPreview] = useState(null);
+  const [isCustomAvatar, setIsCustomAvatar] = useState(false);
 
   useEffect(() => {
     if (user) {
+      const currentAvatar = user.avatar || avatarOptions[0];
+      const isCustom = currentAvatar && !avatarOptions.includes(currentAvatar);
+      
       setForm({
         username: user.username || '',
         email: user.email || '',
         channelName: user.channelName || user.username || '',
         channelDescription: user.channelDescription || '',
-        avatar: user.avatar || avatarOptions[0]
+        avatar: currentAvatar
       });
+      setIsCustomAvatar(isCustom);
+      setAvatarPreview(isCustom ? currentAvatar : null);
     }
   }, [user]);
 
@@ -49,6 +59,86 @@ const Profile = () => {
   const handleChange = (e) => {
     const { name, value } = e.target;
     setForm(prev => ({ ...prev, [name]: value }));
+  };
+
+  const handleAvatarSelect = (avatarSrc) => {
+    setForm(prev => ({ ...prev, avatar: avatarSrc }));
+    setIsCustomAvatar(false);
+    setAvatarPreview(null);
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+  };
+
+  const handleFileSelect = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    // Validate file type
+    const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp'];
+    if (!allowedTypes.includes(file.type)) {
+      setMessage('Only JPEG, PNG, GIF, and WebP images are allowed');
+      return;
+    }
+
+    // Validate file size (5MB)
+    if (file.size > 5 * 1024 * 1024) {
+      setMessage('Image size must be less than 5MB');
+      return;
+    }
+
+    // Create preview
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      setAvatarPreview(reader.result);
+      setIsCustomAvatar(true);
+      setForm(prev => ({ ...prev, avatar: reader.result }));
+    };
+    reader.readAsDataURL(file);
+    setMessage('');
+  };
+
+  const handleUploadAvatar = async () => {
+    if (!fileInputRef.current || !fileInputRef.current.files[0]) {
+      setMessage('Please select an image file');
+      return;
+    }
+
+    try {
+      setUploadingAvatar(true);
+      setMessage('');
+      
+      const formData = new FormData();
+      formData.append('avatar', fileInputRef.current.files[0]);
+
+      const res = await uploadAvatar(user.id, formData);
+      
+      if (res.data.success) {
+        setForm(prev => ({ ...prev, avatar: res.data.data.avatar }));
+        setAvatarPreview(res.data.data.avatar);
+        setIsCustomAvatar(true);
+        await refreshUser?.();
+        setMessage('Avatar uploaded successfully!');
+        // Clear file input
+        if (fileInputRef.current) {
+          fileInputRef.current.value = '';
+        }
+      }
+    } catch (err) {
+      setMessage(err.response?.data?.message || 'Failed to upload avatar');
+      console.error(err);
+    } finally {
+      setUploadingAvatar(false);
+    }
+  };
+
+  const handleRemoveCustomAvatar = () => {
+    setAvatarPreview(null);
+    setIsCustomAvatar(false);
+    setForm(prev => ({ ...prev, avatar: avatarOptions[0] }));
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
   };
 
   const handleSave = async (e) => {
@@ -102,18 +192,72 @@ const Profile = () => {
           </div>
 
           <div className="form-group">
-            <label>Choose Avatar</label>
-            <div className="avatar-grid">
-              {avatarOptions.map((src) => (
+            <label>Profile Picture</label>
+            
+            {/* Current Avatar Preview */}
+            <div className="avatar-preview-section">
+              <div className="current-avatar-preview">
+                <img 
+                  src={avatarPreview || form.avatar || avatarOptions[0]} 
+                  alt="Current avatar" 
+                  className="preview-image"
+                />
+                {isCustomAvatar && avatarPreview && (
+                  <button
+                    type="button"
+                    className="remove-custom-avatar"
+                    onClick={handleRemoveCustomAvatar}
+                    title="Remove custom avatar"
+                  >
+                    <FiX size={16} />
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {/* Custom Avatar Upload */}
+            <div className="custom-avatar-upload">
+              <label className="upload-label">
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/jpeg,image/jpg,image/png,image/gif,image/webp"
+                  onChange={handleFileSelect}
+                  style={{ display: 'none' }}
+                />
+                <span className="upload-button">
+                  <FiUpload size={18} />
+                  Upload Custom Image
+                </span>
+              </label>
+              {avatarPreview && isCustomAvatar && (
                 <button
                   type="button"
-                  key={src}
-                  className={`avatar-option ${form.avatar === src ? 'selected' : ''}`}
-                  onClick={() => setForm(prev => ({ ...prev, avatar: src }))}
+                  className="btn-upload-avatar"
+                  onClick={handleUploadAvatar}
+                  disabled={uploadingAvatar}
                 >
-                  <img src={src} alt="avatar option" />
+                  {uploadingAvatar ? 'Uploading...' : 'Save Custom Avatar'}
                 </button>
-              ))}
+              )}
+              <p className="upload-hint">Max 5MB. JPEG, PNG, GIF, or WebP</p>
+            </div>
+
+            {/* Default Avatar Options */}
+            <div className="avatar-options-section">
+              <p className="avatar-options-label">Or choose from default avatars:</p>
+              <div className="avatar-grid">
+                {avatarOptions.map((src) => (
+                  <button
+                    type="button"
+                    key={src}
+                    className={`avatar-option ${form.avatar === src && !isCustomAvatar ? 'selected' : ''}`}
+                    onClick={() => handleAvatarSelect(src)}
+                  >
+                    <img src={src} alt="avatar option" />
+                  </button>
+                ))}
+              </div>
             </div>
           </div>
 
@@ -121,7 +265,11 @@ const Profile = () => {
             <button className="btn btn-primary" type="submit" disabled={saving}>
               {saving ? 'Saving...' : 'Save Changes'}
             </button>
-            {message && <span className="message">{message}</span>}
+            {message && (
+              <span className={`message ${message.includes('successfully') ? 'success' : message.includes('Failed') ? 'error' : ''}`}>
+                {message}
+              </span>
+            )}
           </div>
         </form>
       </div>

@@ -12,10 +12,14 @@ const Liked = () => {
     const load = async () => {
       try {
         setLoading(true);
+        setError('');
         const res = await getLikedVideos();
-        setVideos(res.data.data || []);
+        const videosData = res.data?.data || res.data || [];
+        setVideos(Array.isArray(videosData) ? videosData : []);
       } catch (e) {
+        console.error('Error loading liked videos:', e);
         setError('Failed to load liked videos');
+        setVideos([]);
       } finally {
         setLoading(false);
       }

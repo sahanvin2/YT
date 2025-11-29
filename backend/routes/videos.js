@@ -9,9 +9,11 @@ const {
   dislikeVideo,
   addView,
   searchVideos,
+  getSearchSuggestions,
   getTrendingVideos,
   createVideoFromUrl,
-  streamVideo
+  streamVideo,
+  getDownloadUrl
 } = require('../controllers/videoController');
 const { protect } = require('../middleware/auth');
 
@@ -30,8 +32,10 @@ router.post('/create', protect, createVideoFromUrl);
 
 
 router.get('/search', searchVideos);
+router.get('/search/suggestions', getSearchSuggestions);
 router.get('/trending', getTrendingVideos);
 router.get('/:id/stream', streamVideo);
+router.get('/:id/download', getDownloadUrl);
 
 
 router.route('/:id')

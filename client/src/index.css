@@ -16,6 +16,32 @@
   --card-bg: #1a1a1a;
 }
 
+/* Light Mode */
+[data-theme="light"] {
+  --primary-color: #ff0000;
+  --secondary-color: #ffffff;
+  --bg-color: #f9f9f9;
+  --sidebar-bg: #ffffff;
+  --text-primary: #030303;
+  --text-secondary: #606060;
+  --border-color: #e0e0e0;
+  --hover-bg: #f0f0f0;
+  --card-bg: #ffffff;
+}
+
+/* Dark Mode (default) */
+[data-theme="dark"] {
+  --primary-color: #ff0000;
+  --secondary-color: #282828;
+  --bg-color: #0f0f0f;
+  --sidebar-bg: #212121;
+  --text-primary: #ffffff;
+  --text-secondary: #aaaaaa;
+  --border-color: #303030;
+  --hover-bg: #3f3f3f;
+  --card-bg: #1a1a1a;
+}
+
 body {
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
     'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
@@ -24,6 +50,7 @@ body {
   -moz-osx-font-smoothing: grayscale;
   background-color: var(--bg-color);
   color: var(--text-primary);
+  transition: background-color 0.3s ease, color 0.3s ease;
 }
 
 code {

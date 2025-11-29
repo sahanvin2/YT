@@ -1,5 +1,9 @@
 const User = require('../models/User');
 const Video = require('../models/Video');
+const path = require('path');
+const fs = require('fs');
+const mime = require('mime-types');
+const { uploadFilePath, deleteFile } = require('../utils/b2');
 
 // @desc    Get user profile
 // @route   GET /api/users/:id
@@ -9,14 +13,24 @@ exports.getUserProfile = async (req, res, next) => {
     const user = await User.findById(req.params.id)
       .select('-password')
       .populate('videos')
-      .populate('subscribers', 'username avatar')
-      .populate('subscribedTo', 'username avatar channelName');
+      .populate('subscribers', 'username avatar name')
+      .populate('subscribedTo', 'username avatar channelName name');
 
     if (!user) {
       return res.status(404).json({ 
         success: false, 
         message: 'User not found' 
       });
+    }
+
+    // Ensure username exists (fallback to name for backward compatibility)
+    if (!user.username && user.name) {
+      user.username = user.name;
+    }
+    
+    // Ensure channelName exists (fallback to name or username)
+    if (!user.channelName) {
+      user.channelName = user.username || user.name || 'User';
     }
 
     res.status(200).json({
@@ -66,6 +80,100 @@ exports.updateProfile = async (req, res, next) => {
     res.status(200).json({
       success: true,
       data: user
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+// @desc    Upload avatar image
+// @route   POST /api/users/:id/avatar
+// @access  Private
+exports.uploadAvatar = async (req, res, next) => {
+  try {
+    // Make sure user is updating their own profile
+    if (req.params.id !== req.user.id) {
+      return res.status(401).json({ 
+        success: false, 
+        message: 'Not authorized to update this profile' 
+      });
+    }
+
+    if (!req.files || !req.files.avatar) {
+      return res.status(400).json({ 
+        success: false, 
+        message: 'Please upload an avatar image' 
+      });
+    }
+
+    const avatarFile = req.files.avatar;
+    const maxSizeBytes = 5 * 1024 * 1024; // 5MB
+    if (avatarFile.size > maxSizeBytes) {
+      return res.status(400).json({
+        success: false,
+        message: 'Avatar file size must be less than 5MB'
+      });
+    }
+
+    // Check file type
+    const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp'];
+    if (!allowedTypes.includes(avatarFile.mimetype)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Only JPEG, PNG, GIF, and WebP images are allowed'
+      });
+    }
+
+    // Get current user to delete old avatar if exists
+    const currentUser = await User.findById(req.params.id);
+    const oldAvatarUrl = currentUser.avatar;
+
+    // Use temp directory for staging before B2 upload
+    const tmpDir = path.join(__dirname, '../../tmp');
+    if (!fs.existsSync(tmpDir)) fs.mkdirSync(tmpDir, { recursive: true });
+    
+    const ts = Date.now();
+    const avatarExt = path.parse(avatarFile.name).ext || '.jpg';
+    const tmpAvatarPath = path.join(tmpDir, `avatar_${req.user.id}_${ts}${avatarExt}`);
+    await avatarFile.mv(tmpAvatarPath);
+
+    // Upload to B2
+    const avatarKey = `avatars/${req.user.id}/${ts}_${path.basename(tmpAvatarPath)}`;
+    const avatarCT = mime.lookup(tmpAvatarPath) || 'image/jpeg';
+    const avatarUrl = await uploadFilePath(tmpAvatarPath, avatarKey, avatarCT);
+
+    // Cleanup temp file
+    fs.unlink(tmpAvatarPath, () => {});
+
+    // Delete old avatar from B2 if it's a custom upload (starts with B2 URL)
+    if (oldAvatarUrl && oldAvatarUrl.includes('backblazeb2.com')) {
+      try {
+        // Extract key from URL
+        const urlParts = oldAvatarUrl.split('/');
+        const keyIndex = urlParts.findIndex(part => part === 'avatars');
+        if (keyIndex !== -1) {
+          const key = urlParts.slice(keyIndex).join('/');
+          await deleteFile(key);
+        }
+      } catch (err) {
+        console.error('Error deleting old avatar:', err);
+        // Continue even if deletion fails
+      }
+    }
+
+    // Update user avatar
+    const user = await User.findByIdAndUpdate(
+      req.params.id,
+      { avatar: avatarUrl },
+      { new: true }
+    ).select('-password');
+
+    res.status(200).json({
+      success: true,
+      data: {
+        avatar: avatarUrl,
+        user: user
+      }
     });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
@@ -272,9 +380,12 @@ exports.addToHistory = async (req, res, next) => {
 // @access  Private
 exports.getLikedVideos = async (req, res, next) => {
   try {
-    const user = await User.findById(req.user.id).select('likedVideos');
-    const videos = await Video.find({ _id: { $in: user.likedVideos } })
-      .populate('user', 'username avatar channelName')
+    // Find videos where the current user is in the likes array
+    const videos = await Video.find({ 
+      likes: { $in: [req.user.id] },
+      visibility: 'public'
+    })
+      .populate('user', 'username avatar channelName name')
       .sort({ createdAt: -1 });
 
     res.status(200).json({

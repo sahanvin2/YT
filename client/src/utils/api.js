@@ -15,7 +15,9 @@ export const likeVideo = (id) => axios.put(`${API_URL}/videos/${id}/like`);
 export const dislikeVideo = (id) => axios.put(`${API_URL}/videos/${id}/dislike`);
 export const addView = (id) => axios.put(`${API_URL}/videos/${id}/view`);
 export const searchVideos = (query, params) => axios.get(`${API_URL}/videos/search?q=${query}`, { params });
+export const getSearchSuggestions = (query, limit = 5) => axios.get(`${API_URL}/videos/search/suggestions?q=${query}&limit=${limit}`);
 export const getTrendingVideos = () => axios.get(`${API_URL}/videos/trending`);
+export const getDownloadUrl = (id, quality = 'orig') => axios.get(`${API_URL}/videos/${id}/download?quality=${quality}`);
 
 // Comments
 export const getComments = (videoId) => axios.get(`${API_URL}/videos/${videoId}/comments`);
@@ -27,6 +29,9 @@ export const addReply = (id, data) => axios.post(`${API_URL}/comments/${id}/repl
 // Users
 export const getUserProfile = (id) => axios.get(`${API_URL}/users/${id}`);
 export const updateProfile = (id, data) => axios.put(`${API_URL}/users/${id}`, data);
+export const uploadAvatar = (id, formData) => axios.post(`${API_URL}/users/${id}/avatar`, formData, {
+  headers: { 'Content-Type': 'multipart/form-data' }
+});
 export const toggleSubscribe = (id) => axios.put(`${API_URL}/users/${id}/subscribe`);
 export const getUserVideos = (id, params) => axios.get(`${API_URL}/users/${id}/videos`, { params });
 export const getSubscriptions = () => axios.get(`${API_URL}/users/subscriptions`);

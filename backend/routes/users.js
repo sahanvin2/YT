@@ -2,6 +2,7 @@ const express = require('express');
 const {
   getUserProfile,
   updateProfile,
+  uploadAvatar,
   toggleSubscribe,
   getUserVideos,
   getSubscriptions,
@@ -24,6 +25,7 @@ router.route('/:id')
   .get(getUserProfile)
   .put(protect, updateProfile);
 
+router.post('/:id/avatar', protect, uploadAvatar);
 router.put('/:id/subscribe', protect, toggleSubscribe);
 router.get('/:id/videos', getUserVideos);
 

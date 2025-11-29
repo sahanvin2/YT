@@ -8,6 +8,11 @@ const UserSchema = new mongoose.Schema({
     trim: true,
     maxlength: [50, 'Name cannot be more than 50 characters']
   },
+  username: {
+    type: String,
+    trim: true,
+    default: ''
+  },
   email: {
     type: String,
     required: [true, 'Please add an email'],
@@ -30,6 +35,22 @@ const UserSchema = new mongoose.Schema({
     enum: ['user', 'admin'],
     default: 'user'
   },
+  channelName: {
+    type: String,
+    trim: true,
+    default: function() {
+      return this.name || '';
+    }
+  },
+  channelDescription: {
+    type: String,
+    trim: true,
+    default: ''
+  },
+  videos: [{
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Video'
+  }],
   subscribers: [{
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User'
@@ -44,6 +65,10 @@ const UserSchema = new mongoose.Schema({
       watchedAt: { type: Date, default: Date.now }
     }
   ],
+  likedVideos: [{
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Video'
+  }],
   avatar: {
     type: String,
     default: ''
