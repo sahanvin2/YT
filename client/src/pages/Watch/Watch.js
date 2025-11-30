@@ -7,6 +7,9 @@ import { formatViews, formatDate, formatFileSize } from '../../utils/helpers';
 import { useAuth } from '../../context/AuthContext';
 import CommentSection from '../../components/CommentSection/CommentSection';
 import SubscribeButton from '../../components/SubscribeButton/SubscribeButton';
+import BannerAd from '../../components/Ads/BannerAd';
+import NativeAd from '../../components/Ads/NativeAd';
+import PopUnderAd from '../../components/Ads/PopUnderAd';
 import './Watch.css';
 
 const Watch = () => {
@@ -199,6 +202,8 @@ const Watch = () => {
 
   return (
     <div className="watch-page">
+      <PopUnderAd trigger="video-play" />
+      <BannerAd position="top" size="responsive" />
       <div className="watch-content">
         <div className="video-player-section">
           <div className="video-player">
@@ -384,9 +389,11 @@ const Watch = () => {
         </div>
 
         <div className="suggested-videos">
+          <BannerAd position="sidebar" size="medium-rectangle" />
           <h3>Suggested Videos</h3>
           {/* This would be populated with related videos in a real app */}
           <p className="no-videos">No suggested videos yet</p>
+          <NativeAd position="sidebar" index={1} />
         </div>
       </div>
     </div>

@@ -24,7 +24,8 @@ const health = require('./routes/health');
 const app = express();
 
 // Body parser
-app.use(express.json());
+app.use(express.json({ limit: "1000mb" }));
+app.use(express.urlencoded({ extended: true, limit: "1000mb" }));
 
 // Cookie parser
 app.use(cookieParser());

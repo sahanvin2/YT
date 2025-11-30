@@ -1,0 +1,83 @@
+.banner-ad {
+  width: 100%;
+  margin: 16px 0;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  background-color: transparent;
+  min-height: 90px;
+}
+
+.banner-ad-top {
+  margin-top: 0;
+  margin-bottom: 24px;
+}
+
+.banner-ad-bottom {
+  margin-top: 24px;
+  margin-bottom: 0;
+}
+
+.banner-ad-sidebar {
+  margin: 16px 0;
+  width: 100%;
+}
+
+.banner-ad-content {
+  width: 100%;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+/* Google AdSense */
+.adsbygoogle {
+  display: block;
+  width: 100%;
+  text-align: center;
+}
+
+/* Placeholder styles */
+.banner-ad-placeholder {
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.05) 0%, rgba(255, 255, 255, 0.02) 100%);
+  border: 1px dashed rgba(255, 255, 255, 0.2);
+  border-radius: 8px;
+  padding: 20px;
+}
+
+.banner-ad-placeholder .ad-label {
+  display: block;
+  font-size: 10px;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  margin-bottom: 8px;
+  text-align: center;
+}
+
+.banner-ad-placeholder .ad-placeholder {
+  color: var(--text-secondary);
+  font-size: 14px;
+  text-align: center;
+  opacity: 0.6;
+}
+
+.banner-ad-placeholder .ad-placeholder small {
+  display: block;
+  margin-top: 4px;
+  font-size: 11px;
+  opacity: 0.5;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .banner-ad {
+    margin: 12px 0;
+    min-height: 50px;
+  }
+
+  .banner-ad-sidebar {
+    display: none;
+  }
+}
+

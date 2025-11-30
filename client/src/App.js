@@ -2,6 +2,8 @@ import React, { useState } from 'react';
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import { AuthProvider } from './context/AuthContext';
 import { ThemeProvider } from './context/ThemeContext';
+import { AdProvider } from './context/AdContext';
+import BannerAd from './components/Ads/BannerAd';
 import Navbar from './components/Navbar/Navbar';
 import Sidebar from './components/Sidebar/Sidebar';
 import Home from './pages/Home/Home';
@@ -26,13 +28,15 @@ function App() {
   return (
     <ThemeProvider>
       <AuthProvider>
-        <Router>
-        <div className="app">
-          <Navbar toggleSidebar={toggleSidebar} />
-          <div className="app-content">
-            <Sidebar isOpen={sidebarOpen} />
-            <main className={`main-content ${sidebarOpen ? 'sidebar-open' : 'sidebar-closed'}`}>
-              <Routes>
+        <AdProvider>
+          <Router>
+          <div className="app">
+            <Navbar toggleSidebar={toggleSidebar} />
+            <BannerAd position="top" size="responsive" />
+            <div className="app-content">
+              <Sidebar isOpen={sidebarOpen} />
+              <main className={`main-content ${sidebarOpen ? 'sidebar-open' : 'sidebar-closed'}`}>
+                <Routes>
                 <Route path="/" element={<Home />} />
                 <Route path="/watch/:id" element={<Watch />} />
                 <Route path="/login" element={<Login />} />
@@ -46,12 +50,14 @@ function App() {
                 <Route path="/liked" element={<Liked />} />
                 <Route path="/subscriptions" element={<Subscriptions />} />
                 <Route path="/profile" element={<Profile />} />
-              </Routes>
-            </main>
+                </Routes>
+              </main>
+            </div>
+            <BannerAd position="bottom" size="responsive" />
           </div>
-        </div>
-      </Router>
-    </AuthProvider>
+        </Router>
+        </AdProvider>
+      </AuthProvider>
     </ThemeProvider>
   );
 }

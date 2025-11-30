@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useLocation, useParams } from 'react-router-dom';
 import VideoCard from '../../components/VideoCard/VideoCard';
+import NativeAd from '../../components/Ads/NativeAd';
 import { getVideos, getTrendingVideos, searchVideos } from '../../utils/api';
 import './Home.css';
 
@@ -81,8 +82,11 @@ const Home = ({ mode }) => {
   return (
     <div className="home-page">
       <div className="videos-grid">
-        {videos.map((video) => (
-          <VideoCard key={video._id} video={video} />
+        {videos.map((video, index) => (
+          <React.Fragment key={video._id}>
+            <VideoCard video={video} />
+            <NativeAd position="video-list" index={index} />
+          </React.Fragment>
         ))}
       </div>
 
