@@ -6,6 +6,8 @@ import {
   FiClock,
   FiThumbsUp,
   FiUsers,
+  FiFilm,
+  FiUser,
   FiMusic,
   FiMonitor,
   FiBook,
@@ -32,6 +34,8 @@ const Sidebar = ({ isOpen }) => {
   ];
 
   const categories = [
+    { path: '/category/Movies', icon: FiFilm, label: 'Movies' },
+    { path: '/category/Cosplay', icon: FiUser, label: 'Cosplay' },
     { path: '/category/Music', icon: FiMusic, label: 'Music' },
     { path: '/category/Gaming', icon: FiMonitor, label: 'Gaming' },
     { path: '/category/Education', icon: FiBook, label: 'Education' },

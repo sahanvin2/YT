@@ -35,6 +35,11 @@ export const AdProvider = ({ children }) => {
     popUnderDelay: 5000, // milliseconds before showing pop-under
     popUnderTriggers: ['video-play', 'page-load'], // when to trigger
     
+    // Smartlink ad settings
+    smartlinkEnabled: true,
+    smartlinkUrl: '', // Your smartlink URL here
+    smartlinkFrequency: 'once-per-video', // 'once-per-video' | 'once-per-session' | 'always'
+    
     // Custom ad codes (for custom ad networks)
     customBannerAds: {
       top: '',

@@ -178,7 +178,8 @@ const Upload = () => {
                 value={category}
                 onChange={onChange}
               >
-                <option value="Other">Other</option>
+                <option value="Movies">Movies</option>
+                <option value="Cosplay">Cosplay</option>
                 <option value="Music">Music</option>
                 <option value="Gaming">Gaming</option>
                 <option value="Education">Education</option>
@@ -186,7 +187,7 @@ const Upload = () => {
                 <option value="News">News</option>
                 <option value="Sports">Sports</option>
                 <option value="Technology">Technology</option>
-                <option value="Vlogs">Vlogs</option>
+                <option value="Other">Other</option>
               </select>
             </div>
 

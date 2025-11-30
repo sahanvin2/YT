@@ -1,0 +1,32 @@
+.tuski-logo {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 700;
+  font-size: 24px;
+  color: var(--text-primary);
+  text-decoration: none;
+  transition: transform 0.2s;
+}
+
+.tuski-logo:hover {
+  transform: scale(1.05);
+}
+
+.tuski-logo-svg {
+  flex-shrink: 0;
+  filter: drop-shadow(0 2px 4px rgba(155, 89, 182, 0.3));
+}
+
+.tuski-logo-text {
+  background: linear-gradient(135deg, #9b59b6 0%, #8e44ad 50%, #7d3c98 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  font-weight: 700;
+  letter-spacing: -0.5px;
+}
+
+
+
+

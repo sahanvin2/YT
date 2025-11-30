@@ -5,7 +5,7 @@
 }
 
 :root {
-  --primary-color: #ff0000;
+  --primary-color: #9b59b6;
   --secondary-color: #282828;
   --bg-color: #0f0f0f;
   --sidebar-bg: #212121;
@@ -16,22 +16,11 @@
   --card-bg: #1a1a1a;
 }
 
-/* Light Mode */
-[data-theme="light"] {
-  --primary-color: #ff0000;
-  --secondary-color: #ffffff;
-  --bg-color: #f9f9f9;
-  --sidebar-bg: #ffffff;
-  --text-primary: #030303;
-  --text-secondary: #606060;
-  --border-color: #e0e0e0;
-  --hover-bg: #f0f0f0;
-  --card-bg: #ffffff;
-}
-
-/* Dark Mode (default) */
+/* Dark Mode Only (forced) */
 [data-theme="dark"] {
-  --primary-color: #ff0000;
+  --primary-color: #9b59b6;
+  --primary-color-hover: #8e44ad;
+  --primary-color-dark: #7d3c98;
   --secondary-color: #282828;
   --bg-color: #0f0f0f;
   --sidebar-bg: #212121;
@@ -117,7 +106,7 @@ input, textarea {
 }
 
 .btn-primary:hover {
-  background-color: #cc0000;
+  background-color: #8e44ad;
 }
 
 .btn-secondary {

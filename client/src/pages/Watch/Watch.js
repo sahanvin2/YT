@@ -10,6 +10,8 @@ import SubscribeButton from '../../components/SubscribeButton/SubscribeButton';
 import BannerAd from '../../components/Ads/BannerAd';
 import NativeAd from '../../components/Ads/NativeAd';
 import PopUnderAd from '../../components/Ads/PopUnderAd';
+import { useSmartlinkAd } from '../../components/Ads/SmartlinkAd';
+import { useAds } from '../../context/AdContext';
 import './Watch.css';
 
 const Watch = () => {
@@ -29,6 +31,11 @@ const Watch = () => {
   const [downloading, setDownloading] = useState(false);
   const downloadMenuRef = useRef(null);
   const playerRef = useRef(null);
+  const { openSmartlink } = useSmartlinkAd();
+  const { adConfig } = useAds();
+  const [videoPlayed, setVideoPlayed] = useState(false);
+  const [adShown, setAdShown] = useState(false);
+  const [shouldPlayAfterAd, setShouldPlayAfterAd] = useState(false);
 
   useEffect(() => {
     const loadVideo = async () => {
@@ -216,13 +223,44 @@ const Watch = () => {
               controls
               width="100%"
               height="100%"
-              playing
+              playing={videoPlayed && !shouldPlayAfterAd}
               key={selectedSource ? selectedSource.quality : 'original'} // Force re-render on quality change
               config={{
                 file: {
                   attributes: {
                     controlsList: 'nodownload'
                   }
+                }
+              }}
+              onPlay={() => {
+                // Intercept play event - show smartlink ad first
+                if (!adShown && adConfig.smartlinkEnabled && adConfig.smartlinkUrl) {
+                  setAdShown(true);
+                  setShouldPlayAfterAd(true);
+                  // Pause video immediately
+                  if (playerRef.current) {
+                    const player = playerRef.current.getInternalPlayer();
+                    if (player) {
+                      player.pause();
+                    }
+                  }
+                  // Open smartlink ad
+                  openSmartlink(() => {
+                    // Ad closed/completed - now play video
+                    setAdShown(false);
+                    setVideoPlayed(true);
+                    setShouldPlayAfterAd(false);
+                    setTimeout(() => {
+                      if (playerRef.current) {
+                        const player = playerRef.current.getInternalPlayer();
+                        if (player) {
+                          player.play();
+                        }
+                      }
+                    }, 200);
+                  });
+                } else {
+                  setVideoPlayed(true);
                 }
               }}
               onError={(e) => {

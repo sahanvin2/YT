@@ -11,33 +11,31 @@ export const useTheme = () => {
 };
 
 export const ThemeProvider = ({ children }) => {
-  const [theme, setTheme] = useState(() => {
-    // Get theme from localStorage or default to dark
-    const savedTheme = localStorage.getItem('theme');
-    return savedTheme || 'dark';
-  });
+  // Force dark mode only - no theme switching
+  const [theme] = useState('dark');
 
   useEffect(() => {
-    // Apply theme to document
-    document.documentElement.setAttribute('data-theme', theme);
-    localStorage.setItem('theme', theme);
+    // Always apply dark theme
+    document.documentElement.setAttribute('data-theme', 'dark');
+    localStorage.setItem('theme', 'dark');
     
-    // Update favicon based on theme
+    // Update favicon
     const favicon = document.querySelector("link[rel='icon']");
     if (favicon) {
-      favicon.href = theme === 'light' ? '/favicon.svg' : '/favicon.svg';
+      favicon.href = '/favicon.svg';
     }
-  }, [theme]);
+  }, []);
 
+  // No toggle function - dark mode only
   const toggleTheme = () => {
-    setTheme(prevTheme => prevTheme === 'light' ? 'dark' : 'light');
+    // Disabled - dark mode only
   };
 
   const value = {
-    theme,
+    theme: 'dark',
     toggleTheme,
-    isDark: theme === 'dark',
-    isLight: theme === 'light'
+    isDark: true,
+    isLight: false
   };
 
   return <ThemeContext.Provider value={value}>{children}</ThemeContext.Provider>;

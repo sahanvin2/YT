@@ -1,9 +1,9 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { FiSearch, FiMenu, FiVideo, FiUser, FiLogOut, FiX, FiSun, FiMoon } from 'react-icons/fi';
+import { FiSearch, FiMenu, FiVideo, FiUser, FiLogOut, FiX } from 'react-icons/fi';
 import { useAuth } from '../../context/AuthContext';
-import { useTheme } from '../../context/ThemeContext';
 import { getSearchSuggestions } from '../../utils/api';
+import TuskiLogo from '../Logo/TuskiLogo';
 import './Navbar.css';
 
 const Navbar = ({ toggleSidebar }) => {
@@ -16,7 +16,6 @@ const Navbar = ({ toggleSidebar }) => {
   const searchRef = useRef(null);
   const suggestionsRef = useRef(null);
   const { user, isAuthenticated, logout } = useAuth();
-  const { theme, toggleTheme, isDark } = useTheme();
   const navigate = useNavigate();
 
   // Debounce function
@@ -102,8 +101,7 @@ const Navbar = ({ toggleSidebar }) => {
           <FiMenu size={24} />
         </button>
         <Link to="/" className="logo">
-          <FiVideo size={32} color="#ff0000" />
-          <span>Movia</span>
+          <TuskiLogo size={32} showText={true} />
         </Link>
       </div>
 
@@ -154,14 +152,6 @@ const Navbar = ({ toggleSidebar }) => {
       </div>
 
       <div className="navbar-right">
-        <button
-          className="theme-toggle"
-          onClick={toggleTheme}
-          aria-label={`Switch to ${isDark ? 'light' : 'dark'} mode`}
-          title={`Switch to ${isDark ? 'light' : 'dark'} mode`}
-        >
-          {isDark ? <FiSun size={20} /> : <FiMoon size={20} />}
-        </button>
         <button
           className="search-toggle"
           onClick={() => setMobileSearchOpen(!mobileSearchOpen)}

@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
-import { FiVideo } from 'react-icons/fi';
+import TuskiLogo from '../../components/Logo/TuskiLogo';
 import './Auth.css';
 
 const Login = () => {
@@ -39,8 +39,8 @@ const Login = () => {
     <div className="auth-page">
       <div className="auth-container">
         <div className="auth-header">
-          <FiVideo size={48} color="#ff0000" />
-          <h1>Welcome to Movia</h1>
+          <TuskiLogo size={48} showText={false} />
+          <h1>Welcome to Tuski</h1>
           <p>Sign in to continue</p>
         </div>
 
