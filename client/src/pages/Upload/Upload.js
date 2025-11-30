@@ -178,15 +178,25 @@ const Upload = () => {
                 value={category}
                 onChange={onChange}
               >
-                <option value="Movies">Movies</option>
-                <option value="Cosplay">Cosplay</option>
+                <option value="Animation">Animation</option>
+                <option value="Art and Design">Art & Design</option>
+                <option value="Cameras and Drones">Cameras & Drones</option>
+                <option value="Comedy">Comedy</option>
+                <option value="Documentary">Documentary</option>
+                <option value="Experimental">Experimental</option>
+                <option value="Fashion">Fashion</option>
+                <option value="Food">Food</option>
+                <option value="Instructional">Instructional</option>
+                <option value="Reporting and Journalism">Reporting & Journalism</option>
                 <option value="Music">Music</option>
-                <option value="Gaming">Gaming</option>
-                <option value="Education">Education</option>
-                <option value="Entertainment">Entertainment</option>
-                <option value="News">News</option>
+                <option value="Narrative">Narrative</option>
                 <option value="Sports">Sports</option>
-                <option value="Technology">Technology</option>
+                <option value="Talks">Talks</option>
+                <option value="Travel and Vlog">Travel & Vlog</option>
+                <option value="Astrology and Astronomy">Astrology & Astronomy</option>
+                <option value="Biology">Biology</option>
+                <option value="Physics">Physics</option>
+                <option value="Chemistry">Chemistry</option>
                 <option value="Other">Other</option>
               </select>
             </div>

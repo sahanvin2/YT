@@ -1,9 +1,10 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { FiSearch, FiMenu, FiVideo, FiUser, FiLogOut, FiX } from 'react-icons/fi';
+import { FiSearch, FiMenu, FiVideo, FiUser, FiLogOut, FiX, FiSun, FiMoon } from 'react-icons/fi';
 import { useAuth } from '../../context/AuthContext';
+import { useTheme } from '../../context/ThemeContext';
 import { getSearchSuggestions } from '../../utils/api';
-import TuskiLogo from '../Logo/TuskiLogo';
+import MoviaLogo from '../Logo/MoviaLogo';
 import './Navbar.css';
 
 const Navbar = ({ toggleSidebar }) => {
@@ -16,6 +17,7 @@ const Navbar = ({ toggleSidebar }) => {
   const searchRef = useRef(null);
   const suggestionsRef = useRef(null);
   const { user, isAuthenticated, logout } = useAuth();
+  const { theme, toggleTheme } = useTheme();
   const navigate = useNavigate();
 
   // Debounce function
@@ -36,7 +38,7 @@ const Navbar = ({ toggleSidebar }) => {
   useEffect(() => {
     const handleClickOutside = (event) => {
       if (
-        searchRef.current && 
+        searchRef.current &&
         !searchRef.current.contains(event.target) &&
         suggestionsRef.current &&
         !suggestionsRef.current.contains(event.target)
@@ -101,7 +103,7 @@ const Navbar = ({ toggleSidebar }) => {
           <FiMenu size={24} />
         </button>
         <Link to="/" className="logo">
-          <TuskiLogo size={32} showText={true} />
+          <MoviaLogo size={28} showText={true} />
         </Link>
       </div>
 
@@ -130,7 +132,7 @@ const Navbar = ({ toggleSidebar }) => {
             <FiX size={18} />
           </button>
         </form>
-        
+
         {showSuggestions && (suggestions.length > 0 || isLoadingSuggestions) && (
           <div className="search-suggestions" ref={suggestionsRef}>
             {isLoadingSuggestions ? (
@@ -152,6 +154,14 @@ const Navbar = ({ toggleSidebar }) => {
       </div>
 
       <div className="navbar-right">
+        <button
+          className="theme-toggle"
+          onClick={toggleTheme}
+          aria-label="Toggle theme"
+          title={`Switch to ${theme === 'dark' ? 'light' : 'dark'} mode`}
+        >
+          {theme === 'dark' ? <FiSun size={20} /> : <FiMoon size={20} />}
+        </button>
         <button
           className="search-toggle"
           onClick={() => setMobileSearchOpen(!mobileSearchOpen)}

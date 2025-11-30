@@ -1,0 +1,59 @@
+.category-section {
+    margin-bottom: 2rem;
+    padding: 0 1rem;
+}
+
+.section-header {
+    margin-bottom: 1rem;
+}
+
+.section-title {
+    font-size: 1.5rem;
+    font-weight: bold;
+    color: var(--text-primary);
+    text-decoration: none;
+}
+
+.section-title:hover {
+    color: var(--primary-color);
+}
+
+.video-row-container {
+    overflow-x: auto;
+    padding-bottom: 1rem;
+    /* Hide scrollbar for cleaner look but keep functionality */
+    scrollbar-width: thin;
+    scrollbar-color: var(--primary-color) var(--bg-color);
+}
+
+.video-row-container::-webkit-scrollbar {
+    height: 8px;
+}
+
+.video-row-container::-webkit-scrollbar-track {
+    background: var(--bg-color);
+}
+
+.video-row-container::-webkit-scrollbar-thumb {
+    background-color: var(--primary-color);
+    border-radius: 4px;
+}
+
+.video-row {
+    display: flex;
+    gap: 1rem;
+    min-width: min-content;
+    /* Ensure row expands */
+}
+
+.video-item {
+    width: 280px;
+    /* Fixed width for cards in row */
+    flex-shrink: 0;
+}
+
+/* Adjust VideoCard styles if needed when inside video-item */
+.video-item .video-card {
+    width: 100%;
+    height: 100%;
+}

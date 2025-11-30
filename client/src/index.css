@@ -5,7 +5,9 @@
 }
 
 :root {
-  --primary-color: #9b59b6;
+  --primary-color: #FF0000;
+  --primary-color-hover: #CC0000;
+  --primary-color-dark: #990000;
   --secondary-color: #282828;
   --bg-color: #0f0f0f;
   --sidebar-bg: #212121;
@@ -16,11 +18,11 @@
   --card-bg: #1a1a1a;
 }
 
-/* Dark Mode Only (forced) */
+/* Dark Mode (Red theme) */
 [data-theme="dark"] {
-  --primary-color: #9b59b6;
-  --primary-color-hover: #8e44ad;
-  --primary-color-dark: #7d3c98;
+  --primary-color: #FF0000;
+  --primary-color-hover: #CC0000;
+  --primary-color-dark: #990000;
   --secondary-color: #282828;
   --bg-color: #0f0f0f;
   --sidebar-bg: #212121;
@@ -29,6 +31,21 @@
   --border-color: #303030;
   --hover-bg: #3f3f3f;
   --card-bg: #1a1a1a;
+}
+
+/* Light Mode (Navy Blue theme) */
+[data-theme="light"] {
+  --primary-color: #1e3a8a;
+  --primary-color-hover: #1e40af;
+  --primary-color-dark: #1e293b;
+  --secondary-color: #e2e8f0;
+  --bg-color: #f8fafc;
+  --sidebar-bg: #ffffff;
+  --text-primary: #0f172a;
+  --text-secondary: #475569;
+  --border-color: #e2e8f0;
+  --hover-bg: #f1f5f9;
+  --card-bg: #ffffff;
 }
 
 body {
@@ -59,7 +76,8 @@ button {
   font-family: inherit;
 }
 
-input, textarea {
+input,
+textarea {
   font-family: inherit;
   outline: none;
 }
@@ -106,7 +124,7 @@ input, textarea {
 }
 
 .btn-primary:hover {
-  background-color: #8e44ad;
+  background-color: var(--primary-color-hover);
 }
 
 .btn-secondary {
@@ -140,8 +158,13 @@ input, textarea {
 }
 
 @keyframes spin {
-  0% { transform: rotate(0deg); }
-  100% { transform: rotate(360deg); }
+  0% {
+    transform: rotate(0deg);
+  }
+
+  100% {
+    transform: rotate(360deg);
+  }
 }
 
 .loading-container {

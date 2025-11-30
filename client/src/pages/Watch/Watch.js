@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { useParams, Link } from 'react-router-dom';
+import { useParams, Link, useNavigate } from 'react-router-dom';
 import ReactPlayer from 'react-player';
 import { FiThumbsUp, FiThumbsDown, FiShare2, FiDownload } from 'react-icons/fi';
 import { getVideo, likeVideo, dislikeVideo, addView, addToHistory, getDownloadUrl } from '../../utils/api';
@@ -7,15 +7,19 @@ import { formatViews, formatDate, formatFileSize } from '../../utils/helpers';
 import { useAuth } from '../../context/AuthContext';
 import CommentSection from '../../components/CommentSection/CommentSection';
 import SubscribeButton from '../../components/SubscribeButton/SubscribeButton';
-import BannerAd from '../../components/Ads/BannerAd';
+import AdBanner from '../../components/Ad/AdBanner';
 import NativeAd from '../../components/Ads/NativeAd';
 import PopUnderAd from '../../components/Ads/PopUnderAd';
 import { useSmartlinkAd } from '../../components/Ads/SmartlinkAd';
 import { useAds } from '../../context/AdContext';
+import ShareModal from '../../components/ShareModal/ShareModal';
+import DownloadModal from '../../components/DownloadModal/DownloadModal';
+import VideoCard from '../../components/VideoCard/VideoCard';
 import './Watch.css';
 
 const Watch = () => {
   const { id } = useParams();
+  const navigate = useNavigate();
   const { isAuthenticated } = useAuth();
   const historyPostedRef = useRef({});
   const [video, setVideo] = useState(null);
@@ -36,6 +40,9 @@ const Watch = () => {
   const [videoPlayed, setVideoPlayed] = useState(false);
   const [adShown, setAdShown] = useState(false);
   const [shouldPlayAfterAd, setShouldPlayAfterAd] = useState(false);
+  const [showShareModal, setShowShareModal] = useState(false);
+  const [showDownloadModal, setShowDownloadModal] = useState(false);
+  const [relatedVideos, setRelatedVideos] = useState([]);
 
   useEffect(() => {
     const loadVideo = async () => {
@@ -48,6 +55,14 @@ const Watch = () => {
     loadVideo();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
+
+  // Fetch related videos when video data is loaded
+  useEffect(() => {
+    if (video?.category) {
+      fetchRelatedVideos(video.category);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [video]);
 
   // Close download menu when clicking outside
   useEffect(() => {
@@ -73,25 +88,25 @@ const Watch = () => {
       const newUrl = selectedSource
         ? (selectedSource.url || selectedSource.videoUrl || video.videoUrl)
         : video.videoUrl;
-      
+
       // ReactPlayer will automatically update when url prop changes
     }
   }, [selectedSource, video]);
-  
+
 
   const fetchVideo = async () => {
     try {
       setLoading(true);
       const res = await getVideo(id);
       const videoData = res.data.data;
-      
+
       // Validate video URL exists
       if (!videoData.videoUrl) {
         setError('Video URL is missing');
         setLoading(false);
         return;
       }
-      
+
       setVideo(videoData);
       setLikesCount(videoData.likes?.length || 0);
       setDislikesCount(videoData.dislikes?.length || 0);
@@ -100,8 +115,8 @@ const Watch = () => {
       // Check both sources and variants arrays
       const sources = videoData.sources || videoData.variants || [];
       if (sources.length > 0) {
-        const sorted = [...sources].sort((a,b)=>a.quality-b.quality);
-        setSelectedSource(sorted[sorted.length-1]);
+        const sorted = [...sources].sort((a, b) => a.quality - b.quality);
+        setSelectedSource(sorted[sorted.length - 1]);
       } else {
         setSelectedSource(null);
       }
@@ -110,6 +125,18 @@ const Watch = () => {
       console.error('Error loading video:', err);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchRelatedVideos = async (category) => {
+    try {
+      const { getVideos } = require('../../utils/api');
+      const res = await getVideos({ category, limit: 10 });
+      const videos = res.data.data || [];
+      // Filter out current video
+      setRelatedVideos(videos.filter(v => v._id !== id));
+    } catch (err) {
+      console.error('Error fetching related videos:', err);
     }
   };
 
@@ -133,7 +160,7 @@ const Watch = () => {
 
   const handleLike = async () => {
     if (!isAuthenticated) return;
-    
+
     try {
       const res = await likeVideo(id);
       setIsLiked(res.data.data.isLiked);
@@ -147,7 +174,7 @@ const Watch = () => {
 
   const handleDislike = async () => {
     if (!isAuthenticated) return;
-    
+
     try {
       const res = await dislikeVideo(id);
       setIsDisliked(res.data.data.isDisliked);
@@ -164,31 +191,9 @@ const Watch = () => {
     alert('Link copied to clipboard!');
   };
 
-  const handleDownload = async (quality = 'orig') => {
-    try {
-      setDownloading(true);
-      const res = await getDownloadUrl(id, quality);
-      
-      if (res.data.success) {
-        const { downloadUrl, filename } = res.data.data;
-        
-        // Create a temporary link and trigger download
-        const link = document.createElement('a');
-        link.href = downloadUrl;
-        link.download = filename;
-        link.target = '_blank';
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        
-        setShowDownloadMenu(false);
-      }
-    } catch (err) {
-      console.error('Error downloading video:', err);
-      alert('Failed to download video. Please try again.');
-    } finally {
-      setDownloading(false);
-    }
+
+  const handleDownload = () => {
+    setShowDownloadModal(true);
   };
 
   if (loading) {
@@ -210,7 +215,7 @@ const Watch = () => {
   return (
     <div className="watch-page">
       <PopUnderAd trigger="video-play" />
-      <BannerAd position="top" size="responsive" />
+      <AdBanner location="watch" />
       <div className="watch-content">
         <div className="video-player-section">
           <div className="video-player">
@@ -296,61 +301,18 @@ const Watch = () => {
                 <span>{formatViews(dislikesCount)}</span>
               </button>
 
-              <button className="action-btn" onClick={handleShare}>
+              <button className="action-btn" onClick={() => setShowShareModal(true)}>
                 <FiShare2 size={20} />
                 <span>Share</span>
               </button>
 
-              <div className="download-menu-container" ref={downloadMenuRef}>
-                <button 
-                  className="action-btn" 
-                  onClick={() => setShowDownloadMenu(!showDownloadMenu)}
-                  disabled={downloading}
-                >
-                  <FiDownload size={20} />
-                  <span>{downloading ? 'Downloading...' : 'Download'}</span>
-                </button>
-                {showDownloadMenu && (
-                  <div className="download-quality-menu">
-                    <div className="download-menu-header">
-                      <span>Choose Quality</span>
-                      <button 
-                        className="close-download-menu"
-                        onClick={() => setShowDownloadMenu(false)}
-                      >
-                        ×
-                      </button>
-                    </div>
-                    <div className="download-options">
-                      <button
-                        className="download-option"
-                        onClick={() => handleDownload('orig')}
-                        disabled={downloading}
-                      >
-                        <span className="quality-name">Original</span>
-                        <span className="quality-size">
-                          {video.videoUrl ? 'Full quality' : 'N/A'}
-                        </span>
-                      </button>
-                      {[...(video.sources || video.variants || [])]
-                        .sort((a, b) => parseInt(b.quality) - parseInt(a.quality))
-                        .map(variant => (
-                          <button
-                            key={variant.quality}
-                            className="download-option"
-                            onClick={() => handleDownload(variant.quality)}
-                            disabled={downloading}
-                          >
-                            <span className="quality-name">{variant.quality}p</span>
-                            <span className="quality-size">
-                              {variant.size ? formatFileSize(variant.size) : 'N/A'}
-                            </span>
-                          </button>
-                        ))}
-                    </div>
-                  </div>
-                )}
-              </div>
+              <button
+                className="action-btn"
+                onClick={handleDownload}
+              >
+                <FiDownload size={20} />
+                <span>Download</span>
+              </button>
             </div>
           </div>
 
@@ -427,13 +389,29 @@ const Watch = () => {
         </div>
 
         <div className="suggested-videos">
-          <BannerAd position="sidebar" size="medium-rectangle" />
-          <h3>Suggested Videos</h3>
-          {/* This would be populated with related videos in a real app */}
-          <p className="no-videos">No suggested videos yet</p>
-          <NativeAd position="sidebar" index={1} />
+          <AdBanner location="sidebar" />
+          <h3>Related Videos</h3>
+          {relatedVideos.length > 0 ? (
+            <div className="related-videos-list">
+              {relatedVideos.map((relatedVideo) => (
+                <VideoCard key={relatedVideo._id} video={relatedVideo} layout="horizontal" />
+              ))}
+            </div>
+          ) : (
+            <p className="no-videos">No related videos yet</p>
+          )}
         </div>
       </div>
+
+      {/* Share Modal */}
+      {showShareModal && video && (
+        <ShareModal video={video} onClose={() => setShowShareModal(false)} />
+      )}
+
+      {/* Download Modal */}
+      {showDownloadModal && video && (
+        <DownloadModal video={video} onClose={() => setShowDownloadModal(false)} />
+      )}
     </div>
   );
 };

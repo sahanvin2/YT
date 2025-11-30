@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
-import TuskiLogo from '../../components/Logo/TuskiLogo';
+import MoviaLogo from '../../components/Logo/MoviaLogo';
 import './Auth.css';
 
 const Register = () => {
@@ -38,10 +38,10 @@ const Register = () => {
 
     setLoading(true);
 
-    const result = await register({ 
-      name:username,
-      email, 
-      password 
+    const result = await register({
+      name: username,
+      email,
+      password
     });
 
     if (result.success) {
@@ -56,8 +56,8 @@ const Register = () => {
     <div className="auth-page">
       <div className="auth-container">
         <div className="auth-header">
-          <TuskiLogo size={48} showText={false} />
-          <h1>Join Tuski</h1>
+          <MoviaLogo size={48} showText={false} />
+          <h1>Join Movia</h1>
           <p>Create your account</p>
         </div>
 

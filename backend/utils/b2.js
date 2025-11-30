@@ -88,13 +88,23 @@ const { GetObjectCommand } = require('@aws-sdk/client-s3');
  * Generate a signed GET URL to access private B2 files
  * @param {string} key - file key in the bucket
  * @param {number} expires - seconds the URL is valid (default 15 min)
+ * @param {object} options - optional overrides (responseContentDisposition, responseContentType)
  * @returns {Promise<string>} - signed URL
  */
-async function presignGet(key, expires = 900) {
-  const cmd = new GetObjectCommand({
+async function presignGet(key, expires = 900, options = {}) {
+  const params = {
     Bucket: B2_BUCKET,
     Key: key,
-  });
+  };
+
+  if (options.responseContentDisposition) {
+    params.ResponseContentDisposition = options.responseContentDisposition;
+  }
+  if (options.responseContentType) {
+    params.ResponseContentType = options.responseContentType;
+  }
+
+  const cmd = new GetObjectCommand(params);
   return await getSignedUrl(s3, cmd, { expiresIn: expires });
 }
 

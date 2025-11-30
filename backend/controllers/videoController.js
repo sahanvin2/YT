@@ -42,7 +42,7 @@ function r2KeyFromUrl(url) {
 exports.getVideos = async (req, res, next) => {
   try {
     const { page = 1, limit = 12, category, sort = '-createdAt' } = req.query;
-    
+
     const query = { visibility: 'public' };
     if (category && category !== 'all') {
       query.category = category;
@@ -85,9 +85,9 @@ exports.getVideo = async (req, res, next) => {
       });
 
     if (!video) {
-      return res.status(404).json({ 
-        success: false, 
-        message: 'Video not found' 
+      return res.status(404).json({
+        success: false,
+        message: 'Video not found'
       });
     }
 
@@ -118,13 +118,13 @@ exports.uploadVideo = async (req, res, next) => {
     if (videoFile.size > maxSizeBytes) {
       return res.status(400).json({
         success: false,
-        message: `Video file exceeds maximum size of ${Math.round(maxSizeBytes / (1024*1024))}MB`
+        message: `Video file exceeds maximum size of ${Math.round(maxSizeBytes / (1024 * 1024))}MB`
       });
     }
 
     // Use temp directory for staging before B2 upload
     const tmpDir = path.join(__dirname, '../../tmp');
-    try { fs.mkdirSync(tmpDir, { recursive: true }); } catch {}
+    try { fs.mkdirSync(tmpDir, { recursive: true }); } catch { }
     const ts = Date.now();
     const videoExt = path.parse(videoFile.name).ext || '.mp4';
     const tmpVideoPath = path.join(tmpDir, `video_${ts}${videoExt}`);
@@ -135,16 +135,42 @@ exports.uploadVideo = async (req, res, next) => {
     const videoCT = mime.lookup(tmpVideoPath) || 'application/octet-stream';
     const videoUrl = await uploadFilePath(tmpVideoPath, videoKey, videoCT);
 
-    // Optional thumbnail upload (if provided)
-    let thumbnailUrl;
+    // Thumbnail handling
+    let thumbnailUrl = '';
+
     if (thumbnailFile) {
+      // User provided thumbnail
       const thumbExt = path.parse(thumbnailFile.name).ext || '.jpg';
       const tmpThumbPath = path.join(tmpDir, `thumb_${ts}${thumbExt}`);
       await thumbnailFile.mv(tmpThumbPath);
       const thumbKey = `thumbnails/${req.user.id}/${ts}_${path.basename(tmpThumbPath)}`;
       const thumbCT = mime.lookup(tmpThumbPath) || 'image/jpeg';
       thumbnailUrl = await uploadFilePath(tmpThumbPath, thumbKey, thumbCT);
-      try { await fs.promises.unlink(tmpThumbPath); } catch {}
+      try { await fs.promises.unlink(tmpThumbPath); } catch { }
+    } else {
+      // Auto-generate thumbnail
+      try {
+        const tmpThumbPath = path.join(tmpDir, `thumb_auto_${ts}.jpg`);
+
+        await new Promise((resolve, reject) => {
+          ffmpeg(tmpVideoPath)
+            .screenshots({
+              timestamps: ['1'], // Take screenshot at 1 second
+              filename: path.basename(tmpThumbPath),
+              folder: tmpDir,
+              size: '1280x720'
+            })
+            .on('end', resolve)
+            .on('error', reject);
+        });
+
+        const thumbKey = `thumbnails/${req.user.id}/${ts}_auto.jpg`;
+        thumbnailUrl = await uploadFilePath(tmpThumbPath, thumbKey, 'image/jpeg');
+        try { await fs.promises.unlink(tmpThumbPath); } catch { }
+      } catch (err) {
+        console.error('Error generating auto-thumbnail:', err);
+        // Continue without thumbnail if generation fails
+      }
     }
 
     // Duration and resolution probing
@@ -157,7 +183,7 @@ exports.uploadVideo = async (req, res, next) => {
           resolve(data);
         });
       });
-      
+
       duration = Math.round(probeData.format.duration || 0);
       const videoStream = probeData.streams.find(s => s.codec_type === 'video');
       if (videoStream && videoStream.height) {
@@ -203,13 +229,13 @@ exports.uploadVideo = async (req, res, next) => {
       })
       .finally(() => {
         // Cleanup temp video file after processing
-        fs.unlink(tmpVideoPath, () => {});
+        fs.unlink(tmpVideoPath, () => { });
       });
 
     // Return immediately (variants will be generated in background)
-    res.status(201).json({ 
-      success: true, 
-      data: video, 
+    res.status(201).json({
+      success: true,
+      data: video,
       video,
       message: 'Video uploaded successfully. Quality variants are being generated in the background.'
     });
@@ -254,18 +280,50 @@ exports.updateVideo = async (req, res, next) => {
     let video = await Video.findById(req.params.id);
 
     if (!video) {
-      return res.status(404).json({ 
-        success: false, 
-        message: 'Video not found' 
+      return res.status(404).json({
+        success: false,
+        message: 'Video not found'
       });
     }
 
     // Make sure user is video owner
     if (video.user.toString() !== req.user.id) {
-      return res.status(401).json({ 
-        success: false, 
-        message: 'Not authorized to update this video' 
+      return res.status(401).json({
+        success: false,
+        message: 'Not authorized to update this video'
       });
+    }
+
+    // Handle thumbnail update
+    if (req.files && req.files.thumbnail) {
+      const thumbnailFile = req.files.thumbnail;
+      const tmpDir = path.join(__dirname, '../../tmp');
+      try { fs.mkdirSync(tmpDir, { recursive: true }); } catch { }
+
+      const ts = Date.now();
+      const thumbExt = path.parse(thumbnailFile.name).ext || '.jpg';
+      const tmpThumbPath = path.join(tmpDir, `thumb_update_${ts}${thumbExt}`);
+
+      await thumbnailFile.mv(tmpThumbPath);
+
+      const thumbKey = `thumbnails/${req.user.id}/${ts}_update${thumbExt}`;
+      const thumbCT = mime.lookup(tmpThumbPath) || 'image/jpeg';
+
+      // Delete old thumbnail if exists
+      if (video.thumbnailUrl) {
+        try {
+          // Extract key from old URL
+          const oldKey = video.thumbnailUrl.split('/').slice(-2).join('/');
+          if (oldKey) await deleteFile(oldKey);
+        } catch (e) {
+          console.error('Error deleting old thumbnail:', e);
+        }
+      }
+
+      const newThumbnailUrl = await uploadFilePath(tmpThumbPath, thumbKey, thumbCT);
+      req.body.thumbnailUrl = newThumbnailUrl;
+
+      try { await fs.promises.unlink(tmpThumbPath); } catch { }
     }
 
     if (req.body.tags && typeof req.body.tags === 'string') {
@@ -311,14 +369,14 @@ exports.deleteVideo = async (req, res, next) => {
     // Delete main video file
     const mainKey = deriveKey(video.videoUrl);
     if (mainKey) {
-      try { await deleteFile(mainKey); } catch {}
+      try { await deleteFile(mainKey); } catch { }
     }
 
     // Delete thumbnail
     if (video.thumbnailUrl) {
       const thumbKey = deriveKey(video.thumbnailUrl);
       if (thumbKey) {
-        try { await deleteFile(thumbKey); } catch {}
+        try { await deleteFile(thumbKey); } catch { }
       }
     }
 
@@ -327,7 +385,7 @@ exports.deleteVideo = async (req, res, next) => {
     for (const variant of variantList) {
       const vKey = deriveKey(variant.url || variant.videoUrl || variant.sourceUrl);
       if (vKey) {
-        try { await deleteFile(vKey); } catch {}
+        try { await deleteFile(vKey); } catch { }
       }
     }
 
@@ -348,9 +406,9 @@ exports.likeVideo = async (req, res, next) => {
     const video = await Video.findById(req.params.id);
 
     if (!video) {
-      return res.status(404).json({ 
-        success: false, 
-        message: 'Video not found' 
+      return res.status(404).json({
+        success: false,
+        message: 'Video not found'
       });
     }
 
@@ -395,9 +453,9 @@ exports.dislikeVideo = async (req, res, next) => {
     const video = await Video.findById(req.params.id);
 
     if (!video) {
-      return res.status(404).json({ 
-        success: false, 
-        message: 'Video not found' 
+      return res.status(404).json({
+        success: false,
+        message: 'Video not found'
       });
     }
 
@@ -472,18 +530,18 @@ exports.searchVideos = async (req, res, next) => {
     const { q, page = 1, limit = 12 } = req.query;
 
     if (!q || q.trim() === '') {
-      return res.status(400).json({ 
-        success: false, 
-        message: 'Please provide a search query' 
+      return res.status(400).json({
+        success: false,
+        message: 'Please provide a search query'
       });
     }
 
     const searchQuery = q.trim();
-    
+
     // Use regex for partial matching (case-insensitive)
     // This allows searching by title, description, or tags
     const regexQuery = new RegExp(searchQuery, 'i');
-    
+
     const query = {
       visibility: 'public',
       $or: [
@@ -532,7 +590,7 @@ exports.getSearchSuggestions = async (req, res, next) => {
 
     const searchQuery = q.trim();
     const regexQuery = new RegExp(searchQuery, 'i');
-    
+
     // Get matching video titles and descriptions for suggestions
     const videos = await Video.find({
       visibility: 'public',
@@ -600,7 +658,7 @@ exports.streamVideo = async (req, res) => {
 
     // Determine which video URL to use
     let fileUrl = video.videoUrl; // Default to original
-    
+
     // If quality is specified, find matching variant
     if (quality && quality !== 'orig' && quality !== 'auto') {
       const variants = video.variants || video.sources || [];
@@ -692,5 +750,88 @@ exports.getDownloadUrl = async (req, res) => {
     });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+// @desc    Proxy video download to avoid CORS/Direct link issues
+// @route   GET /api/videos/:id/download-file
+// @access  Public
+// @desc    Redirect to signed download URL (bypasses server proxy)
+// @route   GET /api/videos/:id/download-file
+// @access  Public
+exports.downloadVideoProxy = async (req, res) => {
+  try {
+    const videoId = req.params.id;
+    const { quality } = req.query;
+
+    const video = await Video.findById(videoId);
+    if (!video) {
+      return res.status(404).json({ success: false, message: "Video not found" });
+    }
+
+    let fileUrl = video.videoUrl;
+    let qualityLabel = 'Original';
+
+    // Try to find requested quality
+    if (quality && quality !== 'orig' && quality !== 'auto') {
+      const variants = video.variants || video.sources || [];
+      const variant = variants.find(v => String(v.quality) === String(quality));
+      if (variant && variant.url) {
+        fileUrl = variant.url;
+        qualityLabel = `${quality}p`;
+      }
+    }
+
+    // Get video title for filename
+    const safeTitle = video.title.replace(/[^a-z0-9]/gi, '_').toLowerCase();
+    const filename = `${safeTitle}_${qualityLabel}.mp4`;
+
+    // Extract key from URL
+    // We need to use the r2KeyFromUrl helper or similar logic
+    let key = null;
+    try {
+      const u = new URL(fileUrl);
+      if (u.hostname.endsWith('.b2.dev') || u.hostname.includes('backblazeb2.com')) {
+        // Standard B2 URL: https://f000.backblazeb2.com/file/<bucket>/<key>
+        // or https://<bucket>.s3.<region>.backblazeb2.com/<key>
+        // Our r2KeyFromUrl handles .b2.dev but let's be robust
+        const parts = u.pathname.split('/').filter(Boolean);
+        // If path starts with /file/<bucket>/, key is after that
+        if (parts[0] === 'file' && parts.length > 2) {
+          key = parts.slice(2).join('/');
+        } else {
+          // Assume path is key (for custom domains or s3-style)
+          key = decodeURIComponent(u.pathname.slice(1));
+        }
+      } else if (u.hostname.includes('r2.dev') || u.hostname.includes('cloudflarestorage.com')) {
+        key = r2KeyFromUrl(fileUrl);
+      } else {
+        // Fallback: assume the path relative to bucket root is the key
+        // This might need adjustment based on exact URL format in DB
+        key = decodeURIComponent(u.pathname.slice(1));
+      }
+    } catch (e) {
+      console.error('Error parsing URL:', e);
+    }
+
+    if (!key) {
+      // Fallback to redirecting to the public URL if we can't determine key
+      // This won't force download but at least opens the file
+      return res.redirect(fileUrl);
+    }
+
+    // Generate signed URL with content-disposition attachment
+    const { presignGet } = require('../utils/b2');
+    const signedUrl = await presignGet(key, 3600, {
+      responseContentDisposition: `attachment; filename="${filename}"`,
+      responseContentType: 'video/mp4'
+    });
+
+    // Redirect user to the signed URL
+    res.redirect(signedUrl);
+
+  } catch (error) {
+    console.error('Download Redirect Error:', error.message);
+    res.status(500).json({ success: false, message: `Download failed: ${error.message}` });
   }
 };

@@ -5,7 +5,8 @@ import { formatViews } from '../../utils/helpers';
 import VideoCard from '../../components/VideoCard/VideoCard';
 import SubscribeButton from '../../components/SubscribeButton/SubscribeButton';
 import { useAuth } from '../../context/AuthContext';
-import { FiTrash2, FiMoreVertical } from 'react-icons/fi';
+import { FiTrash2, FiMoreVertical, FiEdit } from 'react-icons/fi';
+import EditVideoModal from '../../components/EditVideoModal/EditVideoModal';
 import './Channel.css';
 
 const Channel = () => {
@@ -18,6 +19,7 @@ const Channel = () => {
   const [activeTab, setActiveTab] = useState('videos');
   const [deletingVideoId, setDeletingVideoId] = useState(null);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(null);
+  const [editingVideo, setEditingVideo] = useState(null);
   const deleteMenuRef = useRef(null);
 
   useEffect(() => {
@@ -49,15 +51,15 @@ const Channel = () => {
         getUserProfile(id),
         getUserVideos(id)
       ]);
-      
+
       // Handle different response structures
       const channelData = profileRes.data?.data || profileRes.data;
       const videosData = videosRes.data?.data || videosRes.data || [];
-      
+
       if (!channelData) {
         throw new Error('Channel data not found');
       }
-      
+
       setChannel(channelData);
       setVideos(Array.isArray(videosData) ? videosData : []);
       setError('');
@@ -79,15 +81,27 @@ const Channel = () => {
     setShowDeleteConfirm(videoId);
   };
 
+  const handleEditClick = (video) => {
+    setEditingVideo(video);
+    setShowDeleteConfirm(null);
+  };
+
+  const handleEditUpdate = (updatedVideo) => {
+    setVideos(prevVideos => prevVideos.map(v =>
+      v._id === updatedVideo._id ? updatedVideo : v
+    ));
+    setEditingVideo(null);
+  };
+
   const handleDeleteConfirm = async (videoId) => {
     try {
       setDeletingVideoId(videoId);
       await deleteVideo(videoId);
-      
+
       // Remove video from list
       setVideos(prevVideos => prevVideos.filter(v => v._id !== videoId));
       setShowDeleteConfirm(null);
-      
+
       // Update channel video count
       if (channel) {
         setChannel(prev => ({
@@ -129,9 +143,9 @@ const Channel = () => {
         <div className="channel-banner"></div>
         <div className="channel-info-header">
           <div className="channel-avatar-large">
-            <img 
-              src={channel.avatar || '/avatars/avatar1.svg'} 
-              alt={channel.username || channel.name || 'User'} 
+            <img
+              src={channel.avatar || '/avatars/avatar1.svg'}
+              alt={channel.username || channel.name || 'User'}
               onError={(e) => {
                 e.target.src = '/avatars/avatar1.svg';
               }}
@@ -190,6 +204,13 @@ const Channel = () => {
                     <div className="video-actions-menu" ref={showDeleteConfirm === video._id ? deleteMenuRef : null}>
                       <button
                         className="video-menu-btn"
+                        onClick={() => handleEditClick(video)}
+                        title="Edit video"
+                      >
+                        <FiEdit size={18} />
+                      </button>
+                      <button
+                        className="video-menu-btn"
                         onClick={() => handleDeleteClick(video._id)}
                         title="Delete video"
                         disabled={deletingVideoId === video._id}
@@ -226,6 +247,13 @@ const Channel = () => {
               <div className="no-content">
                 <p>No videos uploaded yet</p>
               </div>
+            )}
+            {editingVideo && (
+              <EditVideoModal
+                video={editingVideo}
+                onClose={() => setEditingVideo(null)}
+                onUpdate={handleEditUpdate}
+              />
             )}
           </div>
         )}

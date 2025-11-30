@@ -13,7 +13,8 @@ const {
   getTrendingVideos,
   createVideoFromUrl,
   streamVideo,
-  getDownloadUrl
+  getDownloadUrl,
+  downloadVideoProxy
 } = require('../controllers/videoController');
 const { protect } = require('../middleware/auth');
 
@@ -36,6 +37,7 @@ router.get('/search/suggestions', getSearchSuggestions);
 router.get('/trending', getTrendingVideos);
 router.get('/:id/stream', streamVideo);
 router.get('/:id/download', getDownloadUrl);
+router.get('/:id/download-file', downloadVideoProxy);
 
 
 router.route('/:id')

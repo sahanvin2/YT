@@ -13,7 +13,22 @@ import {
   FiBook,
   FiSmile,
   FiRadio,
-  FiTarget
+  FiTarget,
+  FiPenTool,
+  FiCamera,
+  FiFileText,
+  FiZap,
+  FiShoppingBag,
+  FiCoffee,
+  FiMic,
+  FiMessageCircle,
+  FiMessageSquare,
+  FiMapPin,
+  FiMoon,
+  FiActivity,
+  FiCpu,
+  FiDroplet,
+  FiGrid
 } from 'react-icons/fi';
 import { useAuth } from '../../context/AuthContext';
 import './Sidebar.css';
@@ -24,7 +39,8 @@ const Sidebar = ({ isOpen }) => {
 
   const mainLinks = [
     { path: '/', icon: FiHome, label: 'Home' },
-    { path: '/trending', icon: FiTrendingUp, label: 'Trending' }
+    { path: '/trending', icon: FiTrendingUp, label: 'Trending' },
+    { path: '/categories', icon: FiGrid, label: 'Categories' }
   ];
 
   const userLinks = [
@@ -34,14 +50,25 @@ const Sidebar = ({ isOpen }) => {
   ];
 
   const categories = [
-    { path: '/category/Movies', icon: FiFilm, label: 'Movies' },
-    { path: '/category/Cosplay', icon: FiUser, label: 'Cosplay' },
+    { path: '/category/Animation', icon: FiFilm, label: 'Animation' },
+    { path: '/category/Art and Design', icon: FiPenTool, label: 'Art & Design' },
+    { path: '/category/Cameras and Drones', icon: FiCamera, label: 'Cameras & Drones' },
+    { path: '/category/Comedy', icon: FiSmile, label: 'Comedy' },
+    { path: '/category/Documentary', icon: FiFileText, label: 'Documentary' },
+    { path: '/category/Experimental', icon: FiZap, label: 'Experimental' },
+    { path: '/category/Fashion', icon: FiShoppingBag, label: 'Fashion' },
+    { path: '/category/Food', icon: FiCoffee, label: 'Food' },
+    { path: '/category/Instructional', icon: FiBook, label: 'Instructional' },
+    { path: '/category/Reporting and Journalism', icon: FiMic, label: 'Reporting' },
     { path: '/category/Music', icon: FiMusic, label: 'Music' },
-    { path: '/category/Gaming', icon: FiMonitor, label: 'Gaming' },
-    { path: '/category/Education', icon: FiBook, label: 'Education' },
-    { path: '/category/Entertainment', icon: FiSmile, label: 'Entertainment' },
-    { path: '/category/News', icon: FiRadio, label: 'News' },
-    { path: '/category/Sports', icon: FiTarget, label: 'Sports' }
+    { path: '/category/Narrative', icon: FiMessageCircle, label: 'Narrative' },
+    { path: '/category/Sports', icon: FiTarget, label: 'Sports' },
+    { path: '/category/Talks', icon: FiMessageSquare, label: 'Talks' },
+    { path: '/category/Travel and Vlog', icon: FiMapPin, label: 'Travel & Vlog' },
+    { path: '/category/Astrology and Astronomy', icon: FiMoon, label: 'Astrology' },
+    { path: '/category/Biology', icon: FiActivity, label: 'Biology' },
+    { path: '/category/Physics', icon: FiCpu, label: 'Physics' },
+    { path: '/category/Chemistry', icon: FiDroplet, label: 'Chemistry' }
   ];
 
   const isActive = (path) => {
@@ -82,7 +109,7 @@ const Sidebar = ({ isOpen }) => {
 
         <div className="sidebar-section">
           <div className="sidebar-title">Categories</div>
-          {categories.map((category) => (
+          {categories.slice(0, 6).map((category) => (
             <Link
               key={category.path}
               to={category.path}

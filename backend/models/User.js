@@ -38,7 +38,7 @@ const UserSchema = new mongoose.Schema({
   channelName: {
     type: String,
     trim: true,
-    default: function() {
+    default: function () {
       return this.name || '';
     }
   },
@@ -73,6 +73,10 @@ const UserSchema = new mongoose.Schema({
     type: String,
     default: ''
   },
+  channelBanner: {
+    type: String,
+    default: ''
+  },
   createdAt: {
     type: Date,
     default: Date.now
@@ -80,11 +84,11 @@ const UserSchema = new mongoose.Schema({
 });
 
 // Encrypt password before saving
-UserSchema.pre('save', async function(next) {
+UserSchema.pre('save', async function (next) {
   if (!this.isModified('password')) {
     return next();
   }
-  
+
   try {
     const salt = await bcrypt.genSalt(10);
     this.password = await bcrypt.hash(this.password, salt);
@@ -95,7 +99,7 @@ UserSchema.pre('save', async function(next) {
 });
 
 // Match password method
-UserSchema.methods.matchPassword = async function(enteredPassword) {
+UserSchema.methods.matchPassword = async function (enteredPassword) {
   return await bcrypt.compare(enteredPassword, this.password);
 };
 

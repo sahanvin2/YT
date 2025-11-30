@@ -5,39 +5,29 @@ const ThemeContext = createContext();
 export const useTheme = () => {
   const context = useContext(ThemeContext);
   if (!context) {
-    throw new Error('useTheme must be used within a ThemeProvider');
+    throw new Error('useTheme must be used within ThemeProvider');
   }
   return context;
 };
 
 export const ThemeProvider = ({ children }) => {
-  // Force dark mode only - no theme switching
-  const [theme] = useState('dark');
+  const [theme, setTheme] = useState(() => {
+    const savedTheme = localStorage.getItem('movia-theme');
+    return savedTheme || 'dark';
+  });
 
   useEffect(() => {
-    // Always apply dark theme
-    document.documentElement.setAttribute('data-theme', 'dark');
-    localStorage.setItem('theme', 'dark');
-    
-    // Update favicon
-    const favicon = document.querySelector("link[rel='icon']");
-    if (favicon) {
-      favicon.href = '/favicon.svg';
-    }
-  }, []);
+    document.documentElement.setAttribute('data-theme', theme);
+    localStorage.setItem('movia-theme', theme);
+  }, [theme]);
 
-  // No toggle function - dark mode only
   const toggleTheme = () => {
-    // Disabled - dark mode only
+    setTheme(prevTheme => prevTheme === 'dark' ? 'light' : 'dark');
   };
 
-  const value = {
-    theme: 'dark',
-    toggleTheme,
-    isDark: true,
-    isLight: false
-  };
-
-  return <ThemeContext.Provider value={value}>{children}</ThemeContext.Provider>;
+  return (
+    <ThemeContext.Provider value={{ theme, toggleTheme }}>
+      {children}
+    </ThemeContext.Provider>
+  );
 };
-

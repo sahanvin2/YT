@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useLocation, useParams } from 'react-router-dom';
 import VideoCard from '../../components/VideoCard/VideoCard';
-import NativeAd from '../../components/Ads/NativeAd';
+import AdBanner from '../../components/Ad/AdBanner';
 import { getVideos, getTrendingVideos, searchVideos } from '../../utils/api';
 import './Home.css';
 
@@ -85,7 +85,7 @@ const Home = ({ mode }) => {
         {videos.map((video, index) => (
           <React.Fragment key={video._id}>
             <VideoCard video={video} />
-            <NativeAd position="video-list" index={index} />
+            {index === 0 && <AdBanner location="home" />}
           </React.Fragment>
         ))}
       </div>
