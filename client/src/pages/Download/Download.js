@@ -3,7 +3,6 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { FiDownload, FiArrowLeft, FiCheck } from 'react-icons/fi';
 import { getVideo, getDownloadUrl } from '../../utils/api';
 import { formatFileSize } from '../../utils/helpers';
-import AdBanner from '../../components/Ad/AdBanner';
 import './Download.css';
 
 const Download = () => {
@@ -115,11 +114,6 @@ const Download = () => {
 
     return (
         <div className="download-page">
-            {/* Top Ad */}
-            <div className="download-ad-top">
-                <AdBanner location="download-top" />
-            </div>
-
             {/* Main Content */}
             <div className="download-container">
                 <button className="back-btn" onClick={() => navigate(-1)}>
@@ -191,11 +185,6 @@ const Download = () => {
                         </p>
                     </div>
                 </div>
-            </div>
-
-            {/* Bottom Ad */}
-            <div className="download-ad-bottom">
-                <AdBanner location="download-bottom" />
             </div>
         </div>
     );

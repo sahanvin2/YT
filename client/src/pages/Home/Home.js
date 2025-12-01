@@ -82,11 +82,8 @@ const Home = ({ mode }) => {
   return (
     <div className="home-page">
       <div className="videos-grid">
-        {videos.map((video, index) => (
-          <React.Fragment key={video._id}>
-            <VideoCard video={video} />
-            {index === 0 && <AdBanner location="home" />}
-          </React.Fragment>
+        {videos.map((video) => (
+          <VideoCard key={video._id} video={video} />
         ))}
       </div>
 

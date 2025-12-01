@@ -5,7 +5,6 @@ import {
     FiShoppingBag, FiCoffee, FiBook, FiMic, FiMusic, FiMessageCircle,
     FiTarget, FiMessageSquare, FiMapPin, FiMoon, FiActivity, FiCpu
 } from 'react-icons/fi';
-import AdBanner from '../../components/Ad/AdBanner';
 import CategorySection from './CategorySection';
 import './CategoryPage.css';
 
@@ -33,7 +32,6 @@ const CategoryPage = () => {
 
     return (
         <div className="category-page">
-            <AdBanner location="category" />
             <h1>All Categories</h1>
             <div className="category-grid">
                 {displayCategories.map((category) => (

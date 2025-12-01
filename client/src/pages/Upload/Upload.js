@@ -35,8 +35,8 @@ const Upload = () => {
 
   const onVideoChange = (e) => {
     const file = e.target.files[0];
-    if (file && file.size > 500000000) {
-      setError('Video file must be less than 500MB');
+    if (file && file.size > 2147483648) { // 2GB
+      setError('Video file must be less than 2GB');
       return;
     }
     setVideoFile(file);
@@ -120,7 +120,7 @@ const Upload = () => {
               <div className="file-input-label">
                 <FiUpload size={24} />
                 <span>{videoFile ? videoFile.name : 'Choose video file'}</span>
-                <small>Max size: 500MB</small>
+                <small>Max size: 2GB</small>
               </div>
             </div>
           </div>

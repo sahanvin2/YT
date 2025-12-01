@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import { AuthProvider } from './context/AuthContext';
 import { ThemeProvider } from './context/ThemeContext';
@@ -15,6 +15,8 @@ import Channel from './pages/Channel/Channel';
 import Profile from './pages/Profile/Profile';
 import History from './pages/Library/History';
 import Liked from './pages/Library/Liked';
+import Saved from './pages/Library/Saved';
+import Clips from './pages/Library/Clips';
 import Subscriptions from './pages/Library/Subscriptions';
 import Download from './pages/Download/Download';
 import './App.css';
@@ -25,6 +27,20 @@ function App() {
   const toggleSidebar = () => {
     setSidebarOpen(!sidebarOpen);
   };
+
+  // Listen for sidebar collapse event from Watch component
+  useEffect(() => {
+    const handleCollapseSidebar = () => {
+      if (sidebarOpen) {
+        setSidebarOpen(false);
+      }
+    };
+
+    window.addEventListener('collapseSidebar', handleCollapseSidebar);
+    return () => {
+      window.removeEventListener('collapseSidebar', handleCollapseSidebar);
+    };
+  }, [sidebarOpen]);
 
   return (
     <ThemeProvider>
@@ -49,6 +65,8 @@ function App() {
                     <Route path="/search" element={<Home mode="search" />} />
                     <Route path="/history" element={<History />} />
                     <Route path="/liked" element={<Liked />} />
+                    <Route path="/saved" element={<Saved />} />
+                    <Route path="/clips" element={<Clips />} />
                     <Route path="/subscriptions" element={<Subscriptions />} />
                     <Route path="/profile" element={<Profile />} />
                     <Route path="/download/:id" element={<Download />} />

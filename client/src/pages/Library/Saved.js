@@ -1,14 +1,14 @@
 import React, { useEffect, useState } from 'react';
-import { getWatchHistory } from '../../utils/api';
+import { getSavedVideos } from '../../utils/api';
 import VideoCard from '../../components/VideoCard/VideoCard';
 import { useAuth } from '../../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import './Library.css';
 
-const History = () => {
+const Saved = () => {
   const { isAuthenticated, loading: authLoading } = useAuth();
   const navigate = useNavigate();
-  const [items, setItems] = useState([]);
+  const [videos, setVideos] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
@@ -18,7 +18,7 @@ const History = () => {
 
     // Check if user is authenticated
     if (!isAuthenticated) {
-      setError('Please sign in to view your watch history');
+      setError('Please sign in to view your saved videos');
       setLoading(false);
       return;
     }
@@ -27,18 +27,19 @@ const History = () => {
       try {
         setLoading(true);
         setError('');
-        const res = await getWatchHistory();
-        setItems(res.data.data || []);
+        const res = await getSavedVideos();
+        const videosData = res.data?.data || res.data || [];
+        setVideos(Array.isArray(videosData) ? videosData : []);
       } catch (e) {
-        console.error('Error loading history:', e);
+        console.error('Error loading saved videos:', e);
         // Check if it's an authentication error
         if (e.response?.status === 401) {
-          setError('Please sign in to view your watch history');
+          setError('Please sign in to view your saved videos');
           setTimeout(() => navigate('/login'), 2000);
         } else {
-          setError('Failed to load history. Please try refreshing the page.');
+          setError('Failed to load saved videos. Please try refreshing the page.');
         }
-        setItems([]);
+        setVideos([]);
       } finally {
         setLoading(false);
       }
@@ -51,16 +52,17 @@ const History = () => {
 
   return (
     <div className="library-page">
-      <h2>Watch History</h2>
+      <h2>Saved Videos</h2>
       <div className="videos-grid">
-        {items.length === 0 ? (
-          <div className="no-content"><p>No history yet</p></div>
+        {videos.length === 0 ? (
+          <div className="no-content"><p>No saved videos yet</p></div>
         ) : (
-          items.map(item => item.video && <VideoCard key={item.video._id} video={item.video} />)
+          videos.map(v => <VideoCard key={v._id} video={v} />)
         )}
       </div>
     </div>
   );
 };
 
-export default History;
+export default Saved;
+

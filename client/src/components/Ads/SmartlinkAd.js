@@ -115,17 +115,26 @@ export const useSmartlinkAd = () => {
       return;
     }
 
+    // Store callback in window so it persists across page navigation
+    if (callback) {
+      window.smartlinkCallback = callback;
+    }
+
+    // Open smartlink in new tab (better for user experience)
     const adWindow = window.open(
       smartlinkUrl,
-      '_blank',
-      'width=800,height=600,scrollbars=yes,resizable=yes'
+      '_blank'
     );
 
     if (!adWindow) {
-      // Popup blocked
-      if (window.confirm('Please allow popups to view the advertisement.')) {
+      // Popup blocked - try opening in same window
+      if (window.confirm('Please allow popups to view the advertisement. Click OK to continue.')) {
+        // Store that we're redirecting
+        sessionStorage.setItem('smartlinkRedirect', 'true');
+        sessionStorage.setItem('smartlinkCallback', 'true');
         window.location.href = smartlinkUrl;
       } else {
+        // User cancelled - execute callback immediately
         if (callback) callback();
       }
       return;
@@ -134,25 +143,53 @@ export const useSmartlinkAd = () => {
     adWindowRef.current = adWindow;
     setAdShown(true);
 
-    // Check if window closed
+    // Check if window closed or if user returns to page
+    const handleFocus = () => {
+      // User returned to page - check if ad window is closed
+      if (adWindow && adWindow.closed) {
+        clearInterval(checkIntervalRef.current);
+        window.removeEventListener('focus', handleFocus);
+        setAdShown(false);
+        if (callback) callback();
+        if (window.smartlinkCallback) {
+          window.smartlinkCallback();
+          delete window.smartlinkCallback;
+        }
+      }
+    };
+
+    // Listen for page focus (user returning from ad)
+    window.addEventListener('focus', handleFocus);
+
+    // Check if ad window is closed
     checkIntervalRef.current = setInterval(() => {
       if (adWindow.closed) {
         clearInterval(checkIntervalRef.current);
+        window.removeEventListener('focus', handleFocus);
         setAdShown(false);
         if (callback) callback();
+        if (window.smartlinkCallback) {
+          window.smartlinkCallback();
+          delete window.smartlinkCallback;
+        }
       }
     }, 500);
 
-    // Timeout after 30 seconds
+    // Timeout after 30 seconds - allow video to play anyway
     setTimeout(() => {
       if (checkIntervalRef.current) {
         clearInterval(checkIntervalRef.current);
       }
+      window.removeEventListener('focus', handleFocus);
       if (adWindow && !adWindow.closed) {
-        adWindow.close();
+        // Don't close the window - let user keep it open if they want
       }
       setAdShown(false);
       if (callback) callback();
+      if (window.smartlinkCallback) {
+        window.smartlinkCallback();
+        delete window.smartlinkCallback;
+      }
     }, 30000);
   };
 
@@ -171,6 +208,9 @@ export const useSmartlinkAd = () => {
 };
 
 export default SmartlinkAd;
+
+
+
 
 
 

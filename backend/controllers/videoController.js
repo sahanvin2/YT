@@ -41,11 +41,16 @@ function r2KeyFromUrl(url) {
 // @access  Public
 exports.getVideos = async (req, res, next) => {
   try {
-    const { page = 1, limit = 12, category, sort = '-createdAt' } = req.query;
+    const { page = 1, limit = 12, category, sort = '-createdAt', clips } = req.query;
 
     const query = { visibility: 'public' };
     if (category && category !== 'all') {
       query.category = category;
+    }
+    
+    // Filter for clips (videos under 2 minutes / less than 120 seconds)
+    if (clips === 'true') {
+      query.duration = { $lt: 120 };
     }
 
     const videos = await Video.find(query)
@@ -114,7 +119,7 @@ exports.uploadVideo = async (req, res, next) => {
     const videoFile = req.files.video;
     const thumbnailFile = req.files.thumbnail;
 
-    const maxSizeBytes = parseInt(process.env.MAX_VIDEO_SIZE_MB || '500') * 1024 * 1024;
+    const maxSizeBytes = parseInt(process.env.MAX_VIDEO_SIZE_MB || '2048') * 1024 * 1024;
     if (videoFile.size > maxSizeBytes) {
       return res.status(400).json({
         success: false,
@@ -501,22 +506,45 @@ exports.addView = async (req, res, next) => {
       return res.status(404).json({ success: false, message: 'Video not found' });
     }
 
-    // Always increment (counts multiple watches by same user)
-    video.views += 1;
-    await video.save();
+    const userId = req.user ? req.user.id : null;
+    const ip = req.headers['x-forwarded-for']?.split(',')[0] || req.socket.remoteAddress || req.ip;
+    
+    // Check if this view was already counted (within last 24 hours for same user/IP)
+    const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
+    const existingView = await View.findOne({
+      video: video._id,
+      $or: [
+        ...(userId ? [{ user: userId }] : []),
+        { ip: ip }
+      ],
+      createdAt: { $gte: oneDayAgo }
+    });
 
-    // Record a view event
-    try {
-      await View.create({
-        video: video._id,
-        user: req.user ? req.user.id : undefined,
-        ip: req.headers['x-forwarded-for'] || req.socket.remoteAddress
-      });
-    } catch (e) {
-      // Silently ignore view logging errors
+    // Only count if this is a new view (not viewed in last 24 hours)
+    if (!existingView) {
+      video.views += 1;
+      await video.save();
+
+      // Record a view event
+      try {
+        await View.create({
+          video: video._id,
+          user: userId,
+          ip: ip
+        });
+      } catch (e) {
+        // Silently ignore view logging errors
+        console.error('Error recording view:', e);
+      }
     }
 
-    res.status(200).json({ success: true, data: { views: video.views } });
+    res.status(200).json({ 
+      success: true, 
+      data: { 
+        views: video.views,
+        counted: !existingView
+      } 
+    });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }

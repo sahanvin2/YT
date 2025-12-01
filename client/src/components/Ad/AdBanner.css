@@ -12,6 +12,14 @@
     color: var(--text-secondary);
 }
 
+.ad-container {
+    width: 100%;
+    min-height: 90px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
 .ad-content h3 {
     color: var(--primary-color);
     margin: 0.5rem 0;

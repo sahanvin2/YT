@@ -38,4 +38,19 @@ export const getSubscriptions = () => axios.get(`${API_URL}/users/subscriptions`
 export const getWatchHistory = () => axios.get(`${API_URL}/users/history`);
 export const addToHistory = (videoId) => axios.post(`${API_URL}/users/history/${videoId}`);
 export const getLikedVideos = () => axios.get(`${API_URL}/users/liked`);
+export const getSavedVideos = () => axios.get(`${API_URL}/users/saved`);
+export const saveVideo = (videoId) => axios.post(`${API_URL}/users/saved/${videoId}`);
 export const getSubscriptionVideos = (params) => axios.get(`${API_URL}/users/subscriptions/videos`, { params });
+export const uploadBanner = (id, formData) => axios.post(`${API_URL}/users/${id}/banner`, formData, {
+  headers: { 'Content-Type': 'multipart/form-data' }
+});
+export const updateSettings = (id, settings) => axios.put(`${API_URL}/users/${id}/settings`, { settings });
+
+// Playlists
+export const createPlaylist = (data) => axios.post(`${API_URL}/playlists`, data);
+export const getPlaylists = () => axios.get(`${API_URL}/playlists`);
+export const getPlaylist = (id) => axios.get(`${API_URL}/playlists/${id}`);
+export const updatePlaylist = (id, data) => axios.put(`${API_URL}/playlists/${id}`, data);
+export const deletePlaylist = (id) => axios.delete(`${API_URL}/playlists/${id}`);
+export const addVideoToPlaylist = (playlistId, videoId) => axios.post(`${API_URL}/playlists/${playlistId}/videos/${videoId}`);
+export const removeVideoFromPlaylist = (playlistId, videoId) => axios.delete(`${API_URL}/playlists/${playlistId}/videos/${videoId}`);

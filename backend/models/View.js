@@ -7,6 +7,9 @@ const ViewSchema = new mongoose.Schema({
   createdAt: { type: Date, default: Date.now }
 });
 
+// Indexes for efficient querying
 ViewSchema.index({ video: 1, createdAt: -1 });
+ViewSchema.index({ video: 1, user: 1, createdAt: -1 });
+ViewSchema.index({ video: 1, ip: 1, createdAt: -1 });
 
 module.exports = mongoose.model('View', ViewSchema);

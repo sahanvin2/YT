@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { FiDownload, FiX, FiCheck } from 'react-icons/fi';
 import { formatFileSize } from '../../utils/helpers';
-import AdBanner from '../Ad/AdBanner';
+import { useSmartlinkAd } from '../Ads/SmartlinkAd';
+import { useAds } from '../../context/AdContext';
 import './DownloadModal.css';
 
 const DownloadModal = ({ video, onClose }) => {
@@ -9,6 +10,9 @@ const DownloadModal = ({ video, onClose }) => {
     const [downloading, setDownloading] = useState(false);
     const [countdown, setCountdown] = useState(5);
     const [canDownload, setCanDownload] = useState(false);
+    const [smartlinkShown, setSmartlinkShown] = useState(false);
+    const { openSmartlink } = useSmartlinkAd();
+    const { adConfig } = useAds();
 
     useEffect(() => {
         if (countdown > 0) {
@@ -75,26 +79,59 @@ const DownloadModal = ({ video, onClose }) => {
     };
 
     const handleDownload = () => {
-        // Find the URL for the selected quality
-        let downloadUrl = video.videoUrl; // Default to original
+        // Show smartlink ad before download if enabled and not shown yet
+        if (!smartlinkShown && adConfig.smartlinkEnabled && adConfig.smartlinkUrl) {
+            setSmartlinkShown(true);
+            setDownloading(true);
+            
+            // Open smartlink ad
+            openSmartlink(() => {
+                // Ad closed/completed - proceed with download
+                setDownloading(false);
+                
+                // Find the URL for the selected quality
+                let downloadUrl = video.videoUrl; // Default to original
 
-        if (selectedQuality !== 'orig') {
-            const sources = video.variants || video.sources || [];
-            // Use loose comparison (==) to handle string/number differences
-            const selectedVariant = sources.find(v => v.quality == selectedQuality);
+                if (selectedQuality !== 'orig') {
+                    const sources = video.variants || video.sources || [];
+                    // Use loose comparison (==) to handle string/number differences
+                    const selectedVariant = sources.find(v => v.quality == selectedQuality);
 
-            if (selectedVariant && selectedVariant.url) {
-                downloadUrl = selectedVariant.url;
+                    if (selectedVariant && selectedVariant.url) {
+                        downloadUrl = selectedVariant.url;
+                    }
+                }
+
+                // Open the direct URL in a new tab
+                window.open(downloadUrl, '_blank');
+
+                // Start countdown for modal close
+                setTimeout(() => {
+                    onClose();
+                }, 1000);
+            });
+        } else {
+            // No smartlink or already shown - proceed with download directly
+            let downloadUrl = video.videoUrl; // Default to original
+
+            if (selectedQuality !== 'orig') {
+                const sources = video.variants || video.sources || [];
+                // Use loose comparison (==) to handle string/number differences
+                const selectedVariant = sources.find(v => v.quality == selectedQuality);
+
+                if (selectedVariant && selectedVariant.url) {
+                    downloadUrl = selectedVariant.url;
+                }
             }
+
+            // Open the direct URL in a new tab
+            window.open(downloadUrl, '_blank');
+
+            // Start countdown for modal close
+            setTimeout(() => {
+                onClose();
+            }, 1000);
         }
-
-        // Open the direct URL in a new tab
-        window.open(downloadUrl, '_blank');
-
-        // Start countdown for modal close
-        setTimeout(() => {
-            onClose();
-        }, 1000);
     };
 
     const qualityOptions = getQualityOptions();
@@ -110,21 +147,16 @@ const DownloadModal = ({ video, onClose }) => {
                 </div>
 
                 <div className="download-modal-content">
-                    <div className="ad-download-modal-top">
-                        <AdBanner location="download-modal-top" />
-                    </div>
-
                     <div className="download-layout">
-                        <div className="download-main-content">
-                            <div className="download-video-info">
-                                <img src={video.thumbnailUrl} alt={video.title} className="download-thumbnail" />
-                                <div className="download-details">
-                                    <h3>{video.title}</h3>
-                                    <p>{video.user?.channelName || video.user?.username}</p>
-                                </div>
+                        <div className="download-video-info">
+                            <img src={video.thumbnailUrl} alt={video.title} className="download-thumbnail" />
+                            <div className="download-details">
+                                <h3>{video.title}</h3>
+                                <p>{video.user?.channelName || video.user?.username}</p>
                             </div>
+                        </div>
 
-                            <div className="quality-selection">
+                        <div className="quality-selection">
                                 <h3>Select Quality</h3>
                                 <p className="quality-description">Choose your preferred video quality</p>
 
@@ -174,15 +206,6 @@ const DownloadModal = ({ video, onClose }) => {
                                     By downloading, you agree to our terms of service.
                                 </p>
                             </div>
-                        </div>
-
-                        <div className="download-sidebar">
-                            <AdBanner location="download-modal-sidebar" />
-                        </div>
-                    </div>
-
-                    <div className="ad-download-modal-bottom">
-                        <AdBanner location="download-modal-bottom" />
                     </div>
                 </div>
             </div>

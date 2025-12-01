@@ -37,14 +37,43 @@ export const AdProvider = ({ children }) => {
     
     // Smartlink ad settings
     smartlinkEnabled: true,
-    smartlinkUrl: '', // Your smartlink URL here
+    smartlinkUrl: 'https://www.effectivegatecpm.com/b467swwk68?key=83daee009e4befaeaba7c9dea1c856e8',
     smartlinkFrequency: 'once-per-video', // 'once-per-video' | 'once-per-session' | 'always'
     
     // Custom ad codes (for custom ad networks)
+    // 728x90 Banner Ad Key: f3d1a518f166a74bea90e44208c34ab0
+    // 300x250 Sidebar Ad Key: 7a12bf219eb0e1cf100dc7b56654f792 (until new sidebar ad is provided)
     customBannerAds: {
-      top: '',
-      bottom: '',
-      sidebar: ''
+      top: `<script type="text/javascript">
+	atOptions = {
+		'key' : 'f3d1a518f166a74bea90e44208c34ab0',
+		'format' : 'iframe',
+		'height' : 90,
+		'width' : 728,
+		'params' : {}
+	};
+</script>
+<script type="text/javascript" src="//www.highperformanceformat.com/f3d1a518f166a74bea90e44208c34ab0/invoke.js"></script>`,
+      bottom: `<script type="text/javascript">
+	atOptions = {
+		'key' : 'f3d1a518f166a74bea90e44208c34ab0',
+		'format' : 'iframe',
+		'height' : 90,
+		'width' : 728,
+		'params' : {}
+	};
+</script>
+<script type="text/javascript" src="//www.highperformanceformat.com/f3d1a518f166a74bea90e44208c34ab0/invoke.js"></script>`,
+      sidebar: `<script type="text/javascript">
+	atOptions = {
+		'key' : '7a12bf219eb0e1cf100dc7b56654f792',
+		'format' : 'iframe',
+		'height' : 250,
+		'width' : 300,
+		'params' : {}
+	};
+</script>
+<script type="text/javascript" src="//www.highperformanceformat.com/7a12bf219eb0e1cf100dc7b56654f792/invoke.js"></script>`
     },
     customNativeAds: [],
     customPopUnderAd: ''

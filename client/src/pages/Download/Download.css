@@ -1,22 +1,11 @@
 .download-page {
     min-height: 100vh;
     background-color: var(--bg-color);
-    padding: 20px;
-}
-
-.download-ad-top,
-.download-ad-bottom {
-    max-width: 1200px;
-    margin: 0 auto 20px;
-}
-
-.download-ad-bottom {
-    margin-top: 20px;
-    margin-bottom: 0;
+    padding: 40px 20px;
 }
 
 .download-container {
-    max-width: 800px;
+    max-width: 900px;
     margin: 0 auto;
 }
 

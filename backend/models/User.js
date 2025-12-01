@@ -69,6 +69,14 @@ const UserSchema = new mongoose.Schema({
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Video'
   }],
+  savedVideos: [{
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Video'
+  }],
+  playlists: [{
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Playlist'
+  }],
   avatar: {
     type: String,
     default: ''
@@ -76,6 +84,30 @@ const UserSchema = new mongoose.Schema({
   channelBanner: {
     type: String,
     default: ''
+  },
+  settings: {
+    defaultPlaybackQuality: {
+      type: String,
+      default: 'auto',
+      enum: ['auto', '144', '240', '360', '480', '720', '1080', '1440']
+    },
+    defaultDownloadQuality: {
+      type: String,
+      default: 'highest',
+      enum: ['highest', '1080', '720', '480', '360', '240', '144']
+    },
+    downloadOverWifiOnly: {
+      type: Boolean,
+      default: false
+    },
+    autoplay: {
+      type: Boolean,
+      default: true
+    },
+    subtitles: {
+      type: Boolean,
+      default: false
+    }
   },
   createdAt: {
     type: Date,

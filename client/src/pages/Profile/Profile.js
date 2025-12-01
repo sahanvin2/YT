@@ -1,7 +1,15 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { useAuth } from '../../context/AuthContext';
-import { updateProfile, uploadAvatar } from '../../utils/api';
-import { FiUpload, FiX } from 'react-icons/fi';
+import { 
+  updateProfile, 
+  uploadAvatar, 
+  uploadBanner, 
+  updateSettings,
+  createPlaylist,
+  getPlaylists,
+  deletePlaylist
+} from '../../utils/api';
+import { FiUpload, FiX, FiSettings, FiImage, FiList, FiSave, FiTrash2, FiPlus, FiEdit2 } from 'react-icons/fi';
 import './Profile.css';
 
 const avatarOptions = [
@@ -16,6 +24,8 @@ const avatarOptions = [
 const Profile = () => {
   const { user, isAuthenticated, refreshUser } = useAuth();
   const fileInputRef = useRef(null);
+  const bannerInputRef = useRef(null);
+  const [activeTab, setActiveTab] = useState('profile');
   const [form, setForm] = useState({
     username: '',
     email: '',
@@ -23,10 +33,23 @@ const Profile = () => {
     channelDescription: '',
     avatar: ''
   });
+  const [settings, setSettings] = useState({
+    defaultPlaybackQuality: 'auto',
+    defaultDownloadQuality: 'highest',
+    downloadOverWifiOnly: false,
+    autoplay: true,
+    subtitles: false
+  });
+  const [playlists, setPlaylists] = useState([]);
+  const [newPlaylistName, setNewPlaylistName] = useState('');
+  const [newPlaylistDesc, setNewPlaylistDesc] = useState('');
+  const [showCreatePlaylist, setShowCreatePlaylist] = useState(false);
   const [saving, setSaving] = useState(false);
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
+  const [uploadingBanner, setUploadingBanner] = useState(false);
   const [message, setMessage] = useState('');
   const [avatarPreview, setAvatarPreview] = useState(null);
+  const [bannerPreview, setBannerPreview] = useState(null);
   const [isCustomAvatar, setIsCustomAvatar] = useState(false);
 
   useEffect(() => {
@@ -43,8 +66,30 @@ const Profile = () => {
       });
       setIsCustomAvatar(isCustom);
       setAvatarPreview(isCustom ? currentAvatar : null);
+      setBannerPreview(user.channelBanner || null);
+      
+      if (user.settings) {
+        setSettings({
+          defaultPlaybackQuality: user.settings.defaultPlaybackQuality || 'auto',
+          defaultDownloadQuality: user.settings.defaultDownloadQuality || 'highest',
+          downloadOverWifiOnly: user.settings.downloadOverWifiOnly || false,
+          autoplay: user.settings.autoplay !== undefined ? user.settings.autoplay : true,
+          subtitles: user.settings.subtitles || false
+        });
+      }
+      
+      loadPlaylists();
     }
   }, [user]);
+
+  const loadPlaylists = async () => {
+    try {
+      const res = await getPlaylists();
+      setPlaylists(res.data?.data || []);
+    } catch (err) {
+      console.error('Failed to load playlists:', err);
+    }
+  };
 
   if (!isAuthenticated) {
     return (
@@ -61,6 +106,14 @@ const Profile = () => {
     setForm(prev => ({ ...prev, [name]: value }));
   };
 
+  const handleSettingsChange = (e) => {
+    const { name, value, type, checked } = e.target;
+    setSettings(prev => ({
+      ...prev,
+      [name]: type === 'checkbox' ? checked : value
+    }));
+  };
+
   const handleAvatarSelect = (avatarSrc) => {
     setForm(prev => ({ ...prev, avatar: avatarSrc }));
     setIsCustomAvatar(false);
@@ -74,25 +127,45 @@ const Profile = () => {
     const file = e.target.files[0];
     if (!file) return;
 
-    // Validate file type
     const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp'];
     if (!allowedTypes.includes(file.type)) {
       setMessage('Only JPEG, PNG, GIF, and WebP images are allowed');
       return;
     }
 
-    // Validate file size (5MB)
     if (file.size > 5 * 1024 * 1024) {
       setMessage('Image size must be less than 5MB');
       return;
     }
 
-    // Create preview
     const reader = new FileReader();
     reader.onloadend = () => {
       setAvatarPreview(reader.result);
       setIsCustomAvatar(true);
       setForm(prev => ({ ...prev, avatar: reader.result }));
+    };
+    reader.readAsDataURL(file);
+    setMessage('');
+  };
+
+  const handleBannerSelect = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp'];
+    if (!allowedTypes.includes(file.type)) {
+      setMessage('Only JPEG, PNG, GIF, and WebP images are allowed');
+      return;
+    }
+
+    if (file.size > 10 * 1024 * 1024) {
+      setMessage('Banner size must be less than 10MB');
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      setBannerPreview(reader.result);
     };
     reader.readAsDataURL(file);
     setMessage('');
@@ -119,7 +192,6 @@ const Profile = () => {
         setIsCustomAvatar(true);
         await refreshUser?.();
         setMessage('Avatar uploaded successfully!');
-        // Clear file input
         if (fileInputRef.current) {
           fileInputRef.current.value = '';
         }
@@ -129,6 +201,37 @@ const Profile = () => {
       console.error(err);
     } finally {
       setUploadingAvatar(false);
+    }
+  };
+
+  const handleUploadBanner = async () => {
+    if (!bannerInputRef.current || !bannerInputRef.current.files[0]) {
+      setMessage('Please select a banner image');
+      return;
+    }
+
+    try {
+      setUploadingBanner(true);
+      setMessage('');
+      
+      const formData = new FormData();
+      formData.append('banner', bannerInputRef.current.files[0]);
+
+      const res = await uploadBanner(user.id, formData);
+      
+      if (res.data.success) {
+        setBannerPreview(res.data.data.channelBanner);
+        await refreshUser?.();
+        setMessage('Banner uploaded successfully!');
+        if (bannerInputRef.current) {
+          bannerInputRef.current.value = '';
+        }
+      }
+    } catch (err) {
+      setMessage(err.response?.data?.message || 'Failed to upload banner');
+      console.error(err);
+    } finally {
+      setUploadingBanner(false);
     }
   };
 
@@ -163,115 +266,406 @@ const Profile = () => {
     }
   };
 
+  const handleSaveSettings = async () => {
+    try {
+      setSaving(true);
+      setMessage('');
+      await updateSettings(user.id, settings);
+      await refreshUser?.();
+      setMessage('Settings saved successfully');
+    } catch (err) {
+      setMessage('Failed to save settings');
+      console.error(err);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleCreatePlaylist = async () => {
+    if (!newPlaylistName.trim()) {
+      setMessage('Playlist name is required');
+      return;
+    }
+
+    try {
+      setSaving(true);
+      setMessage('');
+      await createPlaylist({
+        name: newPlaylistName.trim(),
+        description: newPlaylistDesc.trim(),
+        isPublic: true
+      });
+      setNewPlaylistName('');
+      setNewPlaylistDesc('');
+      setShowCreatePlaylist(false);
+      await loadPlaylists();
+      setMessage('Playlist created successfully');
+    } catch (err) {
+      setMessage(err.response?.data?.message || 'Failed to create playlist');
+      console.error(err);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleDeletePlaylist = async (playlistId) => {
+    if (!window.confirm('Are you sure you want to delete this playlist?')) return;
+
+    try {
+      setSaving(true);
+      await deletePlaylist(playlistId);
+      await loadPlaylists();
+      setMessage('Playlist deleted successfully');
+    } catch (err) {
+      setMessage('Failed to delete playlist');
+      console.error(err);
+    } finally {
+      setSaving(false);
+    }
+  };
+
   return (
     <div className="profile-page">
-      <div className="profile-card">
-        <h2>Profile Settings</h2>
-        <form onSubmit={handleSave} className="profile-form">
-          <div className="form-row">
-            <div className="form-group">
-              <label>Username</label>
-              <input name="username" value={form.username} onChange={handleChange} />
-            </div>
-            <div className="form-group">
-              <label>Email</label>
-              <input name="email" type="email" value={form.email} onChange={handleChange} />
-            </div>
-          </div>
-
-          <div className="form-row">
-            <div className="form-group">
-              <label>Channel Name</label>
-              <input name="channelName" value={form.channelName} onChange={handleChange} />
-            </div>
-          </div>
-
-          <div className="form-group">
-            <label>Channel Description</label>
-            <textarea name="channelDescription" rows={4} value={form.channelDescription} onChange={handleChange} />
-          </div>
-
-          <div className="form-group">
-            <label>Profile Picture</label>
-            
-            {/* Current Avatar Preview */}
-            <div className="avatar-preview-section">
-              <div className="current-avatar-preview">
-                <img 
-                  src={avatarPreview || form.avatar || avatarOptions[0]} 
-                  alt="Current avatar" 
-                  className="preview-image"
+      <div className="profile-container">
+        {/* Banner Section */}
+        <div className="profile-banner-section">
+          <div 
+            className="profile-banner"
+            style={{ backgroundImage: bannerPreview ? `url(${bannerPreview})` : 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)' }}
+          >
+            <div className="banner-overlay">
+              <label className="banner-upload-btn">
+                <input
+                  ref={bannerInputRef}
+                  type="file"
+                  accept="image/jpeg,image/jpg,image/png,image/gif,image/webp"
+                  onChange={handleBannerSelect}
+                  style={{ display: 'none' }}
                 />
-                {isCustomAvatar && avatarPreview && (
-                  <button
-                    type="button"
-                    className="remove-custom-avatar"
-                    onClick={handleRemoveCustomAvatar}
-                    title="Remove custom avatar"
-                  >
-                    <FiX size={16} />
+                <FiImage size={20} />
+                {bannerPreview ? 'Change Banner' : 'Upload Banner'}
+              </label>
+              {bannerPreview && (
+                <button
+                  className="banner-save-btn"
+                  onClick={handleUploadBanner}
+                  disabled={uploadingBanner}
+                >
+                  {uploadingBanner ? 'Uploading...' : 'Save Banner'}
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* Tabs */}
+        <div className="profile-tabs">
+          <button
+            className={`tab-btn ${activeTab === 'profile' ? 'active' : ''}`}
+            onClick={() => setActiveTab('profile')}
+          >
+            <FiEdit2 size={18} />
+            Profile
+          </button>
+          <button
+            className={`tab-btn ${activeTab === 'playlists' ? 'active' : ''}`}
+            onClick={() => setActiveTab('playlists')}
+          >
+            <FiList size={18} />
+            Playlists
+          </button>
+          <button
+            className={`tab-btn ${activeTab === 'settings' ? 'active' : ''}`}
+            onClick={() => setActiveTab('settings')}
+          >
+            <FiSettings size={18} />
+            Settings
+          </button>
+        </div>
+
+        {/* Tab Content */}
+        <div className="profile-content">
+          {activeTab === 'profile' && (
+            <div className="profile-card">
+              <h2>Profile Information</h2>
+              <form onSubmit={handleSave} className="profile-form">
+                <div className="form-row">
+                  <div className="form-group">
+                    <label>Username</label>
+                    <input name="username" value={form.username} onChange={handleChange} />
+                  </div>
+                  <div className="form-group">
+                    <label>Email</label>
+                    <input name="email" type="email" value={form.email} onChange={handleChange} />
+                  </div>
+                </div>
+
+                <div className="form-row">
+                  <div className="form-group">
+                    <label>Channel Name</label>
+                    <input name="channelName" value={form.channelName} onChange={handleChange} />
+                  </div>
+                </div>
+
+                <div className="form-group">
+                  <label>Channel Description</label>
+                  <textarea name="channelDescription" rows={4} value={form.channelDescription} onChange={handleChange} />
+                </div>
+
+                <div className="form-group">
+                  <label>Profile Picture</label>
+                  
+                  <div className="avatar-preview-section">
+                    <div className="current-avatar-preview">
+                      <img 
+                        src={avatarPreview || form.avatar || avatarOptions[0]} 
+                        alt="Current avatar" 
+                        className="preview-image"
+                      />
+                      {isCustomAvatar && avatarPreview && (
+                        <button
+                          type="button"
+                          className="remove-custom-avatar"
+                          onClick={handleRemoveCustomAvatar}
+                          title="Remove custom avatar"
+                        >
+                          <FiX size={16} />
+                        </button>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="custom-avatar-upload">
+                    <label className="upload-label">
+                      <input
+                        ref={fileInputRef}
+                        type="file"
+                        accept="image/jpeg,image/jpg,image/png,image/gif,image/webp"
+                        onChange={handleFileSelect}
+                        style={{ display: 'none' }}
+                      />
+                      <span className="upload-button">
+                        <FiUpload size={18} />
+                        Upload Custom Image
+                      </span>
+                    </label>
+                    {avatarPreview && isCustomAvatar && (
+                      <button
+                        type="button"
+                        className="btn-upload-avatar"
+                        onClick={handleUploadAvatar}
+                        disabled={uploadingAvatar}
+                      >
+                        {uploadingAvatar ? 'Uploading...' : 'Save Custom Avatar'}
+                      </button>
+                    )}
+                    <p className="upload-hint">Max 5MB. JPEG, PNG, GIF, or WebP</p>
+                  </div>
+
+                  <div className="avatar-options-section">
+                    <p className="avatar-options-label">Or choose from default avatars:</p>
+                    <div className="avatar-grid">
+                      {avatarOptions.map((src) => (
+                        <button
+                          type="button"
+                          key={src}
+                          className={`avatar-option ${form.avatar === src && !isCustomAvatar ? 'selected' : ''}`}
+                          onClick={() => handleAvatarSelect(src)}
+                        >
+                          <img src={src} alt="avatar option" />
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="actions">
+                  <button className="btn btn-primary" type="submit" disabled={saving}>
+                    <FiSave size={18} />
+                    {saving ? 'Saving...' : 'Save Changes'}
                   </button>
+                  {message && (
+                    <span className={`message ${message.includes('successfully') ? 'success' : message.includes('Failed') ? 'error' : ''}`}>
+                      {message}
+                    </span>
+                  )}
+                </div>
+              </form>
+            </div>
+          )}
+
+          {activeTab === 'playlists' && (
+            <div className="profile-card">
+              <div className="playlists-header">
+                <h2>My Playlists</h2>
+                <button
+                  className="btn btn-primary"
+                  onClick={() => setShowCreatePlaylist(!showCreatePlaylist)}
+                >
+                  <FiPlus size={18} />
+                  Create Playlist
+                </button>
+              </div>
+
+              {showCreatePlaylist && (
+                <div className="create-playlist-form">
+                  <div className="form-group">
+                    <label>Playlist Name</label>
+                    <input
+                      type="text"
+                      value={newPlaylistName}
+                      onChange={(e) => setNewPlaylistName(e.target.value)}
+                      placeholder="Enter playlist name"
+                    />
+                  </div>
+                  <div className="form-group">
+                    <label>Description (Optional)</label>
+                    <textarea
+                      rows={3}
+                      value={newPlaylistDesc}
+                      onChange={(e) => setNewPlaylistDesc(e.target.value)}
+                      placeholder="Enter playlist description"
+                    />
+                  </div>
+                  <div className="form-actions">
+                    <button className="btn btn-primary" onClick={handleCreatePlaylist} disabled={saving}>
+                      Create
+                    </button>
+                    <button className="btn btn-secondary" onClick={() => {
+                      setShowCreatePlaylist(false);
+                      setNewPlaylistName('');
+                      setNewPlaylistDesc('');
+                    }}>
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              <div className="playlists-grid">
+                {playlists.length === 0 ? (
+                  <div className="no-playlists">
+                    <p>No playlists yet. Create one to get started!</p>
+                  </div>
+                ) : (
+                  playlists.map(playlist => (
+                    <div key={playlist._id} className="playlist-card">
+                      <div className="playlist-info">
+                        <h3>{playlist.name}</h3>
+                        <p>{playlist.description || 'No description'}</p>
+                        <span className="playlist-count">{playlist.videos?.length || 0} videos</span>
+                      </div>
+                      <button
+                        className="delete-playlist-btn"
+                        onClick={() => handleDeletePlaylist(playlist._id)}
+                        disabled={saving}
+                      >
+                        <FiTrash2 size={18} />
+                      </button>
+                    </div>
+                  ))
                 )}
               </div>
             </div>
+          )}
 
-            {/* Custom Avatar Upload */}
-            <div className="custom-avatar-upload">
-              <label className="upload-label">
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  accept="image/jpeg,image/jpg,image/png,image/gif,image/webp"
-                  onChange={handleFileSelect}
-                  style={{ display: 'none' }}
-                />
-                <span className="upload-button">
-                  <FiUpload size={18} />
-                  Upload Custom Image
-                </span>
-              </label>
-              {avatarPreview && isCustomAvatar && (
-                <button
-                  type="button"
-                  className="btn-upload-avatar"
-                  onClick={handleUploadAvatar}
-                  disabled={uploadingAvatar}
-                >
-                  {uploadingAvatar ? 'Uploading...' : 'Save Custom Avatar'}
-                </button>
-              )}
-              <p className="upload-hint">Max 5MB. JPEG, PNG, GIF, or WebP</p>
-            </div>
+          {activeTab === 'settings' && (
+            <div className="profile-card">
+              <h2>Video Settings</h2>
+              <div className="settings-form">
+                <div className="settings-section">
+                  <h3>Playback Quality</h3>
+                  <div className="form-group">
+                    <label>Default Playback Quality</label>
+                    <select
+                      name="defaultPlaybackQuality"
+                      value={settings.defaultPlaybackQuality}
+                      onChange={handleSettingsChange}
+                    >
+                      <option value="auto">Auto</option>
+                      <option value="144">144p</option>
+                      <option value="240">240p</option>
+                      <option value="360">360p</option>
+                      <option value="480">480p</option>
+                      <option value="720">720p</option>
+                      <option value="1080">1080p</option>
+                      <option value="1440">1440p</option>
+                    </select>
+                  </div>
+                </div>
 
-            {/* Default Avatar Options */}
-            <div className="avatar-options-section">
-              <p className="avatar-options-label">Or choose from default avatars:</p>
-              <div className="avatar-grid">
-                {avatarOptions.map((src) => (
-                  <button
-                    type="button"
-                    key={src}
-                    className={`avatar-option ${form.avatar === src && !isCustomAvatar ? 'selected' : ''}`}
-                    onClick={() => handleAvatarSelect(src)}
-                  >
-                    <img src={src} alt="avatar option" />
+                <div className="settings-section">
+                  <h3>Download Settings</h3>
+                  <div className="form-group">
+                    <label>Default Download Quality</label>
+                    <select
+                      name="defaultDownloadQuality"
+                      value={settings.defaultDownloadQuality}
+                      onChange={handleSettingsChange}
+                    >
+                      <option value="highest">Highest Available</option>
+                      <option value="1080">1080p</option>
+                      <option value="720">720p</option>
+                      <option value="480">480p</option>
+                      <option value="360">360p</option>
+                      <option value="240">240p</option>
+                      <option value="144">144p</option>
+                    </select>
+                  </div>
+                  <div className="form-group checkbox-group">
+                    <label className="checkbox-label">
+                      <input
+                        type="checkbox"
+                        name="downloadOverWifiOnly"
+                        checked={settings.downloadOverWifiOnly}
+                        onChange={handleSettingsChange}
+                      />
+                      <span>Download over Wi-Fi only</span>
+                    </label>
+                  </div>
+                </div>
+
+                <div className="settings-section">
+                  <h3>Player Settings</h3>
+                  <div className="form-group checkbox-group">
+                    <label className="checkbox-label">
+                      <input
+                        type="checkbox"
+                        name="autoplay"
+                        checked={settings.autoplay}
+                        onChange={handleSettingsChange}
+                      />
+                      <span>Autoplay videos</span>
+                    </label>
+                  </div>
+                  <div className="form-group checkbox-group">
+                    <label className="checkbox-label">
+                      <input
+                        type="checkbox"
+                        name="subtitles"
+                        checked={settings.subtitles}
+                        onChange={handleSettingsChange}
+                      />
+                      <span>Show subtitles by default</span>
+                    </label>
+                  </div>
+                </div>
+
+                <div className="actions">
+                  <button className="btn btn-primary" onClick={handleSaveSettings} disabled={saving}>
+                    <FiSave size={18} />
+                    {saving ? 'Saving...' : 'Save Settings'}
                   </button>
-                ))}
+                  {message && (
+                    <span className={`message ${message.includes('successfully') ? 'success' : message.includes('Failed') ? 'error' : ''}`}>
+                      {message}
+                    </span>
+                  )}
+                </div>
               </div>
             </div>
-          </div>
-
-          <div className="actions">
-            <button className="btn btn-primary" type="submit" disabled={saving}>
-              {saving ? 'Saving...' : 'Save Changes'}
-            </button>
-            {message && (
-              <span className={`message ${message.includes('successfully') ? 'success' : message.includes('Failed') ? 'error' : ''}`}>
-                {message}
-              </span>
-            )}
-          </div>
-        </form>
+          )}
+        </div>
       </div>
     </div>
   );

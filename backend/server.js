@@ -20,12 +20,13 @@ const comments = require('./routes/comments');
 const admin = require('./routes/admin');
 const uploads = require('./routes/uploads');
 const health = require('./routes/health');
+const playlists = require('./routes/playlists');
 
 const app = express();
 
 // Body parser
-app.use(express.json({ limit: "1000mb" }));
-app.use(express.urlencoded({ extended: true, limit: "1000mb" }));
+app.use(express.json({ limit: "2500mb" }));
+app.use(express.urlencoded({ extended: true, limit: "2500mb" }));
 
 // Cookie parser
 app.use(cookieParser());
@@ -36,7 +37,7 @@ if (process.env.NODE_ENV === 'development') {
 }
 
 // File uploading
-const maxSizeMb = parseInt(process.env.MAX_VIDEO_SIZE_MB || '500');
+const maxSizeMb = parseInt(process.env.MAX_VIDEO_SIZE_MB || '2048');
 const tempDir = path.join(__dirname, '../tmp');
 if (!fs.existsSync(tempDir)) fs.mkdirSync(tempDir, { recursive: true });
 app.use(fileUpload({
@@ -63,6 +64,7 @@ app.use('/api/users', users);
 app.use('/api/comments', comments);
 app.use('/api/admin', admin);
 app.use('/api/uploads', uploads);
+app.use('/api/playlists', playlists);
 
 // Error handler
 app.use(errorHandler);
@@ -76,9 +78,9 @@ let server;
   try {
     console.log('Attempting to connect to MongoDB...');
     console.log('MongoDB URI:', process.env.MONGO_URI ? 'Set (hidden for security)' : 'NOT SET!');
-    
+
     await connectDB();
-    
+
     console.log('Starting Express server...');
     server = app.listen(PORT, () => {
       console.log(`✅ Server running in ${process.env.NODE_ENV} mode on port ${PORT}`);

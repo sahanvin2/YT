@@ -1,9 +1,25 @@
 const User = require('../models/User');
 const Video = require('../models/Video');
+const Playlist = require('../models/Playlist');
 const path = require('path');
 const fs = require('fs');
 const mime = require('mime-types');
 const { uploadFilePath, deleteFile } = require('../utils/b2');
+
+// Helper function to extract R2 key from URL
+function r2KeyFromUrl(url) {
+  try {
+    const urlObj = new URL(url);
+    const pathParts = urlObj.pathname.split('/');
+    const keyIndex = pathParts.findIndex(part => part === 'videos' || part === 'avatars' || part === 'banners' || part === 'thumbnails');
+    if (keyIndex !== -1) {
+      return pathParts.slice(keyIndex).join('/');
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
 
 // @desc    Get user profile
 // @route   GET /api/users/:id
@@ -391,6 +407,193 @@ exports.getLikedVideos = async (req, res, next) => {
     res.status(200).json({
       success: true,
       data: videos
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+// @desc    Save/Unsave video for current user
+// @route   POST /api/users/saved/:videoId
+// @access  Private
+exports.saveVideo = async (req, res, next) => {
+  try {
+    const user = await User.findById(req.user.id);
+    const videoId = req.params.videoId;
+
+    // Check if video exists
+    const video = await Video.findById(videoId);
+    if (!video) {
+      return res.status(404).json({
+        success: false,
+        message: 'Video not found'
+      });
+    }
+
+    // Toggle save status
+    const isSaved = user.savedVideos.includes(videoId);
+    
+    if (isSaved) {
+      // Remove from saved
+      user.savedVideos = user.savedVideos.filter(
+        id => id.toString() !== videoId
+      );
+    } else {
+      // Add to saved
+      user.savedVideos.push(videoId);
+    }
+
+    await user.save();
+
+    res.status(200).json({
+      success: true,
+      data: {
+        saved: !isSaved,
+        savedVideos: user.savedVideos
+      }
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+// @desc    Get saved videos for current user
+// @route   GET /api/users/saved
+// @access  Private
+exports.getSavedVideos = async (req, res, next) => {
+  try {
+    const user = await User.findById(req.user.id)
+      .populate({
+        path: 'savedVideos',
+        populate: { path: 'user', select: 'username avatar channelName' }
+      });
+
+    const videos = user.savedVideos || [];
+    
+    res.status(200).json({
+      success: true,
+      data: videos
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+// @desc    Upload channel banner image
+// @route   POST /api/users/:id/banner
+// @access  Private
+exports.uploadBanner = async (req, res, next) => {
+  try {
+    // Make sure user is updating their own profile
+    if (req.params.id !== req.user.id) {
+      return res.status(401).json({ 
+        success: false, 
+        message: 'Not authorized to update this profile' 
+      });
+    }
+
+    if (!req.files || !req.files.banner) {
+      return res.status(400).json({ 
+        success: false, 
+        message: 'Please upload a banner image' 
+      });
+    }
+
+    const bannerFile = req.files.banner;
+    const maxSizeBytes = 10 * 1024 * 1024; // 10MB
+    if (bannerFile.size > maxSizeBytes) {
+      return res.status(400).json({
+        success: false,
+        message: 'Banner file size must be less than 10MB'
+      });
+    }
+
+    // Check file type
+    const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp'];
+    if (!allowedTypes.includes(bannerFile.mimetype)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Only JPEG, PNG, GIF, and WebP images are allowed'
+      });
+    }
+
+    // Get current user to delete old banner if exists
+    const currentUser = await User.findById(req.params.id);
+    const oldBannerUrl = currentUser.channelBanner;
+
+    // Use temp directory for staging before B2 upload
+    const tmpDir = path.join(__dirname, '../../tmp');
+    if (!fs.existsSync(tmpDir)) fs.mkdirSync(tmpDir, { recursive: true });
+    
+    const ts = Date.now();
+    const bannerExt = path.parse(bannerFile.name).ext || '.jpg';
+    const tmpBannerPath = path.join(tmpDir, `banner_${req.user.id}_${ts}${bannerExt}`);
+    await bannerFile.mv(tmpBannerPath);
+
+    // Upload to B2
+    const bannerKey = `banners/${req.user.id}/${ts}_${path.basename(tmpBannerPath)}`;
+    const bannerCT = mime.lookup(tmpBannerPath) || 'image/jpeg';
+    const bannerUrl = await uploadFilePath(tmpBannerPath, bannerKey, bannerCT);
+
+    // Clean up temp file
+    fs.unlink(tmpBannerPath, () => {});
+
+    // Delete old banner from B2 if exists
+    if (oldBannerUrl && oldBannerUrl.includes('backblazeb2.com')) {
+      try {
+        const key = r2KeyFromUrl(oldBannerUrl);
+        if (key) {
+          await deleteFile(key);
+        }
+      } catch (err) {
+        console.error('Error deleting old banner:', err);
+        // Don't fail the request if old banner deletion fails
+      }
+    }
+
+    // Update user with new banner URL
+    const updatedUser = await User.findByIdAndUpdate(
+      req.params.id,
+      { channelBanner: bannerUrl },
+      { new: true }
+    ).select('-password');
+
+    res.status(200).json({
+      success: true,
+      data: {
+        channelBanner: bannerUrl,
+        user: updatedUser
+      }
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+// @desc    Update user settings
+// @route   PUT /api/users/:id/settings
+// @access  Private
+exports.updateSettings = async (req, res, next) => {
+  try {
+    // Make sure user is updating their own settings
+    if (req.params.id !== req.user.id) {
+      return res.status(401).json({ 
+        success: false, 
+        message: 'Not authorized to update this profile' 
+      });
+    }
+
+    const { settings } = req.body;
+    
+    const user = await User.findByIdAndUpdate(
+      req.params.id,
+      { settings: settings || {} },
+      { new: true, runValidators: true }
+    ).select('-password');
+
+    res.status(200).json({
+      success: true,
+      data: user
     });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
