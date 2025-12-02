@@ -9,6 +9,16 @@ const ffprobePath = require('ffprobe-static').path;
 const mime = require('mime-types');
 const { uploadFilePath, deleteFile } = require('../utils/b2');
 const { generateVideoVariants, getVideoResolution } = require('../utils/videoTranscoder');
+const { cdnUrlFrom, extractKeyFromUrl } = require('../utils/cdn');
+
+// Log CDN configuration on startup
+const CDN_BASE = process.env.CDN_BASE || process.env.CDN_URL;
+if (CDN_BASE) {
+  console.log(`🌐 Bunny CDN configured: ${CDN_BASE}`);
+} else {
+  console.warn('⚠️ CDN_BASE not set - videos will be served directly from B2');
+  console.warn('   To enable CDN, add CDN_BASE=https://movia-1.b-cdn.net to your .env file');
+}
 
 const axios = require('axios');
 
@@ -53,12 +63,47 @@ exports.getVideos = async (req, res, next) => {
       query.duration = { $lt: 120 };
     }
 
-    const videos = await Video.find(query)
+    let videos = await Video.find(query)
       .populate('user', 'username avatar channelName')
       .sort(sort)
       .limit(limit * 1)
       .skip((page - 1) * limit)
       .exec();
+
+    videos = videos.map(video => {
+      let videoObj = video.toObject(); // convert Mongoose doc to plain object
+      const original = videoObj.filePath || videoObj.url || videoObj.path || videoObj.videoUrl;
+      
+      // Convert main video URL to CDN URL
+      videoObj.cdnUrl = cdnUrlFrom(original);
+      // Also update videoUrl to use CDN URL for streaming
+      videoObj.videoUrl = videoObj.cdnUrl;
+      
+      // Convert thumbnail URL to CDN URL
+      if (videoObj.thumbnailUrl) {
+        videoObj.thumbnailUrl = cdnUrlFrom(videoObj.thumbnailUrl);
+      }
+      
+      // Convert variant URLs to CDN URLs
+      if (videoObj.variants && Array.isArray(videoObj.variants)) {
+        videoObj.variants = videoObj.variants.map(variant => ({
+          ...variant,
+          url: cdnUrlFrom(variant.url || variant.videoUrl || variant.sourceUrl),
+          cdnUrl: cdnUrlFrom(variant.url || variant.videoUrl || variant.sourceUrl)
+        }));
+      }
+      
+      // Also update sources array (for compatibility)
+      if (videoObj.sources && Array.isArray(videoObj.sources)) {
+        videoObj.sources = videoObj.sources.map(source => ({
+          ...source,
+          url: cdnUrlFrom(source.url || source.videoUrl || source.sourceUrl),
+          cdnUrl: cdnUrlFrom(source.url || source.videoUrl || source.sourceUrl)
+        }));
+      }
+      
+      return videoObj;
+    });
 
     const count = await Video.countDocuments(query);
 
@@ -96,9 +141,70 @@ exports.getVideo = async (req, res, next) => {
       });
     }
 
+    // Check if user can view private video
+    const requestingUserId = req.user?.id;
+    const videoOwnerId = video.user._id?.toString() || video.user.toString();
+    if (video.visibility === 'private' && (!requestingUserId || requestingUserId.toString() !== videoOwnerId)) {
+      return res.status(403).json({
+        success: false,
+        message: 'This video is private'
+      });
+    }
+    const videoObj = video.toObject(); // convert Mongoose doc to plain object
+    const original = videoObj.filePath || videoObj.url || videoObj.path || videoObj.videoUrl;
+    
+    // Convert main video URL to CDN URL
+    videoObj.cdnUrl = cdnUrlFrom(original);
+    // Also update videoUrl to use CDN URL for streaming
+    videoObj.videoUrl = videoObj.cdnUrl;
+    
+    // Debug: Log URL conversion
+    if (original !== videoObj.cdnUrl) {
+      console.log(`✅ CDN URL conversion for video ${video._id}:`);
+      console.log(`   Original: ${original}`);
+      console.log(`   CDN URL: ${videoObj.cdnUrl}`);
+    } else {
+      console.warn(`⚠️ CDN URL not converted for video ${video._id} (CDN_BASE may not be set)`);
+    }
+    
+    // Convert thumbnail URL to CDN URL
+    if (videoObj.thumbnailUrl) {
+      const originalThumb = videoObj.thumbnailUrl;
+      videoObj.thumbnailUrl = cdnUrlFrom(videoObj.thumbnailUrl);
+      if (originalThumb !== videoObj.thumbnailUrl) {
+        console.log(`   Thumbnail CDN: ${videoObj.thumbnailUrl}`);
+      }
+    }
+    
+    // Convert variant URLs to CDN URLs
+    if (videoObj.variants && Array.isArray(videoObj.variants)) {
+      videoObj.variants = videoObj.variants.map(variant => {
+        const originalVariantUrl = variant.url || variant.videoUrl || variant.sourceUrl;
+        const cdnVariantUrl = cdnUrlFrom(originalVariantUrl);
+        return {
+          ...variant,
+          url: cdnVariantUrl,
+          cdnUrl: cdnVariantUrl
+        };
+      });
+    }
+    
+    // Also update sources array (for compatibility)
+    if (videoObj.sources && Array.isArray(videoObj.sources)) {
+      videoObj.sources = videoObj.sources.map(source => {
+        const originalSourceUrl = source.url || source.videoUrl || source.sourceUrl;
+        const cdnSourceUrl = cdnUrlFrom(originalSourceUrl);
+        return {
+          ...source,
+          url: cdnSourceUrl,
+          cdnUrl: cdnSourceUrl
+        };
+      });
+    }
+
     res.status(200).json({
       success: true,
-      data: video
+      data: videoObj
     });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
@@ -238,10 +344,18 @@ exports.uploadVideo = async (req, res, next) => {
       });
 
     // Return immediately (variants will be generated in background)
+    const videoObj = video.toObject();
+    // Convert URLs to CDN URLs
+    videoObj.cdnUrl = cdnUrlFrom(video.videoUrl);
+    videoObj.videoUrl = videoObj.cdnUrl; // Use CDN URL for streaming
+    if (videoObj.thumbnailUrl) {
+      videoObj.thumbnailUrl = cdnUrlFrom(videoObj.thumbnailUrl);
+    }
+
     res.status(201).json({
       success: true,
-      data: video,
-      video,
+      data: videoObj,
+      video: videoObj,
       message: 'Video uploaded successfully. Quality variants are being generated in the background.'
     });
   } catch (error) {
@@ -271,7 +385,15 @@ exports.createVideoFromUrl = async (req, res) => {
       sources: []
     });
     await User.findByIdAndUpdate(req.user.id, { $push: { videos: video._id } });
-    res.status(201).json({ success: true, data: video, video });
+
+    const videoObj = video.toObject();
+    // Convert URLs to CDN URLs
+    videoObj.cdnUrl = cdnUrlFrom(video.videoUrl);
+    videoObj.videoUrl = videoObj.cdnUrl; // Use CDN URL for streaming
+    if (videoObj.thumbnailUrl) {
+      videoObj.thumbnailUrl = cdnUrlFrom(videoObj.thumbnailUrl);
+    }
+    res.status(201).json({ success: true, data: videoObj });
   } catch (e) {
     res.status(500).json({ success: false, message: e.message });
   }
@@ -331,8 +453,31 @@ exports.updateVideo = async (req, res, next) => {
       try { await fs.promises.unlink(tmpThumbPath); } catch { }
     }
 
-    if (req.body.tags && typeof req.body.tags === 'string') {
-      req.body.tags = req.body.tags.split(',').map(tag => tag.trim());
+    // Handle tags - can be string (comma-separated) or JSON string
+    if (req.body.tags) {
+      if (typeof req.body.tags === 'string') {
+        try {
+          // Try to parse as JSON first
+          const parsed = JSON.parse(req.body.tags);
+          if (Array.isArray(parsed)) {
+            req.body.tags = parsed;
+          } else {
+            // Fallback to comma-separated string
+            req.body.tags = req.body.tags.split(',').map(tag => tag.trim()).filter(tag => tag);
+          }
+        } catch {
+          // Not JSON, treat as comma-separated string
+          req.body.tags = req.body.tags.split(',').map(tag => tag.trim()).filter(tag => tag);
+        }
+      }
+    }
+
+    // Handle cut parameters
+    if (req.body.cutStart !== undefined) {
+      req.body.cutStart = parseFloat(req.body.cutStart) || 0;
+    }
+    if (req.body.cutEnd !== undefined) {
+      req.body.cutEnd = parseFloat(req.body.cutEnd) || null;
     }
 
     video = await Video.findByIdAndUpdate(req.params.id, req.body, {
@@ -579,12 +724,24 @@ exports.searchVideos = async (req, res, next) => {
       ]
     };
 
-    const videos = await Video.find(query)
+    let videos = await Video.find(query)
       .populate('user', 'username avatar channelName')
       .sort({ createdAt: -1 })
       .limit(limit * 1)
       .skip((page - 1) * limit)
       .exec();
+
+    // Convert URLs to CDN URLs
+    videos = videos.map(video => {
+      let videoObj = video.toObject();
+      const original = videoObj.filePath || videoObj.url || videoObj.path || videoObj.videoUrl;
+      videoObj.cdnUrl = cdnUrlFrom(original);
+      videoObj.videoUrl = videoObj.cdnUrl;
+      if (videoObj.thumbnailUrl) {
+        videoObj.thumbnailUrl = cdnUrlFrom(videoObj.thumbnailUrl);
+      }
+      return videoObj;
+    });
 
     const count = await Video.countDocuments(query);
 
@@ -636,7 +793,7 @@ exports.getSearchSuggestions = async (req, res, next) => {
     const suggestions = videos.map(video => ({
       title: video.title,
       id: video._id,
-      thumbnailUrl: video.thumbnailUrl
+      thumbnailUrl: video.thumbnailUrl ? cdnUrlFrom(video.thumbnailUrl) : video.thumbnailUrl
     }));
 
     res.status(200).json({
@@ -656,10 +813,23 @@ exports.getTrendingVideos = async (req, res, next) => {
   try {
     const { limit = 12 } = req.query;
 
-    const videos = await Video.find({ visibility: 'public' })
+    let videos = await Video.find({ visibility: 'public' })
       .populate('user', 'username avatar channelName')
       .sort({ views: -1, likes: -1 })
-      .limit(parseInt(limit));
+      .limit(parseInt(limit))
+      .exec();
+
+    // Convert URLs to CDN URLs
+    videos = videos.map(video => {
+      let videoObj = video.toObject();
+      const original = videoObj.filePath || videoObj.url || videoObj.path || videoObj.videoUrl;
+      videoObj.cdnUrl = cdnUrlFrom(original);
+      videoObj.videoUrl = videoObj.cdnUrl;
+      if (videoObj.thumbnailUrl) {
+        videoObj.thumbnailUrl = cdnUrlFrom(videoObj.thumbnailUrl);
+      }
+      return videoObj;
+    });
 
     res.status(200).json({
       success: true,
@@ -684,53 +854,104 @@ exports.streamVideo = async (req, res) => {
       return res.status(404).json({ success: false, message: "Video not found" });
     }
 
-    // Determine which video URL to use
-    let fileUrl = video.videoUrl; // Default to original
+    // Determine which video URL to use (use CDN URL)
+    let fileUrl = cdnUrlFrom(video.videoUrl); // Default to original, converted to CDN
 
     // If quality is specified, find matching variant
     if (quality && quality !== 'orig' && quality !== 'auto') {
       const variants = video.variants || video.sources || [];
       const variant = variants.find(v => String(v.quality) === String(quality));
-      if (variant && variant.url) {
-        fileUrl = variant.url;
+      if (variant) {
+        // Use CDN URL for variant
+        const variantUrl = variant.url || variant.videoUrl || variant.sourceUrl;
+        fileUrl = cdnUrlFrom(variantUrl);
       }
     }
 
     const range = req.headers.range;
 
+    // Check if this is a CDN URL
+    const isBunnyCdn = fileUrl.includes('b-cdn.net');
+    const CDN_BASE = process.env.CDN_BASE || process.env.CDN_URL;
+    const isCdnUrl = (CDN_BASE && fileUrl.includes(CDN_BASE)) || isBunnyCdn;
+
     if (!range) {
-      // If no range header, redirect to direct URL for download
+      // If no range header, redirect to CDN URL for download
       return res.redirect(fileUrl);
     }
 
-    const videoSizeReq = await axios.head(fileUrl);
-    const videoSize = Number(videoSizeReq.headers['content-length']);
+    // For CDN URLs, let the CDN handle range requests directly
+    // We can proxy the request or redirect to CDN with range header
+    if (isCdnUrl) {
+      // Bunny CDN supports range requests, so we can proxy or redirect
+      // For better performance, redirect to CDN with range header
+      // But we need to get video size first for proper range handling
+      try {
+        const videoSizeReq = await axios.head(fileUrl);
+        const videoSize = Number(videoSizeReq.headers['content-length']);
 
-    const CHUNK_SIZE = 5 * 1024 * 1024; // 5MB
-    const start = Number(range.replace(/\D/g, ""));
-    const end = Math.min(start + CHUNK_SIZE, videoSize - 1);
+        const CHUNK_SIZE = 5 * 1024 * 1024; // 5MB
+        const start = Number(range.replace(/\D/g, ""));
+        const end = Math.min(start + CHUNK_SIZE, videoSize - 1);
 
-    const contentLength = end - start + 1;
+        // Proxy the range request to CDN
+        const contentLength = end - start + 1;
 
-    const headers = {
-      "Content-Range": `bytes ${start}-${end}/${videoSize}`,
-      "Accept-Ranges": "bytes",
-      "Content-Length": contentLength,
-      "Content-Type": "video/mp4"
-    };
+        const headers = {
+          "Content-Range": `bytes ${start}-${end}/${videoSize}`,
+          "Accept-Ranges": "bytes",
+          "Content-Length": contentLength,
+          "Content-Type": "video/mp4"
+        };
 
-    res.writeHead(206, headers);
+        res.writeHead(206, headers);
 
-    const stream = await axios({
-      url: fileUrl,
-      method: "GET",
-      responseType: "stream",
-      headers: {
-        Range: `bytes=${start}-${end}`
+        const stream = await axios({
+          url: fileUrl,
+          method: "GET",
+          responseType: "stream",
+          headers: {
+            Range: `bytes=${start}-${end}`
+          }
+        });
+
+        stream.data.pipe(res);
+      } catch (err) {
+        console.error("CDN Stream Error:", err.message);
+        // Fallback: redirect to CDN URL
+        return res.redirect(fileUrl);
       }
-    });
+    } else {
+      // For non-CDN URLs (direct B2/R2), use existing logic
+      const videoSizeReq = await axios.head(fileUrl);
+      const videoSize = Number(videoSizeReq.headers['content-length']);
 
-    stream.data.pipe(res);
+      const CHUNK_SIZE = 5 * 1024 * 1024; // 5MB
+      const start = Number(range.replace(/\D/g, ""));
+      const end = Math.min(start + CHUNK_SIZE, videoSize - 1);
+
+      const contentLength = end - start + 1;
+
+      const headers = {
+        "Content-Range": `bytes ${start}-${end}/${videoSize}`,
+        "Accept-Ranges": "bytes",
+        "Content-Length": contentLength,
+        "Content-Type": "video/mp4"
+      };
+
+      res.writeHead(206, headers);
+
+      const stream = await axios({
+        url: fileUrl,
+        method: "GET",
+        responseType: "stream",
+        headers: {
+          Range: `bytes=${start}-${end}`
+        }
+      });
+
+      stream.data.pipe(res);
+    }
 
   } catch (err) {
     console.error("STREAM ERROR:", err.message);
@@ -751,15 +972,18 @@ exports.getDownloadUrl = async (req, res) => {
       return res.status(404).json({ success: false, message: "Video not found" });
     }
 
-    let downloadUrl = video.videoUrl; // Default to original
+    // Use CDN URL for download
+    let downloadUrl = cdnUrlFrom(video.videoUrl); // Default to original, converted to CDN
     let qualityLabel = 'Original';
 
     // If quality is specified and not 'orig', find matching variant
     if (quality && quality !== 'orig' && quality !== 'auto') {
       const variants = video.variants || video.sources || [];
       const variant = variants.find(v => String(v.quality) === String(quality));
-      if (variant && variant.url) {
-        downloadUrl = variant.url;
+      if (variant) {
+        // Use CDN URL for variant
+        const variantUrl = variant.url || variant.videoUrl || variant.sourceUrl;
+        downloadUrl = cdnUrlFrom(variantUrl);
         qualityLabel = `${quality}p`;
       }
     }
@@ -797,15 +1021,18 @@ exports.downloadVideoProxy = async (req, res) => {
       return res.status(404).json({ success: false, message: "Video not found" });
     }
 
-    let fileUrl = video.videoUrl;
+    // Use CDN URL for download
+    let fileUrl = cdnUrlFrom(video.videoUrl);
     let qualityLabel = 'Original';
 
     // Try to find requested quality
     if (quality && quality !== 'orig' && quality !== 'auto') {
       const variants = video.variants || video.sources || [];
       const variant = variants.find(v => String(v.quality) === String(quality));
-      if (variant && variant.url) {
-        fileUrl = variant.url;
+      if (variant) {
+        // Use CDN URL for variant
+        const variantUrl = variant.url || variant.videoUrl || variant.sourceUrl;
+        fileUrl = cdnUrlFrom(variantUrl);
         qualityLabel = `${quality}p`;
       }
     }
@@ -814,41 +1041,51 @@ exports.downloadVideoProxy = async (req, res) => {
     const safeTitle = video.title.replace(/[^a-z0-9]/gi, '_').toLowerCase();
     const filename = `${safeTitle}_${qualityLabel}.mp4`;
 
-    // Extract key from URL
-    // We need to use the r2KeyFromUrl helper or similar logic
-    let key = null;
-    try {
-      const u = new URL(fileUrl);
-      if (u.hostname.endsWith('.b2.dev') || u.hostname.includes('backblazeb2.com')) {
-        // Standard B2 URL: https://f000.backblazeb2.com/file/<bucket>/<key>
-        // or https://<bucket>.s3.<region>.backblazeb2.com/<key>
-        // Our r2KeyFromUrl handles .b2.dev but let's be robust
-        const parts = u.pathname.split('/').filter(Boolean);
-        // If path starts with /file/<bucket>/, key is after that
-        if (parts[0] === 'file' && parts.length > 2) {
-          key = parts.slice(2).join('/');
+    // Check if this is a Bunny CDN URL or other CDN URL
+    const isBunnyCdn = fileUrl.includes('b-cdn.net');
+    const CDN_BASE = process.env.CDN_BASE || process.env.CDN_URL;
+    const isCdnUrl = (CDN_BASE && fileUrl.includes(CDN_BASE)) || isBunnyCdn;
+    
+    // If it's a CDN URL, redirect directly to CDN URL
+    // Browser will handle the download, and we can't force filename for CDN URLs
+    // Frontend should use getDownloadUrl endpoint instead which returns JSON
+    if (isCdnUrl) {
+      console.log(`📥 Redirecting to CDN URL for download: ${fileUrl}`);
+      console.log(`   Filename: ${filename}`);
+      // Direct redirect - browser will download the file
+      return res.redirect(fileUrl);
+    }
+    
+    // If not CDN URL, try to extract key and generate signed URL (fallback for direct B2/R2 access)
+    let key = extractKeyFromUrl(fileUrl);
+    
+    if (!key) {
+      try {
+        const u = new URL(fileUrl);
+        if (u.hostname.endsWith('.b2.dev') || u.hostname.includes('backblazeb2.com')) {
+          // Standard B2 URL: https://f000.backblazeb2.com/file/<bucket>/<key>
+          const parts = u.pathname.split('/').filter(Boolean);
+          if (parts[0] === 'file' && parts.length > 2) {
+            key = parts.slice(2).join('/');
+          } else {
+            key = decodeURIComponent(u.pathname.slice(1));
+          }
+        } else if (u.hostname.includes('r2.dev') || u.hostname.includes('cloudflarestorage.com')) {
+          key = r2KeyFromUrl(fileUrl);
         } else {
-          // Assume path is key (for custom domains or s3-style)
           key = decodeURIComponent(u.pathname.slice(1));
         }
-      } else if (u.hostname.includes('r2.dev') || u.hostname.includes('cloudflarestorage.com')) {
-        key = r2KeyFromUrl(fileUrl);
-      } else {
-        // Fallback: assume the path relative to bucket root is the key
-        // This might need adjustment based on exact URL format in DB
-        key = decodeURIComponent(u.pathname.slice(1));
+      } catch (e) {
+        console.error('Error parsing URL:', e);
       }
-    } catch (e) {
-      console.error('Error parsing URL:', e);
     }
 
     if (!key) {
       // Fallback to redirecting to the public URL if we can't determine key
-      // This won't force download but at least opens the file
       return res.redirect(fileUrl);
     }
 
-    // Generate signed URL with content-disposition attachment
+    // Generate signed URL with content-disposition attachment (for direct B2/R2 access)
     const { presignGet } = require('../utils/b2');
     const signedUrl = await presignGet(key, 3600, {
       responseContentDisposition: `attachment; filename="${filename}"`,

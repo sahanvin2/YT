@@ -12,6 +12,17 @@ const errorHandler = require('./middleware/error');
 // Load env vars
 dotenv.config();
 
+// Check CDN configuration on startup
+const CDN_BASE = process.env.CDN_BASE || process.env.CDN_URL;
+if (CDN_BASE) {
+  console.log(`\n🌐 Bunny CDN configured: ${CDN_BASE}\n`);
+} else {
+  console.warn('\n⚠️  CDN_BASE not set in environment variables!');
+  console.warn('   Videos will be served directly from B2 storage.');
+  console.warn('   To enable Bunny CDN, add to your .env file:');
+  console.warn('   CDN_BASE=https://movia-1.b-cdn.net\n');
+}
+
 // Route files
 const auth = require('./routes/auth');
 const videos = require('./routes/videos');
@@ -21,6 +32,7 @@ const admin = require('./routes/admin');
 const uploads = require('./routes/uploads');
 const health = require('./routes/health');
 const playlists = require('./routes/playlists');
+const channels = require('./routes/channels');
 
 const app = express();
 
@@ -65,6 +77,7 @@ app.use('/api/comments', comments);
 app.use('/api/admin', admin);
 app.use('/api/uploads', uploads);
 app.use('/api/playlists', playlists);
+app.use('/api/channels', channels);
 
 // Error handler
 app.use(errorHandler);

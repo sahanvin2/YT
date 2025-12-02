@@ -16,7 +16,7 @@ const {
   getDownloadUrl,
   downloadVideoProxy
 } = require('../controllers/videoController');
-const { protect } = require('../middleware/auth');
+const { protect, optionalAuth } = require('../middleware/auth');
 
 const router = express.Router();
 
@@ -41,7 +41,7 @@ router.get('/:id/download-file', downloadVideoProxy);
 
 
 router.route('/:id')
-  .get(getVideo)
+  .get(optionalAuth, getVideo)
   .put(protect, updateVideo)
   .delete(protect, deleteVideo);
 

@@ -71,6 +71,10 @@ const Navbar = ({ toggleSidebar }) => {
       navigate(`/search?q=${searchQuery.trim()}`);
       setSearchQuery('');
       setShowSuggestions(false);
+      // Close mobile search on mobile devices
+      if (window.innerWidth <= 480) {
+        setMobileSearchOpen(false);
+      }
     }
   };
 
@@ -78,6 +82,10 @@ const Navbar = ({ toggleSidebar }) => {
     navigate(`/search?q=${suggestion.title}`);
     setSearchQuery('');
     setShowSuggestions(false);
+    // Close mobile search on mobile devices
+    if (window.innerWidth <= 480) {
+      setMobileSearchOpen(false);
+    }
   };
 
   const handleInputChange = (e) => {
@@ -164,34 +172,36 @@ const Navbar = ({ toggleSidebar }) => {
         </button>
         <button
           className="search-toggle"
-          onClick={() => setMobileSearchOpen(!mobileSearchOpen)}
+          onClick={() => {
+            setMobileSearchOpen(!mobileSearchOpen);
+            if (!mobileSearchOpen) {
+              // Focus search input when opening on mobile
+              setTimeout(() => {
+                const input = document.querySelector('.navbar-search input');
+                if (input) input.focus();
+              }, 100);
+            }
+          }}
           aria-label="Open search"
         >
           <FiSearch size={20} />
         </button>
         {isAuthenticated ? (
           <>
-            <Link to="/upload" className="upload-btn btn btn-primary">
-              <FiVideo size={18} />
-              <span>Upload</span>
-            </Link>
             <div className="user-menu-container">
               <button
                 className="user-avatar"
                 onClick={() => setShowUserMenu(!showUserMenu)}
               >
-                <img src={user.avatar} alt={user.username} />
+                <img 
+                  src={user.avatar} 
+                  alt={user.username}
+                  loading="lazy"
+                  decoding="async"
+                />
               </button>
               {showUserMenu && (
                 <div className="user-menu">
-                  {user?.id && (
-                    <Link
-                      to={`/channel/${user.id}`}
-                      onClick={() => setShowUserMenu(false)}
-                    >
-                      <FiUser /> Your Channel
-                    </Link>
-                  )}
                   <Link
                     to="/profile"
                     onClick={() => setShowUserMenu(false)}

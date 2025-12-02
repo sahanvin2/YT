@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import {
     FiPenTool, FiCamera, FiSmile, FiFileText, FiZap,
@@ -9,6 +9,30 @@ import CategorySection from './CategorySection';
 import './CategoryPage.css';
 
 const CategoryPage = () => {
+    const videoRef = useRef(null);
+    const [randomVideo, setRandomVideo] = useState('');
+
+    // Banner video URLs
+    const bannerVideos = [
+        'https://movia-prod.s3.us-east-005.backblazeb2.com/videos/6921dd4e75b5b4597cbd59e7/1764696568892_video_1764696568892.mp4',
+        'https://f005.backblazeb2.com/file/movia-prod/videos/6921dd4e75b5b4597cbd59e7/1764696513778_video_1764696513778.mp4',
+        'https://f005.backblazeb2.com/file/movia-prod/videos/6921dd4e75b5b4597cbd59e7/1764696398610_video_1764696398610.mp4'
+    ];
+
+    useEffect(() => {
+        // Select random video on mount
+        const randomIndex = Math.floor(Math.random() * bannerVideos.length);
+        setRandomVideo(bannerVideos[randomIndex]);
+    }, []);
+
+    useEffect(() => {
+        // Auto-play and loop video
+        if (videoRef.current && randomVideo) {
+            videoRef.current.play().catch(err => {
+                console.log('Autoplay prevented:', err);
+            });
+        }
+    }, [randomVideo]);
     // Only show these specific categories with top 5 videos each
     const displayCategories = [
         { path: '/category/Art and Design', icon: FiPenTool, label: 'Art & Design', bg: 'linear-gradient(45deg, #8E2DE2, #4A00E0)' },
@@ -32,6 +56,21 @@ const CategoryPage = () => {
 
     return (
         <div className="category-page">
+            {randomVideo && (
+                <div className="category-banner-container">
+                    <video
+                        ref={videoRef}
+                        className="category-banner-video"
+                        src={randomVideo}
+                        autoPlay
+                        loop
+                        muted
+                        playsInline
+                        disablePictureInPicture
+                        controlsList="nodownload nofullscreen noremoteplayback"
+                    />
+                </div>
+            )}
             <h1>All Categories</h1>
             <div className="category-grid">
                 {displayCategories.map((category) => (

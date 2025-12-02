@@ -85,6 +85,33 @@ const UserSchema = new mongoose.Schema({
     type: String,
     default: ''
   },
+  country: {
+    type: String,
+    trim: true,
+    default: ''
+  },
+  language: {
+    type: String,
+    trim: true,
+    default: 'en'
+  },
+  socialLinks: {
+    youtube: { type: String, trim: true, default: '' },
+    twitter: { type: String, trim: true, default: '' },
+    instagram: { type: String, trim: true, default: '' },
+    facebook: { type: String, trim: true, default: '' },
+    tiktok: { type: String, trim: true, default: '' },
+    website: { type: String, trim: true, default: '' }
+  },
+  contactInfo: {
+    email: { type: String, trim: true, default: '' },
+    phone: { type: String, trim: true, default: '' },
+    address: { type: String, trim: true, default: '' }
+  },
+  totalViews: {
+    type: Number,
+    default: 0
+  },
   settings: {
     defaultPlaybackQuality: {
       type: String,

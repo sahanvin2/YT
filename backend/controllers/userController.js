@@ -39,6 +39,17 @@ exports.getUserProfile = async (req, res, next) => {
       });
     }
 
+    // Calculate total views from all videos
+    const Video = require('../models/Video');
+    const videos = await Video.find({ user: user._id });
+    const totalViews = videos.reduce((sum, video) => sum + (video.views || 0), 0);
+    
+    // Update user's totalViews if not set or different
+    if (user.totalViews !== totalViews) {
+      user.totalViews = totalViews;
+      await user.save();
+    }
+
     // Ensure username exists (fallback to name for backward compatibility)
     if (!user.username && user.name) {
       user.username = user.name;
@@ -72,17 +83,23 @@ exports.updateProfile = async (req, res, next) => {
     }
 
     const fieldsToUpdate = {
-      username: req.body.username,
       email: req.body.email,
-      channelName: req.body.channelName,
       channelDescription: req.body.channelDescription,
-      avatar: req.body.avatar
+      avatar: req.body.avatar,
+      country: req.body.country,
+      language: req.body.language,
+      socialLinks: req.body.socialLinks,
+      contactInfo: req.body.contactInfo
     };
 
     // Remove undefined fields
     Object.keys(fieldsToUpdate).forEach(key => 
       fieldsToUpdate[key] === undefined && delete fieldsToUpdate[key]
     );
+    
+    // Username and channelName cannot be changed
+    delete fieldsToUpdate.username;
+    delete fieldsToUpdate.channelName;
 
     const user = await User.findByIdAndUpdate(
       req.params.id,
@@ -255,25 +272,53 @@ exports.toggleSubscribe = async (req, res, next) => {
 exports.getUserVideos = async (req, res, next) => {
   try {
     const { page = 1, limit = 12 } = req.query;
+    const userId = req.params.id;
+    const requestingUserId = req.user?.id;
 
-    const videos = await Video.find({ 
-      user: req.params.id,
-      visibility: 'public'
-    })
+    // If user is viewing their own channel, show all videos (public and private)
+    // Otherwise, only show public videos
+    const query = { user: userId };
+    const isOwnChannel = requestingUserId && requestingUserId.toString() === userId.toString();
+    
+    if (!isOwnChannel) {
+      query.visibility = 'public';
+    }
+
+    // Debug logging
+    console.log(`📹 getUserVideos - userId: ${userId}, requestingUserId: ${requestingUserId}, isOwnChannel: ${isOwnChannel}, limit: ${limit}`);
+
+    const videos = await Video.find(query)
       .populate('user', 'username avatar channelName')
       .sort({ createdAt: -1 })
       .limit(limit * 1)
       .skip((page - 1) * limit)
       .exec();
 
-    const count = await Video.countDocuments({ 
-      user: req.params.id,
-      visibility: 'public'
+    const count = await Video.countDocuments(query);
+
+    // Convert URLs to CDN URLs
+    const { cdnUrlFrom } = require('../utils/cdn');
+    const videosWithCDN = videos.map(video => {
+      const videoObj = video.toObject();
+      const original = videoObj.filePath || videoObj.url || videoObj.path || videoObj.videoUrl;
+      videoObj.cdnUrl = cdnUrlFrom(original);
+      videoObj.videoUrl = videoObj.cdnUrl;
+      if (videoObj.thumbnailUrl) {
+        videoObj.thumbnailUrl = cdnUrlFrom(videoObj.thumbnailUrl);
+      }
+      if (videoObj.variants && Array.isArray(videoObj.variants)) {
+        videoObj.variants = videoObj.variants.map(variant => ({
+          ...variant,
+          url: cdnUrlFrom(variant.url || variant.videoUrl || variant.sourceUrl),
+          cdnUrl: cdnUrlFrom(variant.url || variant.videoUrl || variant.sourceUrl)
+        }));
+      }
+      return videoObj;
     });
 
     res.status(200).json({
       success: true,
-      data: videos,
+      data: videosWithCDN,
       totalPages: Math.ceil(count / limit),
       currentPage: page,
       total: count

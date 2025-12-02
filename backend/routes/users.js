@@ -15,7 +15,7 @@ const {
   getSavedVideos,
   updateSettings
 } = require('../controllers/userController');
-const { protect } = require('../middleware/auth');
+const { protect, optionalAuth } = require('../middleware/auth');
 
 const router = express.Router();
 
@@ -35,6 +35,6 @@ router.post('/:id/avatar', protect, uploadAvatar);
 router.post('/:id/banner', protect, uploadBanner);
 router.put('/:id/settings', protect, updateSettings);
 router.put('/:id/subscribe', protect, toggleSubscribe);
-router.get('/:id/videos', getUserVideos);
+router.get('/:id/videos', optionalAuth, getUserVideos);
 
 module.exports = router;

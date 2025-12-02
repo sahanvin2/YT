@@ -6,7 +6,13 @@ const API_URL = process.env.REACT_APP_API_URL || '/api';
 // Videos
 export const getVideos = (params) => axios.get(`${API_URL}/videos`, { params });
 export const getVideo = (id) => axios.get(`${API_URL}/videos/${id}`);
-export const uploadVideo = (formData) => axios.post(`${API_URL}/videos`, formData);
+export const uploadVideo = (formData, config = {}) => axios.post(`${API_URL}/videos`, formData, {
+  headers: {
+    'Content-Type': 'multipart/form-data'
+  },
+  onUploadProgress: config.onUploadProgress,
+  timeout: 600000 // 10 minutes for large files
+});
 export const presignPut = (fileName, contentType) => axios.post(`${API_URL}/uploads/presign`, { fileName, contentType });
 export const createVideoFromUrl = (data) => axios.post(`${API_URL}/videos/create`, data);
 export const updateVideo = (id, data) => axios.put(`${API_URL}/videos/${id}`, data);
@@ -45,6 +51,13 @@ export const uploadBanner = (id, formData) => axios.post(`${API_URL}/users/${id}
   headers: { 'Content-Type': 'multipart/form-data' }
 });
 export const updateSettings = (id, settings) => axios.put(`${API_URL}/users/${id}/settings`, { settings });
+
+// Channels
+export const createChannel = (data) => axios.post(`${API_URL}/channels`, data);
+export const getMyChannels = () => axios.get(`${API_URL}/channels/my-channels`);
+export const getChannel = (id) => axios.get(`${API_URL}/channels/${id}`);
+export const updateChannel = (id, data) => axios.put(`${API_URL}/channels/${id}`, data);
+export const deleteChannel = (id) => axios.delete(`${API_URL}/channels/${id}`);
 
 // Playlists
 export const createPlaylist = (data) => axios.post(`${API_URL}/playlists`, data);

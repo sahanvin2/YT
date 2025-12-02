@@ -4,6 +4,29 @@
   min-height: 100vh;
 }
 
+.category-banner-container {
+  width: 100%;
+  max-width: 1280px;
+  height: 360px;
+  margin: 0 auto 2rem auto;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  background-color: var(--card-bg);
+  border-radius: 12px;
+  overflow: hidden;
+  position: relative;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+}
+
+.category-banner-video {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  pointer-events: none;
+  user-select: none;
+}
+
 .category-page h1 {
   color: var(--text-primary);
   margin-bottom: 2rem;
@@ -95,6 +118,13 @@
 @media (max-width: 768px) {
   .category-page {
     padding: 1rem;
+  }
+
+  .category-banner-container {
+    max-width: 100%;
+    height: 200px;
+    margin-bottom: 1.5rem;
+    border-radius: 8px;
   }
 
   .category-grid {

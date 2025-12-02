@@ -20,6 +20,15 @@ const Watch = () => {
   const { isAuthenticated } = useAuth();
   const historyPostedRef = useRef({});
   const [video, setVideo] = useState(null);
+
+  useEffect(() => {
+    // Debug logging (can be removed in production)
+    if (process.env.NODE_ENV === 'development') {
+      console.log("VIDEO PLAYER URL:", video?.cdnUrl, video?.videoUrl);
+    }
+    window.__lastVideo = video;
+  }, [video]);
+
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [showFullDescription, setShowFullDescription] = useState(false);
@@ -175,10 +184,10 @@ const Watch = () => {
   // Update player when quality changes
   useEffect(() => {
     if (playerRef.current && video) {
-      // Force player to reload with new URL
+      // Force player to reload with new URL (prefer CDN URL)
       const newUrl = selectedSource
-        ? (selectedSource.url || selectedSource.videoUrl || video.videoUrl)
-        : video.videoUrl;
+        ? (selectedSource.cdnUrl || selectedSource.url || selectedSource.videoUrl || video.cdnUrl || video.videoUrl)
+        : (video.cdnUrl || video.videoUrl);
 
       // ReactPlayer will automatically update when url prop changes
     }
@@ -188,11 +197,30 @@ const Watch = () => {
   const fetchVideo = async () => {
     try {
       setLoading(true);
+      setError('');
       const res = await getVideo(id);
       const videoData = res.data.data;
 
-      // Validate video URL exists
-      if (!videoData.videoUrl) {
+      // Debug: Log video URLs to check CDN conversion (development only)
+      if (process.env.NODE_ENV === 'development') {
+        console.log('📹 Video Data Received:', {
+          videoUrl: videoData.videoUrl,
+          cdnUrl: videoData.cdnUrl,
+          isBunnyCDN: videoData.videoUrl?.includes('b-cdn.net') || videoData.cdnUrl?.includes('b-cdn.net'),
+          isB2Direct: videoData.videoUrl?.includes('backblazeb2.com') || videoData.cdnUrl?.includes('backblazeb2.com'),
+        });
+        
+        const finalUrl = videoData.cdnUrl || videoData.videoUrl;
+        if (finalUrl && finalUrl.includes('b-cdn.net')) {
+          console.log('✅ Using Bunny CDN:', finalUrl);
+        } else if (finalUrl && finalUrl.includes('backblazeb2.com')) {
+          console.warn('⚠️ Still using B2 directly:', finalUrl);
+        }
+      }
+
+      // Validate video URL exists (prefer CDN URL)
+      const finalVideoUrl = videoData.cdnUrl || videoData.videoUrl;
+      if (!finalVideoUrl) {
         setError('Video URL is missing');
         setLoading(false);
         return;
@@ -207,7 +235,12 @@ const Watch = () => {
       const sources = videoData.sources || videoData.variants || [];
       if (sources.length > 0) {
         const sorted = [...sources].sort((a, b) => a.quality - b.quality);
-        setSelectedSource(sorted[sorted.length - 1]);
+        const highestQuality = sorted[sorted.length - 1];
+        // Ensure we use CDN URL for selected source
+        if (highestQuality && !highestQuality.cdnUrl && highestQuality.url) {
+          highestQuality.cdnUrl = highestQuality.url; // Fallback if cdnUrl not set
+        }
+        setSelectedSource(highestQuality);
       } else {
         setSelectedSource(null);
       }
@@ -223,8 +256,14 @@ const Watch = () => {
         }
       }
     } catch (err) {
-      setError('Failed to load video');
+      const errorMessage = err.response?.data?.message || err.message || 'Failed to load video';
+      setError(errorMessage);
       console.error('Error loading video:', err);
+      
+      // If it's a private video error, show helpful message
+      if (errorMessage.includes('private') || err.response?.status === 403) {
+        setError('This video is private. Only the channel owner can view it.');
+      }
     } finally {
       setLoading(false);
     }
@@ -377,9 +416,10 @@ const Watch = () => {
           <div className="video-player">
             <ReactPlayer
               ref={playerRef}
-              url={selectedSource
-                ? (selectedSource.url || selectedSource.videoUrl || video.videoUrl)
-                : video.videoUrl
+              url={
+                selectedSource
+                ? (selectedSource.cdnUrl || selectedSource.url || selectedSource.videoUrl || video.cdnUrl || video.videoUrl)
+                : (video.cdnUrl || video.videoUrl)
               }
               controls
               width="100%"
@@ -480,10 +520,10 @@ const Watch = () => {
                 
                 // Only show error if ad was not shown and we're not waiting
                 if (!adShown && video) {
-                  // Check if video URL exists
+                  // Check if video URL exists (prefer CDN URL)
                   const videoUrl = selectedSource
-                    ? (selectedSource.url || selectedSource.videoUrl || video.videoUrl)
-                    : video.videoUrl;
+                    ? (selectedSource.cdnUrl || selectedSource.url || selectedSource.videoUrl || video.cdnUrl || video.videoUrl)
+                    : (video.cdnUrl || video.videoUrl);
                   
                   if (!videoUrl) {
                     setError('Video URL is missing. Please try refreshing the page.');
@@ -717,7 +757,12 @@ const Watch = () => {
             <div className="channel-description-right">
               <div className="channel-info-compact">
                 <Link to={`/channel/${video.user._id}`} className="channel-avatar">
-                  <img src={video.user.avatar} alt={video.user.username} />
+                  <img 
+                    src={video.user.avatar} 
+                    alt={video.user.username}
+                    loading="lazy"
+                    decoding="async"
+                  />
                 </Link>
                 <div className="channel-meta-compact">
                   <Link to={`/channel/${video.user._id}`} className="channel-name">

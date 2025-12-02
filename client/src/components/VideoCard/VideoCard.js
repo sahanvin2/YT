@@ -7,7 +7,12 @@ const VideoCard = ({ video, layout = 'grid' }) => {
   return (
     <div className={`video-card ${layout}`}>
       <Link to={`/watch/${video._id}`} className="video-thumbnail">
-        <img src={video.thumbnailUrl} alt={video.title} />
+        <img 
+          src={video.thumbnailUrl} 
+          alt={video.title}
+          loading="lazy"
+          decoding="async"
+        />
         {video.duration > 0 && (
           <span className="video-duration">{formatDuration(video.duration)}</span>
         )}
@@ -15,7 +20,12 @@ const VideoCard = ({ video, layout = 'grid' }) => {
 
       <div className="video-info">
         <Link to={`/channel/${video.user._id}`} className="video-avatar">
-          <img src={video.user.avatar} alt={video.user.username} />
+          <img 
+            src={video.user.avatar} 
+            alt={video.user.username}
+            loading="lazy"
+            decoding="async"
+          />
         </Link>
 
         <div className="video-details">

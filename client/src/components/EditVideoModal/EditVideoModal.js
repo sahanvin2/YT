@@ -1,34 +1,119 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { updateVideo } from '../../utils/api';
-import { FiUpload, FiX } from 'react-icons/fi';
+import { FiUpload, FiX, FiImage, FiScissors } from 'react-icons/fi';
 import './EditVideoModal.css';
 
 const EditVideoModal = ({ video, onClose, onUpdate }) => {
+    const [activeTab, setActiveTab] = useState('information');
+    const [formData, setFormData] = useState({
+        description: video?.description || '',
+        tags: video?.tags?.join(', ') || '',
+        category: video?.category || 'Other',
+        visibility: video?.visibility || 'public'
+    });
     const [thumbnailFile, setThumbnailFile] = useState(null);
+    const [thumbnailPreview, setThumbnailPreview] = useState(video?.thumbnailUrl || '');
+    const [cutStart, setCutStart] = useState(0);
+    const [cutEnd, setCutEnd] = useState(video?.duration || 0);
+    const [videoDuration, setVideoDuration] = useState(video?.duration || 0);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
+    const videoRef = useRef(null);
+
+    useEffect(() => {
+        if (video) {
+            setFormData({
+                description: video.description || '',
+                tags: video.tags?.join(', ') || '',
+                category: video.category || 'Other',
+                visibility: video.visibility || 'public'
+            });
+            setThumbnailPreview(video.thumbnailUrl || '');
+            setVideoDuration(video.duration || 0);
+            setCutStart(video.cutStart || 0);
+            setCutEnd(video.cutEnd || video.duration || 0);
+        }
+    }, [video]);
+
+    const handleInputChange = (e) => {
+        const { name, value } = e.target;
+        setFormData(prev => ({
+            ...prev,
+            [name]: value
+        }));
+    };
 
     const handleFileChange = (e) => {
-        setThumbnailFile(e.target.files[0]);
+        const file = e.target.files[0];
+        if (file) {
+            setThumbnailFile(file);
+            const reader = new FileReader();
+            reader.onloadend = () => {
+                setThumbnailPreview(reader.result);
+            };
+            reader.readAsDataURL(file);
+        }
+    };
+
+    const formatTime = (seconds) => {
+        const mins = Math.floor(seconds / 60);
+        const secs = Math.floor(seconds % 60);
+        return `${mins}:${secs.toString().padStart(2, '0')}`;
+    };
+
+    const handleCutChange = (type, value) => {
+        const numValue = parseFloat(value) || 0;
+        if (type === 'start') {
+            if (numValue >= 0 && numValue < cutEnd) {
+                setCutStart(numValue);
+            }
+        } else {
+            if (numValue > cutStart && numValue <= videoDuration) {
+                setCutEnd(numValue);
+            }
+        }
     };
 
     const handleSubmit = async (e) => {
         e.preventDefault();
-        if (!thumbnailFile) {
-            setError('Please select a new thumbnail');
-            return;
-        }
+        setError('');
 
         try {
             setLoading(true);
-            const formData = new FormData();
-            formData.append('thumbnail', thumbnailFile);
+            const formDataToSend = new FormData();
+            
+            // Add description
+            formDataToSend.append('description', formData.description);
+            
+            // Add tags (convert comma-separated string to array)
+            const tagsArray = formData.tags
+                .split(',')
+                .map(tag => tag.trim())
+                .filter(tag => tag.length > 0);
+            formDataToSend.append('tags', JSON.stringify(tagsArray));
+            
+            // Add category
+            formDataToSend.append('category', formData.category);
+            
+            // Add visibility
+            formDataToSend.append('visibility', formData.visibility);
+            
+            // Add thumbnail if selected
+            if (thumbnailFile) {
+                formDataToSend.append('thumbnail', thumbnailFile);
+            }
 
-            const res = await updateVideo(video._id, formData);
+            // Add cut duration if changed
+            if (cutStart > 0 || cutEnd < videoDuration) {
+                formDataToSend.append('cutStart', cutStart);
+                formDataToSend.append('cutEnd', cutEnd);
+            }
+
+            const res = await updateVideo(video._id, formDataToSend);
             onUpdate(res.data.data || res.data.video);
             onClose();
         } catch (err) {
-            setError('Failed to update thumbnail');
+            setError(err.response?.data?.message || 'Failed to update video');
             console.error(err);
         } finally {
             setLoading(false);
@@ -36,10 +121,13 @@ const EditVideoModal = ({ video, onClose, onUpdate }) => {
     };
 
     return (
-        <div className="edit-modal-overlay">
-            <div className="edit-modal">
-                <div className="modal-header">
-                    <h2>Update Thumbnail</h2>
+        <div className="edit-modal-overlay" onClick={onClose}>
+            <div className="edit-modal" onClick={(e) => e.stopPropagation()}>
+                <div className="edit-modal-header">
+                    <div className="edit-modal-title">
+                        <h2>Edit Video</h2>
+                        <p className="video-title-display">{video?.title}</p>
+                    </div>
                     <button className="close-btn" onClick={onClose}>
                         <FiX size={24} />
                     </button>
@@ -47,37 +135,209 @@ const EditVideoModal = ({ video, onClose, onUpdate }) => {
 
                 {error && <div className="error-message">{error}</div>}
 
-                <form onSubmit={handleSubmit}>
-                    <div className="form-group">
-                        <label>Current Thumbnail</label>
-                        {video.thumbnailUrl && (
-                            <img src={video.thumbnailUrl} alt="Current" className="current-thumbnail" />
-                        )}
-                    </div>
+                <div className="edit-modal-tabs">
+                    <button
+                        className={`edit-tab ${activeTab === 'information' ? 'active' : ''}`}
+                        onClick={() => setActiveTab('information')}
+                    >
+                        Information
+                    </button>
+                    <button
+                        className={`edit-tab ${activeTab === 'additional' ? 'active' : ''}`}
+                        onClick={() => setActiveTab('additional')}
+                    >
+                        Additional
+                    </button>
+                    <button
+                        className={`edit-tab ${activeTab === 'publication' ? 'active' : ''}`}
+                        onClick={() => setActiveTab('publication')}
+                    >
+                        Publication
+                    </button>
+                </div>
 
-                    <div className="form-group">
-                        <label htmlFor="thumbnail">New Thumbnail</label>
-                        <div className="file-input">
-                            <input
-                                type="file"
-                                id="thumbnail"
-                                accept="image/*"
-                                onChange={handleFileChange}
-                                required
-                            />
-                            <div className="file-input-label">
-                                <FiUpload size={24} />
-                                <span>{thumbnailFile ? thumbnailFile.name : 'Choose new thumbnail'}</span>
+                <form onSubmit={handleSubmit} className="edit-form">
+                    {activeTab === 'information' && (
+                        <>
+                            <div className="form-section">
+                                <h3 className="section-title">General</h3>
+                                
+                                <div className="form-group">
+                                    <label>Video Title</label>
+                                    <input
+                                        type="text"
+                                        value={video?.title || ''}
+                                        disabled
+                                        className="disabled-input"
+                                        title="Title cannot be changed"
+                                    />
+                                    <small className="form-hint">Title cannot be changed</small>
+                                </div>
+
+                                <div className="form-group">
+                                    <label htmlFor="description">Description</label>
+                                    <textarea
+                                        id="description"
+                                        name="description"
+                                        value={formData.description}
+                                        onChange={handleInputChange}
+                                        rows="6"
+                                        maxLength={2000}
+                                        placeholder="What's your video about?"
+                                        className="form-textarea"
+                                    />
+                                    <small className="char-count">
+                                        {formData.description.length} / 2000 characters
+                                    </small>
+                                </div>
+                            </div>
+
+                            <div className="form-section">
+                                <h3 className="section-title">Cover</h3>
+                                {thumbnailPreview && (
+                                    <div className="thumbnail-preview-container">
+                                        <img 
+                                            src={thumbnailPreview} 
+                                            alt="Thumbnail preview" 
+                                            className="thumbnail-preview" 
+                                        />
+                                    </div>
+                                )}
+                                <div className="file-input">
+                                    <input
+                                        type="file"
+                                        id="thumbnail"
+                                        accept="image/*"
+                                        onChange={handleFileChange}
+                                    />
+                                    <label htmlFor="thumbnail" className="file-input-label">
+                                        <FiImage size={20} />
+                                        <span>{thumbnailFile ? thumbnailFile.name : 'Choose new thumbnail (optional)'}</span>
+                                    </label>
+                                </div>
+                                <small className="form-hint">Leave empty to keep current thumbnail</small>
+                            </div>
+                        </>
+                    )}
+
+                    {activeTab === 'additional' && (
+                        <>
+                            <div className="form-section">
+                                <h3 className="section-title">Video Details</h3>
+                                
+                                <div className="form-group">
+                                    <label htmlFor="category">Category</label>
+                                    <select
+                                        id="category"
+                                        name="category"
+                                        value={formData.category}
+                                        onChange={handleInputChange}
+                                        className="form-select"
+                                    >
+                                        <option value="Other">Other</option>
+                                        <option value="Music">Music</option>
+                                        <option value="Gaming">Gaming</option>
+                                        <option value="Education">Education</option>
+                                        <option value="Entertainment">Entertainment</option>
+                                        <option value="News">News</option>
+                                        <option value="Sports">Sports</option>
+                                        <option value="Art and Design">Art & Design</option>
+                                        <option value="Comedy">Comedy</option>
+                                        <option value="Documentary">Documentary</option>
+                                        <option value="Fashion">Fashion</option>
+                                        <option value="Food">Food</option>
+                                    </select>
+                                </div>
+
+                                <div className="form-group">
+                                    <label htmlFor="tags">Tags</label>
+                                    <input
+                                        type="text"
+                                        id="tags"
+                                        name="tags"
+                                        value={formData.tags}
+                                        onChange={handleInputChange}
+                                        placeholder="tag1, tag2, tag3..."
+                                        className="form-input"
+                                    />
+                                    <small className="form-hint">Separate tags with commas</small>
+                                </div>
+                            </div>
+
+                            <div className="form-section">
+                                <h3 className="section-title">
+                                    <FiScissors size={18} />
+                                    Cut Video Duration
+                                </h3>
+                                <div className="cut-controls">
+                                    <div className="cut-info">
+                                        <p>Original Duration: <strong>{formatTime(videoDuration)}</strong></p>
+                                        <p>New Duration: <strong>{formatTime(cutEnd - cutStart)}</strong></p>
+                                    </div>
+                                    <div className="cut-input-group">
+                                        <label>Start Time (seconds)</label>
+                                        <input
+                                            type="number"
+                                            min="0"
+                                            max={videoDuration}
+                                            step="0.1"
+                                            value={cutStart}
+                                            onChange={(e) => handleCutChange('start', e.target.value)}
+                                            className="form-input"
+                                        />
+                                        <span className="time-display">{formatTime(cutStart)}</span>
+                                    </div>
+                                    <div className="cut-input-group">
+                                        <label>End Time (seconds)</label>
+                                        <input
+                                            type="number"
+                                            min={cutStart}
+                                            max={videoDuration}
+                                            step="0.1"
+                                            value={cutEnd}
+                                            onChange={(e) => handleCutChange('end', e.target.value)}
+                                            className="form-input"
+                                        />
+                                        <span className="time-display">{formatTime(cutEnd)}</span>
+                                    </div>
+                                    <div className="cut-duration-display">
+                                        <strong>Cut Duration: {formatTime(cutEnd - cutStart)}</strong>
+                                    </div>
+                                    <small className="form-hint">
+                                        Set start and end times to trim your video. Leave at 0 and {formatTime(videoDuration)} to keep full video.
+                                    </small>
+                                </div>
+                            </div>
+                        </>
+                    )}
+
+                    {activeTab === 'publication' && (
+                        <div className="form-section">
+                            <h3 className="section-title">Visibility</h3>
+                            
+                            <div className="form-group">
+                                <label htmlFor="visibility">Who can watch this video?</label>
+                                <select
+                                    id="visibility"
+                                    name="visibility"
+                                    value={formData.visibility}
+                                    onChange={handleInputChange}
+                                    className="form-select"
+                                >
+                                    <option value="public">Public - Anyone can watch</option>
+                                    <option value="private">Private - Only you can watch</option>
+                                    <option value="unlisted">Unlisted - Only people with the link can watch</option>
+                                </select>
                             </div>
                         </div>
-                    </div>
+                    )}
 
                     <div className="edit-modal-actions">
-                        <button type="button" className="btn btn-secondary" onClick={onClose}>
+                        <button type="button" className="btn btn-secondary" onClick={onClose} disabled={loading}>
                             Cancel
                         </button>
                         <button type="submit" className="btn btn-primary" disabled={loading}>
-                            {loading ? 'Updating...' : 'Update'}
+                            {loading ? 'Updating...' : 'Save Changes'}
                         </button>
                     </div>
                 </form>

@@ -26,11 +26,16 @@
 
 /* Responsive */
 @media (max-width: 768px) {
+  .app-content {
+    margin-top: 56px;
+  }
+
   .main-content.sidebar-open {
-    margin-left: 200px;
+    margin-left: 0;
   }
 
   .main-content.sidebar-closed {
     margin-left: 0;
+    width: 100%;
   }
 }

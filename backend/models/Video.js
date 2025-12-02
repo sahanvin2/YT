@@ -31,6 +31,9 @@ const VideoSchema = new mongoose.Schema({
     default: 'public'
   },
 
+  cutStart: { type: Number, default: 0 },
+  cutEnd: { type: Number, default: null },
+
   createdAt: { type: Date, default: Date.now },
   comments: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Comment' }],
 

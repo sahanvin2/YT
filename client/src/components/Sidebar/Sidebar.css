@@ -90,16 +90,35 @@
 
 /* Responsive */
 @media (max-width: 768px) {
+  .sidebar {
+    top: 56px;
+    transform: translateX(-100%);
+    transition: transform 0.3s ease;
+  }
+
   .sidebar.open {
-    width: 200px;
+    width: 240px;
+    transform: translateX(0);
   }
 
   .sidebar.closed {
-    width: 0;
-    border: none;
+    width: 240px;
+    transform: translateX(-100%);
   }
 
   .sidebar.closed .sidebar-content {
-    display: none;
+    display: block;
+  }
+
+  /* Overlay for mobile sidebar */
+  .sidebar.open::before {
+    content: '';
+    position: fixed;
+    top: 56px;
+    left: 240px;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.5);
+    z-index: -1;
   }
 }

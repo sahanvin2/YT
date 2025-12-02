@@ -45,6 +45,29 @@ exports.authorize = (...roles) => {
   };
 };
 
+// Optional authentication - sets req.user if token is provided, but doesn't fail if not
+exports.optionalAuth = async (req, res, next) => {
+  let token;
+
+  if (req.headers.authorization && req.headers.authorization.startsWith('Bearer')) {
+    token = req.headers.authorization.split(' ')[1];
+  } else if (req.cookies.token) {
+    token = req.cookies.token;
+  }
+
+  if (token) {
+    try {
+      const decoded = jwt.verify(token, process.env.JWT_SECRET);
+      req.user = await User.findById(decoded.id);
+    } catch (err) {
+      // Invalid token, but continue without user
+      req.user = null;
+    }
+  }
+  
+  next();
+};
+
 // Alias for admin-only routes
 exports.adminOnly = (req, res, next) => {
   if (req.user.role !== 'admin') {
