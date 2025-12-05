@@ -2,12 +2,25 @@
   min-height: 100vh;
   display: flex;
   flex-direction: column;
+  position: relative;
+}
+
+/* Animated Background Mesh */
+.hero-mesh {
+  position: fixed;
+  top: -50%;
+  left: -50%;
+  width: 200%;
+  height: 200%;
+  background: radial-gradient(circle at center, rgba(110, 60, 180, 0.08) 0%, rgba(5, 3, 8, 0) 60%);
+  z-index: -1;
+  pointer-events: none;
 }
 
 .app-content {
   display: flex;
-  margin-top: 60px;
-  min-height: calc(100vh - 60px);
+  margin-top: 64px;
+  min-height: calc(100vh - 64px);
 }
 
 .main-content {
@@ -17,7 +30,7 @@
 }
 
 .main-content.sidebar-open {
-  margin-left: 240px;
+  margin-left: 256px;
 }
 
 .main-content.sidebar-closed {

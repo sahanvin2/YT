@@ -39,7 +39,7 @@ const Login = () => {
     <div className="auth-page">
       <div className="auth-container">
         <div className="auth-header">
-          <MoviaLogo size={48} showText={false} />
+          <MoviaLogo size={28} showText={true} />
           <h1>Welcome to Movia</h1>
           <p>Sign in to continue</p>
         </div>

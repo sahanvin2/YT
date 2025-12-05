@@ -56,7 +56,7 @@ const Register = () => {
     <div className="auth-page">
       <div className="auth-container">
         <div className="auth-header">
-          <MoviaLogo size={48} showText={false} />
+          <MoviaLogo size={28} showText={true} />
           <h1>Join Movia</h1>
           <p>Create your account</p>
         </div>

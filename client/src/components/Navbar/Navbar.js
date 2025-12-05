@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { FiSearch, FiMenu, FiVideo, FiUser, FiLogOut, FiX, FiSun, FiMoon } from 'react-icons/fi';
+import { FiSearch, FiMenu, FiVideo, FiUser, FiLogOut, FiX, FiSun, FiMoon, FiPlus, FiBell, FiMic } from 'react-icons/fi';
 import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../context/ThemeContext';
 import { getSearchSuggestions } from '../../utils/api';
@@ -119,14 +119,17 @@ const Navbar = ({ toggleSidebar }) => {
         <form className={`navbar-search ${mobileSearchOpen ? 'open' : ''}`} onSubmit={handleSearch}>
           <input
             type="text"
-            placeholder="Search videos..."
+            placeholder="Search creators, vibes, or hashtags..."
             value={searchQuery}
             onChange={handleInputChange}
             onFocus={handleInputFocus}
             autoComplete="off"
           />
+          <button type="button" className="search-mic-btn" title="Voice search">
+            <FiMic size={16} />
+          </button>
           <button type="submit" className="search-btn">
-            <FiSearch size={20} />
+            <FiSearch size={16} />
           </button>
           <button
             type="button"
@@ -162,6 +165,18 @@ const Navbar = ({ toggleSidebar }) => {
       </div>
 
       <div className="navbar-right">
+        {isAuthenticated && (
+          <Link to="/upload" className="create-btn">
+            <FiPlus size={16} />
+            <span>Create</span>
+          </Link>
+        )}
+        {isAuthenticated && (
+          <button className="notification-btn">
+            <FiBell size={20} />
+            <span className="notification-dot"></span>
+          </button>
+        )}
         <button
           className="theme-toggle"
           onClick={toggleTheme}

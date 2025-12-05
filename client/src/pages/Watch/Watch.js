@@ -1,16 +1,15 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import ReactPlayer from 'react-player';
-import { FiThumbsUp, FiThumbsDown, FiShare2, FiDownload, FiBookmark, FiChevronDown, FiChevronUp, FiZap, FiMaximize2 } from 'react-icons/fi';
-import { getVideo, likeVideo, dislikeVideo, addView, addToHistory, getDownloadUrl, saveVideo, getSavedVideos } from '../../utils/api';
-import { formatViews, formatDate, formatFileSize } from '../../utils/helpers';
+import { FiThumbsUp, FiThumbsDown, FiShare2, FiBookmark, FiChevronDown, FiChevronUp, FiZap, FiMaximize2, FiMinimize2, FiPlay } from 'react-icons/fi';
+import { getVideo, likeVideo, dislikeVideo, addView, addToHistory, saveVideo, getSavedVideos } from '../../utils/api';
+import { formatViews, formatDate, formatDuration } from '../../utils/helpers';
 import { useAuth } from '../../context/AuthContext';
 import CommentSection from '../../components/CommentSection/CommentSection';
 import SubscribeButton from '../../components/SubscribeButton/SubscribeButton';
 import { useSmartlinkAd } from '../../components/Ads/SmartlinkAd';
 import { useAds } from '../../context/AdContext';
 import ShareModal from '../../components/ShareModal/ShareModal';
-import DownloadModal from '../../components/DownloadModal/DownloadModal';
 import VideoCard from '../../components/VideoCard/VideoCard';
 import './Watch.css';
 
@@ -37,9 +36,6 @@ const Watch = () => {
   const [likesCount, setLikesCount] = useState(0);
   const [selectedSource, setSelectedSource] = useState(null);
   const [dislikesCount, setDislikesCount] = useState(0);
-  const [showDownloadMenu, setShowDownloadMenu] = useState(false);
-  const [downloading, setDownloading] = useState(false);
-  const downloadMenuRef = useRef(null);
   const playerRef = useRef(null);
   const { openSmartlink } = useSmartlinkAd();
   const { adConfig } = useAds();
@@ -47,8 +43,9 @@ const Watch = () => {
   const [adShown, setAdShown] = useState(false);
   const [shouldPlayAfterAd, setShouldPlayAfterAd] = useState(false);
   const [showShareModal, setShowShareModal] = useState(false);
-  const [showDownloadModal, setShowDownloadModal] = useState(false);
   const [relatedVideos, setRelatedVideos] = useState([]);
+  const [filteredVideos, setFilteredVideos] = useState([]);
+  const [videoFilter, setVideoFilter] = useState('all'); // 'all', 'from', 'related'
   const [isSaved, setIsSaved] = useState(false);
   const [showDescription, setShowDescription] = useState(false);
   const [playbackRate, setPlaybackRate] = useState(1);
@@ -91,6 +88,29 @@ const Watch = () => {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [video]);
+
+  // Filter videos based on selected filter
+  useEffect(() => {
+    if (!video || !relatedVideos.length) {
+      setFilteredVideos([]);
+      return;
+    }
+
+    let filtered = [];
+    switch (videoFilter) {
+      case 'from':
+        filtered = relatedVideos.filter(v => v.user._id === video.user._id);
+        break;
+      case 'related':
+        filtered = relatedVideos.filter(v => v.category === video.category && v._id !== video._id);
+        break;
+      case 'all':
+      default:
+        filtered = relatedVideos;
+        break;
+    }
+    setFilteredVideos(filtered);
+  }, [videoFilter, relatedVideos, video]);
 
   // Check if user returned from smartlink redirect
   useEffect(() => {
@@ -164,22 +184,19 @@ const Watch = () => {
   // Close download menu and speed menu when clicking outside
   useEffect(() => {
     const handleClickOutside = (event) => {
-      if (downloadMenuRef.current && !downloadMenuRef.current.contains(event.target)) {
-        setShowDownloadMenu(false);
-      }
       if (speedMenuRef.current && !speedMenuRef.current.contains(event.target)) {
         setShowSpeedMenu(false);
       }
     };
 
-    if (showDownloadMenu || showSpeedMenu) {
+    if (showSpeedMenu) {
       document.addEventListener('mousedown', handleClickOutside);
     }
 
     return () => {
       document.removeEventListener('mousedown', handleClickOutside);
     };
-  }, [showDownloadMenu, showSpeedMenu]);
+  }, [showSpeedMenu]);
 
   // Update player when quality changes
   useEffect(() => {
@@ -368,10 +385,6 @@ const Watch = () => {
   };
 
 
-  const handleDownload = () => {
-    setShowDownloadModal(true);
-  };
-
   const handleSave = async () => {
     if (!isAuthenticated) {
       navigate('/login');
@@ -414,6 +427,103 @@ const Watch = () => {
       <div className="watch-content">
         <div className="video-player-section">
           <div className="video-player">
+            {/* Player Settings Bar - Top */}
+            <div className="player-settings-bar">
+              {((video.sources && video.sources.length > 0) || (video.variants && video.variants.length > 0)) && (
+                <div className="player-setting-item">
+                  <label className="player-setting-label">Quality:</label>
+                  <select
+                    className="player-setting-select"
+                    value={selectedSource ? selectedSource.quality : 'orig'}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      if (val === 'orig') {
+                        setSelectedSource(null);
+                      } else {
+                        const sources = video.sources || video.variants || [];
+                        const match = sources.find(s => String(s.quality) === String(val));
+                        setSelectedSource(match || null);
+                      }
+                    }}
+                  >
+                    <option value="orig">Auto</option>
+                    {[...(video.sources || video.variants || [])]
+                      .sort((a, b) => parseInt(b.quality) - parseInt(a.quality))
+                      .map(s => (
+                        <option key={s.quality} value={s.quality}>
+                          {s.quality}p
+                        </option>
+                      ))}
+                  </select>
+                </div>
+              )}
+              
+              <div className="player-setting-item" ref={speedMenuRef}>
+                <label className="player-setting-label">Speed:</label>
+                <button
+                  className="player-setting-btn"
+                  onClick={() => setShowSpeedMenu(!showSpeedMenu)}
+                >
+                  {playbackRate}x
+                  {showSpeedMenu && (
+                    <div className="player-setting-menu">
+                      {[0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2].map((rate) => (
+                        <button
+                          key={rate}
+                          className={`player-setting-option ${playbackRate === rate ? 'active' : ''}`}
+                          onClick={() => {
+                            setPlaybackRate(rate);
+                            setShowSpeedMenu(false);
+                          }}
+                        >
+                          {rate}x
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </button>
+              </div>
+
+              <button
+                className={`player-setting-btn ${pipEnabled ? 'active' : ''}`}
+                onClick={() => {
+                  if (playerRef.current) {
+                    const player = playerRef.current.getInternalPlayer();
+                    if (player && player.requestPictureInPicture) {
+                      if (pipEnabled) {
+                        document.exitPictureInPicture().catch(() => {});
+                        setPipEnabled(false);
+                      } else {
+                        player.requestPictureInPicture().then(() => {
+                          setPipEnabled(true);
+                        }).catch(() => {});
+                      }
+                    }
+                  }
+                }}
+                title="Picture in Picture"
+              >
+                <FiMinimize2 size={14} />
+              </button>
+
+              <button
+                className="player-setting-btn"
+                onClick={() => {
+                  if (playerRef.current) {
+                    const player = playerRef.current.getInternalPlayer();
+                    if (player && player.requestFullscreen) {
+                      player.requestFullscreen();
+                    } else if (playerRef.current.wrapper && playerRef.current.wrapper.requestFullscreen) {
+                      playerRef.current.wrapper.requestFullscreen();
+                    }
+                  }
+                }}
+                title="Fullscreen"
+              >
+                <FiMaximize2 size={14} />
+              </button>
+            </div>
+
             <ReactPlayer
               ref={playerRef}
               url={
@@ -424,12 +534,19 @@ const Watch = () => {
               controls
               width="100%"
               height="100%"
-              playing={videoPlayed && !shouldPlayAfterAd && !error && (adShown || !adConfig.smartlinkEnabled || !adConfig.smartlinkUrl)}
+              playing={videoPlayed && !error}
               key={`${video?._id || 'video'}-${selectedSource ? selectedSource.quality : 'original'}-${adShown ? 'ad-shown' : 'ad-not-shown'}`} // Force re-render when ad status changes
               config={{
                 file: {
                   attributes: {
                     controlsList: 'nodownload noremoteplayback'
+                  }
+                },
+                youtube: {
+                  playerVars: {
+                    controls: 1,
+                    modestbranding: 1,
+                    rel: 0
                   }
                 }
               }}
@@ -437,55 +554,63 @@ const Watch = () => {
               pip={pipEnabled}
               onProgress={handleProgress}
               onPlay={() => {
-                // Intercept play event - show smartlink ad first
-                // Check if ad was already shown for this specific video ID
-                const adShownForThisVideo = sessionStorage.getItem(`adShown_${id}`) === 'true';
+                // Hide sidebar when video starts playing
+                window.dispatchEvent(new CustomEvent('collapseSidebar'));
                 
-                if (!adShownForThisVideo && !adShown && adConfig.smartlinkEnabled && adConfig.smartlinkUrl) {
-                  setShouldPlayAfterAd(true);
-                  // Pause video immediately
-                  if (playerRef.current) {
-                    try {
-                      const player = playerRef.current.getInternalPlayer();
-                      if (player && typeof player.pause === 'function') {
-                        player.pause();
-                      }
-                    } catch (error) {
-                      console.error('Error pausing video:', error);
-                    }
-                  }
-                  // Open smartlink ad
-                  openSmartlink(() => {
-                    // Ad closed/completed - mark as watched for this video and play video
-                    setAdShown(true);
-                    sessionStorage.setItem(`adShown_${id}`, 'true'); // Store per video ID
-                    setVideoPlayed(true);
-                    setShouldPlayAfterAd(false);
-                    setTimeout(() => {
-                      if (playerRef.current && video) {
-                        try {
-                          const player = playerRef.current.getInternalPlayer();
-                          if (player && typeof player.play === 'function') {
-                            player.play().catch(err => {
-                              console.error('Error playing video after ad:', err);
-                              // If play fails, try reloading
-                              if (playerRef.current) {
-                                const currentTime = playerRef.current.getCurrentTime();
-                                playerRef.current.seekTo(currentTime || 0);
-                              }
-                            });
-                          }
-                        } catch (error) {
-                          console.error('Error accessing player after ad:', error);
-                        }
-                      }
-                    }, 300);
-                  });
-                } else {
-                  // Ad already shown for this video or disabled - play normally
-                  setVideoPlayed(true);
-                  setShouldPlayAfterAd(false);
-                }
+                // Advertisement functionality commented out - not needed
+                // // Intercept play event - show smartlink ad first
+                // // Check if ad was already shown for this specific video ID
+                // const adShownForThisVideo = sessionStorage.getItem(`adShown_${id}`) === 'true';
+                
+                // if (!adShownForThisVideo && !adShown && adConfig.smartlinkEnabled && adConfig.smartlinkUrl) {
+                //   setShouldPlayAfterAd(true);
+                //   // Pause video immediately
+                //   if (playerRef.current) {
+                //     try {
+                //       const player = playerRef.current.getInternalPlayer();
+                //       if (player && typeof player.pause === 'function') {
+                //         player.pause();
+                //       }
+                //     } catch (error) {
+                //       console.error('Error pausing video:', error);
+                //     }
+                //   }
+                //   // Open smartlink ad
+                //   openSmartlink(() => {
+                //     // Ad closed/completed - mark as watched for this video and play video
+                //     setAdShown(true);
+                //     sessionStorage.setItem(`adShown_${id}`, 'true'); // Store per video ID
+                //     setVideoPlayed(true);
+                //     setShouldPlayAfterAd(false);
+                //     setTimeout(() => {
+                //       if (playerRef.current && video) {
+                //         try {
+                //           const player = playerRef.current.getInternalPlayer();
+                //           if (player && typeof player.play === 'function') {
+                //             player.play().catch(err => {
+                //               console.error('Error playing video after ad:', err);
+                //               // If play fails, try reloading
+                //               if (playerRef.current) {
+                //                 const currentTime = playerRef.current.getCurrentTime();
+                //                 playerRef.current.seekTo(currentTime || 0);
+                //               }
+                //             });
+                //           }
+                //         } catch (error) {
+                //           console.error('Error accessing player after ad:', error);
+                //         }
+                //       }
+                //     }, 300);
+                //   });
+                // } else {
+                //   // Ad already shown for this video or disabled - play normally
+                //   setVideoPlayed(true);
+                //   setShouldPlayAfterAd(false);
+                // }
+                
+                // Play video normally without ad
+                setVideoPlayed(true);
+                setShouldPlayAfterAd(false);
               }}
               onError={(e) => {
                 console.error('ReactPlayer error:', e);
@@ -605,41 +730,51 @@ const Watch = () => {
           <div className="video-info-section">
             <h1 className="video-title">{video.title}</h1>
 
-            <div className="video-stats">
-              <span>{formatViews(video.views)} views</span>
-              <span>•</span>
-              <span>{formatDate(video.createdAt)}</span>
-            </div>
+            <div className="video-meta-row">
+              <div className="channel-info-section">
+                <Link to={`/channel/${video.user._id}`} className="channel-avatar-link">
+                  <div className="channel-avatar-wrapper">
+                    <img 
+                      src={video.user.avatar} 
+                      alt={video.user.username}
+                      className="channel-avatar-img"
+                    />
+                  </div>
+                </Link>
+                <div className="channel-meta">
+                  <Link to={`/channel/${video.user._id}`} className="channel-name-large">
+                    {video.user.channelName || video.user.username}
+                  </Link>
+                  <p className="subscriber-count-large">
+                    {formatViews(video.user.subscribers?.length || 0)} subscribers
+                  </p>
+                </div>
+                <SubscribeButton 
+                  channelId={video.user._id}
+                  channelName={video.user.channelName || video.user.username}
+                />
+              </div>
 
-            <div className="video-actions">
-              <div className="video-actions-left">
-                <button
-                  className={`action-btn ${isLiked ? 'active' : ''}`}
-                  onClick={handleLike}
-                >
-                  <FiThumbsUp size={20} />
-                  <span>{formatViews(likesCount)}</span>
-                </button>
-
-                <button
-                  className={`action-btn ${isDisliked ? 'active' : ''}`}
-                  onClick={handleDislike}
-                >
-                  <FiThumbsDown size={20} />
-                  <span>{formatViews(dislikesCount)}</span>
-                </button>
+              <div className="video-actions-toolbar">
+                <div className="like-dislike-group">
+                  <button
+                    className={`action-btn like-btn ${isLiked ? 'active' : ''}`}
+                    onClick={handleLike}
+                  >
+                    <FiThumbsUp size={20} />
+                    <span>{formatViews(likesCount)}</span>
+                  </button>
+                  <button
+                    className={`action-btn dislike-btn ${isDisliked ? 'active' : ''}`}
+                    onClick={handleDislike}
+                  >
+                    <FiThumbsDown size={20} />
+                  </button>
+                </div>
 
                 <button className="action-btn" onClick={() => setShowShareModal(true)}>
-                  <FiShare2 size={20} />
+                  <FiShare2 size={16} />
                   <span>Share</span>
-                </button>
-
-                <button
-                  className="action-btn"
-                  onClick={handleDownload}
-                >
-                  <FiDownload size={20} />
-                  <span>Download</span>
                 </button>
 
                 {isAuthenticated && (
@@ -647,149 +782,101 @@ const Watch = () => {
                     className={`action-btn ${isSaved ? 'active' : ''}`}
                     onClick={handleSave}
                   >
-                    <FiBookmark size={20} />
-                    <span>{isSaved ? 'Saved' : 'Save'}</span>
+                    <FiBookmark size={16} />
+                    <span>Save</span>
                   </button>
                 )}
-              </div>
-
-              <div className="video-actions-right">
-                {((video.sources && video.sources.length > 0) || (video.variants && video.variants.length > 0)) && (
-                  <div className="quality-selector-inline">
-                    <span className="quality-label">Quality:</span>
-                    <select
-                      className="quality-dropdown"
-                      value={selectedSource ? selectedSource.quality : 'orig'}
-                      onChange={(e) => {
-                        const val = e.target.value;
-                        if (val === 'orig') {
-                          setSelectedSource(null);
-                        } else {
-                          const sources = video.sources || video.variants || [];
-                          const match = sources.find(s => String(s.quality) === String(val));
-                          setSelectedSource(match || null);
-                        }
-                      }}
-                    >
-                      <option value="orig">Auto (Recommended)</option>
-                      {[...(video.sources || video.variants || [])]
-                        .sort((a, b) => parseInt(b.quality) - parseInt(a.quality))
-                        .map(s => (
-                          <option key={s.quality} value={s.quality}>
-                            {s.quality}p {s.size ? `(${formatFileSize(s.size)})` : ''}
-                          </option>
-                        ))}
-                    </select>
-                  </div>
-                )}
-                
-                <div className="playback-controls">
-                  <div className="speed-control" ref={speedMenuRef}>
-                    <button
-                      className="action-btn"
-                      onClick={() => setShowSpeedMenu(!showSpeedMenu)}
-                      title="Playback Speed"
-                    >
-                      <FiZap size={18} />
-                      <span>{playbackRate}x</span>
-                    </button>
-                    {showSpeedMenu && (
-                      <div className="speed-menu">
-                        {[0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2].map((rate) => (
-                          <button
-                            key={rate}
-                            className={`speed-option ${playbackRate === rate ? 'active' : ''}`}
-                            onClick={() => {
-                              setPlaybackRate(rate);
-                              setShowSpeedMenu(false);
-                            }}
-                          >
-                            {rate}x
-                          </button>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                  
-                  <button
-                    className={`action-btn ${pipEnabled ? 'active' : ''}`}
-                    onClick={() => {
-                      if (playerRef.current) {
-                        const player = playerRef.current.getInternalPlayer();
-                        if (player && player.requestPictureInPicture) {
-                          if (pipEnabled) {
-                            document.exitPictureInPicture().catch(() => {});
-                            setPipEnabled(false);
-                          } else {
-                            player.requestPictureInPicture().then(() => {
-                              setPipEnabled(true);
-                            }).catch(() => {});
-                          }
-                        }
-                      }
-                    }}
-                    title="Picture in Picture"
-                  >
-                    <FiMaximize2 size={18} />
-                  </button>
-                </div>
               </div>
             </div>
-          </div>
 
-          <div className="channel-description-section">
-            <div className="channel-description-left">
-              <button
-                className="description-toggle"
-                onClick={() => setShowDescription(!showDescription)}
-              >
-                {showDescription ? <FiChevronUp size={20} /> : <FiChevronDown size={20} />}
-                <span className="description-preview">
-                  {showDescription ? 'Hide description' : (video.description ? video.description.substring(0, 100) + (video.description.length > 100 ? '...' : '') : 'No description')}
-                </span>
-              </button>
-              {showDescription && (
-                <div className="video-description-expanded">
-                  <p>{video.description}</p>
-                </div>
+          <div className="video-description-box">
+            <div className="video-description-stats">
+              <span>{formatViews(video.views)} Views</span>
+              <span>•</span>
+              <span>{formatDate(video.createdAt)}</span>
+            </div>
+            <div className="video-description-text">
+              {showFullDescription ? (
+                <p>{video.description || 'No description available.'}</p>
+              ) : (
+                <p style={{ display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
+                  {video.description || 'No description available.'}
+                </p>
               )}
             </div>
-            <div className="channel-description-right">
-              <div className="channel-info-compact">
-                <Link to={`/channel/${video.user._id}`} className="channel-avatar">
-                  <img 
-                    src={video.user.avatar} 
-                    alt={video.user.username}
-                    loading="lazy"
-                    decoding="async"
-                  />
-                </Link>
-                <div className="channel-meta-compact">
-                  <Link to={`/channel/${video.user._id}`} className="channel-name">
-                    {video.user.channelName || video.user.username}
-                  </Link>
-                  <span className="subscriber-count">
-                    {formatViews(video.user.subscribers?.length || 0)} subscribers
-                  </span>
-                </div>
-                <SubscribeButton channelId={video.user._id} />
-              </div>
-            </div>
+            {video.description && video.description.length > 150 && (
+              <button
+                className="show-more-link"
+                onClick={() => setShowFullDescription(!showFullDescription)}
+              >
+                {showFullDescription ? 'SHOW LESS' : 'SHOW MORE'}
+              </button>
+            )}
           </div>
 
           <CommentSection videoId={id} comments={video.comments} />
         </div>
+        </div>
 
         <div className="suggested-videos">
-          <h3>Related Videos</h3>
-          {relatedVideos.length > 0 ? (
-            <div className="related-videos-list">
-              {relatedVideos.map((relatedVideo) => (
-                <VideoCard key={relatedVideo._id} video={relatedVideo} layout="horizontal" />
-              ))}
-            </div>
+          <div className="suggested-videos-header">
+            <button 
+              className={`suggested-filter-btn ${videoFilter === 'all' ? 'active' : ''}`}
+              onClick={() => setVideoFilter('all')}
+            >
+              All
+            </button>
+            <button 
+              className={`suggested-filter-btn ${videoFilter === 'from' ? 'active' : ''}`}
+              onClick={() => setVideoFilter('from')}
+            >
+              From {video.user.channelName || video.user.username}
+            </button>
+            <button 
+              className={`suggested-filter-btn ${videoFilter === 'related' ? 'active' : ''}`}
+              onClick={() => setVideoFilter('related')}
+            >
+              Related
+            </button>
+          </div>
+          {filteredVideos.length > 0 ? (
+            <>
+              {/* Desktop: Sidebar List View */}
+              <div className="suggested-videos-list suggested-videos-desktop">
+                {filteredVideos.map((relatedVideo) => (
+                  <div 
+                    key={relatedVideo._id} 
+                    className="suggested-video-item"
+                    onClick={() => navigate(`/watch/${relatedVideo._id}`)}
+                  >
+                    <div className="suggested-video-thumbnail">
+                      <img 
+                        src={relatedVideo.thumbnailUrl} 
+                        alt={relatedVideo.title}
+                        loading="lazy"
+                      />
+                      {relatedVideo.duration > 0 && (
+                        <span className="suggested-video-duration">
+                          {formatDuration(relatedVideo.duration)}
+                        </span>
+                      )}
+                    </div>
+                    <div className="suggested-video-info">
+                      <h4 className="suggested-video-title">{relatedVideo.title}</h4>
+                    </div>
+                  </div>
+                ))}
+              </div>
+              
+              {/* Mobile: Grid View (Same as Homepage - Simplified) */}
+              <div className="suggested-videos-grid suggested-videos-mobile">
+                {filteredVideos.map((relatedVideo) => (
+                  <VideoCard key={relatedVideo._id} video={relatedVideo} simplified={true} />
+                ))}
+              </div>
+            </>
           ) : (
-            <p className="no-videos">No related videos yet</p>
+            <p className="no-videos">No videos found</p>
           )}
         </div>
       </div>
@@ -797,11 +884,6 @@ const Watch = () => {
       {/* Share Modal */}
       {showShareModal && video && (
         <ShareModal video={video} onClose={() => setShowShareModal(false)} />
-      )}
-
-      {/* Download Modal */}
-      {showDownloadModal && video && (
-        <DownloadModal video={video} onClose={() => setShowDownloadModal(false)} />
       )}
     </div>
   );

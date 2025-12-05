@@ -1,0 +1,1408 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MOVIA | The Future of Stream</title>
+    
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Space Grotesk', 'sans-serif'],
+                    },
+                    colors: {
+                        void: '#050308', // Deepest black-purple
+                        voidLight: '#130d1f',
+                        voidLighter: '#1f1633',
+                        acid: '#CCFF00', // Signature Accent
+                        acidDim: 'rgba(204, 255, 0, 0.1)',
+                        lavender: '#B084CC',
+                        hologram: '#E0E0E0',
+                        glass: 'rgba(20, 15, 30, 0.85)',
+                        glassBorder: 'rgba(255, 255, 255, 0.08)',
+                        surface: '#1c142b'
+                    },
+                    boxShadow: {
+                        'neon': '0 0 20px rgba(204, 255, 0, 0.15)',
+                        'neon-strong': '0 0 30px rgba(204, 255, 0, 0.3)',
+                        'glow-text': '0 0 10px rgba(204, 255, 0, 0.5)',
+                    },
+                    keyframes: {
+                        slideIn: {
+                            '0%': { transform: 'translateX(-100%)' },
+                            '100%': { transform: 'translateX(0)' },
+                        }
+                    },
+                    animation: {
+                        slideIn: 'slideIn 0.3s cubic-bezier(0.16, 1, 0.3, 1)',
+                    }
+                }
+            }
+        }
+    </script>
+
+    <style>
+        body {
+            background-color: #050308;
+            color: #E0E0E0;
+            overflow-x: hidden;
+        }
+
+        /* Smooth Scroll & Custom Scrollbar */
+        html { scroll-behavior: smooth; }
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: #050308; }
+        ::-webkit-scrollbar-thumb { background: #333; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #CCFF00; }
+        
+        /* Custom scrollbar for sidebar */
+        .custom-scrollbar::-webkit-scrollbar { width: 6px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.1); border-radius: 4px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: rgba(204, 255, 0, 0.5); }
+
+        /* Animated Background Mesh */
+        .hero-mesh {
+            position: fixed;
+            top: -50%;
+            left: -50%;
+            width: 200%;
+            height: 200%;
+            background: radial-gradient(circle at center, rgba(110, 60, 180, 0.08) 0%, rgba(5, 3, 8, 0) 60%);
+            z-index: -1;
+            pointer-events: none;
+        }
+
+        /* Card Interactions */
+        .video-card { transition: all 0.3s cubic-bezier(0.2, 0.8, 0.2, 1); }
+        .video-card:hover { transform: translateY(-4px); z-index: 10; }
+
+        /* Sidebar Transition */
+        #sidebar-drawer {
+            transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            transform: translateX(-100%);
+        }
+        #sidebar-drawer.open {
+            transform: translateX(0);
+        }
+        #sidebar-backdrop {
+            transition: opacity 0.3s ease;
+            opacity: 0;
+            pointer-events: none;
+        }
+        #sidebar-backdrop.open {
+            opacity: 1;
+            pointer-events: auto;
+        }
+
+        /* Video Player Progress Bar */
+        .progress-container:hover .progress-handle { transform: scale(1); }
+        .progress-handle { transform: scale(0); transition: transform 0.1s; }
+
+        /* Sidebar Items */
+        .nav-section-title {
+            font-size: 0.75rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            color: #6b7280;
+            padding: 1rem 1.5rem 0.5rem;
+        }
+        .nav-item {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            padding: 0.75rem 1.5rem;
+            color: #d1d5db;
+            transition: all 0.2s;
+            border-left: 3px solid transparent;
+            cursor: pointer;
+        }
+        .nav-item:hover {
+            background: rgba(255,255,255,0.05);
+            color: white;
+        }
+        .nav-item.active {
+            background: rgba(204, 255, 0, 0.05);
+            color: #CCFF00;
+            border-left-color: #CCFF00;
+        }
+        .nav-item i { width: 20px; height: 20px; }
+
+        /* Hide scrollbar for horizontal lists */
+        .hide-scrollbar::-webkit-scrollbar { display: none; }
+        .hide-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+
+        /* Filter Button Active State */
+        .filter-btn.active {
+            background: white !important;
+            color: #050308 !important;
+            box-shadow: 0 0 20px rgba(204, 255, 0, 0.15);
+        }
+
+        /* Smooth transitions for sidebar video items */
+        #up-next-list > div {
+            animation: slideInRight 0.3s ease-out;
+        }
+        @keyframes slideInRight {
+            from {
+                opacity: 0;
+                transform: translateX(10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateX(0);
+            }
+        }
+
+        /* Notification Dropdown */
+        #notification-dropdown {
+            animation: slideDown 0.2s ease-out;
+        }
+        @keyframes slideDown {
+            from {
+                opacity: 0;
+                transform: translateY(-10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .notification-item {
+            transition: all 0.2s;
+        }
+        .notification-item:hover {
+            background: rgba(255, 255, 255, 0.05) !important;
+        }
+
+        #notification-badge {
+            min-width: 18px;
+            height: 18px;
+            padding: 0 4px;
+            font-size: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        /* Mobile Recommendations Styling */
+        .filter-btn-mobile.active {
+            background: white !important;
+            color: #050308 !important;
+            box-shadow: 0 0 20px rgba(204, 255, 0, 0.15);
+        }
+
+        /* Ensure mobile videos match homepage style */
+        @media (max-width: 1023px) {
+            #up-next-list-mobile .video-card {
+                width: 100%;
+            }
+        }
+    </style>
+</head>
+<body class="selection:bg-acid selection:text-void font-sans">
+
+    <!-- BACKGROUND -->
+    <div class="hero-mesh"></div>
+
+    <!-- TOP NAVIGATION -->
+    <nav class="fixed top-0 w-full z-50 bg-void/90 backdrop-blur-md border-b border-glassBorder h-16 flex items-center justify-between px-4 lg:px-6 shadow-lg">
+        <!-- Left: Menu & Logo -->
+        <div class="flex items-center gap-6">
+            <button id="menu-btn" onclick="toggleSidebar()" class="p-2 hover:bg-white/10 rounded-full transition-colors text-white">
+                <i data-lucide="menu" class="w-6 h-6"></i>
+            </button>
+            <div class="flex items-center gap-2 cursor-pointer group" onclick="goHome()">
+                <div class="w-8 h-8 bg-acid rounded flex items-center justify-center transform group-hover:rotate-12 transition-transform shadow-neon">
+                    <i data-lucide="play" class="text-void fill-current w-5 h-5 ml-1"></i>
+                </div>
+                <span class="text-2xl font-bold tracking-tighter text-white">MOVIA</span>
+            </div>
+        </div>
+
+        <!-- Center: Omni-Search (Desktop) -->
+        <div class="hidden md:flex relative w-1/3 max-w-2xl group">
+            <div class="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                <i data-lucide="search" class="text-gray-500 w-4 h-4 group-focus-within:text-acid transition-colors"></i>
+            </div>
+            <input type="text" placeholder="Search creators, vibes, or hashtags..." 
+                class="w-full bg-voidLight/80 border border-glassBorder rounded-full py-2.5 pl-12 pr-12 text-sm text-hologram focus:outline-none focus:border-acid focus:shadow-neon transition-all placeholder-gray-600">
+            <div class="absolute inset-y-0 right-2 flex items-center gap-1">
+                 <button class="p-1.5 hover:bg-white/10 rounded-full text-gray-400 hover:text-white transition-colors">
+                    <i data-lucide="x" class="w-4 h-4 hidden"></i>
+                 </button>
+                 <button class="p-1.5 hover:bg-white/10 rounded-full text-gray-400 hover:text-white transition-colors">
+                    <i data-lucide="mic" class="w-4 h-4"></i>
+                 </button>
+            </div>
+        </div>
+
+        <!-- Right: Actions -->
+        <div class="flex items-center gap-2 md:gap-4">
+            <button class="hidden md:flex items-center gap-2 text-sm font-bold text-void bg-acid hover:bg-white transition-colors px-4 py-2 rounded-full shadow-neon hover:scale-105 transform duration-200">
+                <i data-lucide="plus" class="w-4 h-4"></i>
+                <span>Create</span>
+            </button>
+            
+            <div class="relative">
+                <button id="notification-btn" onclick="toggleNotifications()" class="relative p-2.5 hover:bg-white/10 rounded-full transition-colors">
+                    <i data-lucide="bell" class="text-gray-300 w-5 h-5"></i>
+                    <span id="notification-badge" class="absolute top-2 right-2.5 w-2 h-2 bg-acid rounded-full animate-pulse border border-void hidden"></span>
+                </button>
+                
+                <!-- Notification Dropdown -->
+                <div id="notification-dropdown" class="absolute right-0 top-full mt-2 w-96 bg-voidLight border border-glassBorder rounded-xl shadow-2xl z-50 hidden overflow-hidden">
+                    <div class="p-4 border-b border-glassBorder flex items-center justify-between">
+                        <h3 class="font-bold text-lg flex items-center gap-2">
+                            <i data-lucide="bell" class="text-acid w-5 h-5"></i>
+                            Notifications
+                        </h3>
+                        <button onclick="clearAllNotifications()" class="text-xs text-gray-400 hover:text-acid transition-colors">Clear all</button>
+                    </div>
+                    <div id="notification-list" class="max-h-96 overflow-y-auto custom-scrollbar">
+                        <!-- Notifications will be populated here -->
+                        <div class="p-8 text-center text-gray-500">
+                            <i data-lucide="bell-off" class="w-12 h-12 mx-auto mb-3 opacity-50"></i>
+                            <p class="text-sm">No notifications yet</p>
+                            <p class="text-xs mt-1">Follow creators to get notified when they upload new videos</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="w-10 h-10 rounded-full bg-gradient-to-tr from-acid to-lavender p-[2px] cursor-pointer hover:scale-105 transition-transform ml-2">
+                <img src="https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=100&h=100" alt="Profile" class="rounded-full w-full h-full object-cover border-2 border-void">
+            </div>
+        </div>
+    </nav>
+
+    <!-- SIDEBAR DRAWER -->
+    <div id="sidebar-backdrop" onclick="toggleSidebar()" class="fixed inset-0 bg-black/50 z-[60] backdrop-blur-sm"></div>
+    <aside id="sidebar-drawer" class="fixed top-0 left-0 h-full w-64 bg-void border-r border-glassBorder z-[70] overflow-y-auto flex flex-col pb-6 shadow-2xl">
+        <div class="p-4 flex items-center gap-4 h-16 border-b border-glassBorder">
+            <button onclick="toggleSidebar()" class="p-2 hover:bg-white/10 rounded-full text-white">
+                <i data-lucide="menu" class="w-6 h-6"></i>
+            </button>
+            <div class="flex items-center gap-2 cursor-pointer" onclick="goHome(); toggleSidebar()">
+                <div class="w-8 h-8 bg-acid rounded flex items-center justify-center">
+                    <i data-lucide="play" class="text-void fill-current w-5 h-5 ml-1"></i>
+                </div>
+                <span class="text-xl font-bold tracking-tighter text-white">MOVIA</span>
+            </div>
+        </div>
+
+        <!-- Mobile Search (Visible only on mobile/tablet) -->
+        <div class="p-4 md:hidden border-b border-glassBorder">
+            <div class="relative group">
+                <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                    <i data-lucide="search" class="text-gray-500 w-4 h-4 group-focus-within:text-acid transition-colors"></i>
+                </div>
+                <input type="text" placeholder="Search Movia..." 
+                    class="w-full bg-voidLight/50 border border-glassBorder rounded-full py-2 pl-10 pr-4 text-sm text-hologram focus:outline-none focus:border-acid focus:shadow-neon transition-all placeholder-gray-600">
+            </div>
+        </div>
+
+        <div class="flex-1 overflow-y-auto custom-scrollbar">
+            <!-- Section 1 -->
+            <div class="py-2">
+                <div class="nav-item active" onclick="goHome(); toggleSidebar()"><i data-lucide="home"></i> Home</div>
+                <div class="nav-item"><i data-lucide="flame"></i> Trending</div>
+                <div class="nav-item"><i data-lucide="zap"></i> All Vibes</div>
+                <div class="nav-item"><i data-lucide="scissors"></i> Clips</div>
+                <div class="nav-item"><i data-lucide="compass"></i> Explore</div>
+            </div>
+            <div class="h-px bg-white/5 mx-4 my-2"></div>
+
+            <!-- Section 2: Following -->
+            <div class="nav-section-title">Following</div>
+            <div class="nav-item"><i data-lucide="users"></i> Creators</div>
+            <div class="nav-item"><i data-lucide="tv-2"></i> Channels</div>
+            <div class="nav-item"><i data-lucide="messages-square"></i> Communities</div>
+            <div class="h-px bg-white/5 mx-4 my-2"></div>
+
+            <!-- Section 3: Personal -->
+            <div class="nav-section-title">You</div>
+            <div class="nav-item"><i data-lucide="history"></i> Watch History</div>
+            <div class="nav-item"><i data-lucide="thumbs-up"></i> Voted Videos</div>
+            <div class="nav-item"><i data-lucide="bookmark"></i> Saved Videos</div>
+            <div class="nav-item"><i data-lucide="clock"></i> Watch Later</div>
+            <div class="h-px bg-white/5 mx-4 my-2"></div>
+
+            <!-- Section 4: Project -->
+            <div class="nav-section-title">Project</div>
+            <div class="nav-item"><i data-lucide="mail"></i> Contact Us</div>
+            <div class="nav-item"><i data-lucide="heart-handshake"></i> Support Us</div>
+            <div class="nav-item"><i data-lucide="smile"></i> Team</div>
+            <div class="nav-item"><i data-lucide="info"></i> About Movia</div>
+        </div>
+
+        <div class="p-4 text-xs text-gray-600 text-center">
+            &copy; 2025 Movia Inc. <br> The Future of Stream.
+        </div>
+    </aside>
+
+
+    <!-- MAIN CONTAINER -->
+    <div class="pt-16 min-h-screen relative" id="main-content">
+        
+        <!-- === HOME VIEW === -->
+        <div id="home-view" class="transition-opacity duration-300">
+            <!-- VIBE FILTERS -->
+            <div class="sticky top-16 z-30 bg-void/95 backdrop-blur-md border-b border-white/5 py-3 px-4 lg:px-8 mb-6">
+                <div class="flex gap-3 overflow-x-auto hide-scrollbar pb-1">
+                    <button class="whitespace-nowrap px-4 py-1.5 rounded-lg bg-acid text-void font-bold text-sm shadow-neon">All Vibes</button>
+                    <button class="whitespace-nowrap px-4 py-1.5 rounded-lg bg-surface border border-white/5 hover:border-acid/50 text-sm text-gray-300 hover:text-white transition-all">Deep Focus</button>
+                    <button class="whitespace-nowrap px-4 py-1.5 rounded-lg bg-surface border border-white/5 hover:border-acid/50 text-sm text-gray-300 hover:text-white transition-all">Gaming</button>
+                    <button class="whitespace-nowrap px-4 py-1.5 rounded-lg bg-surface border border-white/5 hover:border-acid/50 text-sm text-gray-300 hover:text-white transition-all">Sci-Fi</button>
+                    <button class="whitespace-nowrap px-4 py-1.5 rounded-lg bg-surface border border-white/5 hover:border-acid/50 text-sm text-gray-300 hover:text-white transition-all">Music</button>
+                    <button class="whitespace-nowrap px-4 py-1.5 rounded-lg bg-surface border border-white/5 hover:border-acid/50 text-sm text-gray-300 hover:text-white transition-all">Live</button>
+                    <button class="whitespace-nowrap px-4 py-1.5 rounded-lg bg-surface border border-white/5 hover:border-acid/50 text-sm text-gray-300 hover:text-white transition-all">Creative</button>
+                    <button class="whitespace-nowrap px-4 py-1.5 rounded-lg bg-surface border border-white/5 hover:border-acid/50 text-sm text-gray-300 hover:text-white transition-all">Tech</button>
+                </div>
+            </div>
+
+            <!-- HERO BANNER -->
+            <div class="px-4 lg:px-8 mb-8">
+                <div class="relative rounded-3xl overflow-hidden aspect-[21/9] md:aspect-[3.5/1] border border-white/10 group cursor-pointer shadow-2xl">
+                    <img src="https://images.unsplash.com/photo-1614728263952-84ea256f9679?q=80&w=2608&auto=format&fit=crop" class="absolute inset-0 w-full h-full object-cover transition-transform duration-700 group-hover:scale-105 opacity-80 group-hover:opacity-100">
+                    <div class="absolute inset-0 bg-gradient-to-r from-void via-void/60 to-transparent"></div>
+                    <div class="absolute bottom-0 left-0 p-6 md:p-10 max-w-2xl">
+                        <div class="flex items-center gap-3 mb-3">
+                            <span class="bg-acid text-void text-[10px] font-bold px-2 py-0.5 rounded uppercase tracking-wider">Featured</span>
+                            <span class="text-acid text-[10px] font-bold tracking-widest uppercase flex items-center gap-1"><span class="w-1.5 h-1.5 bg-acid rounded-full animate-pulse"></span> Live Premiere</span>
+                        </div>
+                        <h2 class="text-3xl md:text-5xl font-bold mb-3 leading-tight text-white drop-shadow-lg">Neon Horizons: <br> The Syntax Error</h2>
+                        <div class="flex gap-4 mt-6">
+                            <button class="bg-white text-void px-6 py-2.5 rounded-lg font-bold hover:bg-acid transition-colors flex items-center gap-2 shadow-lg">
+                                <i data-lucide="play" class="fill-current w-4 h-4"></i> Play Now
+                            </button>
+                            <button class="bg-white/10 backdrop-blur px-4 py-2.5 rounded-lg font-bold hover:bg-white/20 transition-colors flex items-center gap-2">
+                                <i data-lucide="plus" class="w-4 h-4"></i> My List
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- HOME GRID -->
+            <div class="px-4 lg:px-8 pb-20">
+                <h3 class="text-xl font-bold mb-6 flex items-center gap-2">
+                    <i data-lucide="flame" class="text-acid"></i>
+                    Trending in the Void
+                </h3>
+                
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-x-6 gap-y-10" id="video-grid">
+                    <!-- Populated by JS -->
+                </div>
+            </div>
+        </div>
+
+
+        <!-- === WATCH PAGE VIEW === -->
+        <div id="watch-view" class="hidden opacity-0 transition-opacity duration-300 px-4 lg:px-8 py-6">
+            <div class="flex flex-col lg:flex-row gap-8 max-w-[1800px] mx-auto">
+                
+                <!-- Main Content (Left) -->
+                <div class="flex-1 w-full">
+                    
+                    <!-- Player Container -->
+                    <div class="relative w-full aspect-video bg-black rounded-xl overflow-hidden shadow-neon-strong group select-none border border-glassBorder">
+                        <img id="player-img" src="" class="w-full h-full object-cover opacity-80 group-hover:opacity-100 transition-opacity duration-500">
+                        
+                        <!-- Custom Video Controls Overlay -->
+                        <div class="absolute inset-0 bg-gradient-to-t from-black via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex flex-col justify-end px-4 pb-4">
+                            
+                            <!-- Progress Bar -->
+                            <div class="w-full h-1.5 bg-gray-700 rounded-full mb-4 cursor-pointer relative progress-container group/progress">
+                                <div class="absolute top-0 left-0 h-full w-[40%] bg-acid rounded-full shadow-[0_0_10px_#CCFF00]"></div>
+                                <div class="absolute top-1/2 left-[40%] w-4 h-4 bg-white rounded-full -translate-x-1/2 -translate-y-1/2 shadow-lg progress-handle"></div>
+                            </div>
+
+                            <!-- Controls Row -->
+                            <div class="flex justify-between items-center text-white">
+                                <div class="flex items-center gap-6">
+                                    <button class="hover:text-acid transition-colors transform hover:scale-110"><i data-lucide="play" class="w-6 h-6 fill-current"></i></button>
+                                    <button class="hover:text-acid transition-colors"><i data-lucide="skip-forward" class="w-6 h-6 fill-current"></i></button>
+                                    
+                                    <div class="flex items-center gap-2 group/vol">
+                                        <i data-lucide="volume-2" class="w-5 h-5 cursor-pointer hover:text-acid"></i>
+                                        <div class="w-0 overflow-hidden group-hover/vol:w-20 transition-all duration-300">
+                                            <div class="h-1 bg-white rounded-full w-16 ml-2"></div>
+                                        </div>
+                                    </div>
+                                    
+                                    <span class="text-xs font-mono text-gray-300">08:24 / 24:12</span>
+                                </div>
+
+                                <div class="flex items-center gap-4">
+                                    <!-- Settings / Quality -->
+                                    <button class="hover:text-acid transition-colors" title="Settings"><i data-lucide="settings" class="w-5 h-5"></i></button>
+                                    <button class="hover:text-acid transition-colors" title="Miniplayer"><i data-lucide="picture-in-picture-2" class="w-5 h-5"></i></button>
+                                    <button class="hover:text-acid transition-colors" title="Theater Mode"><i data-lucide="rectangle-horizontal" class="w-5 h-5"></i></button>
+                                    <button class="hover:text-acid transition-colors" title="Fullscreen"><i data-lucide="maximize" class="w-5 h-5"></i></button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Big Play Button Center -->
+                        <div class="absolute inset-0 flex items-center justify-center pointer-events-none group-hover:opacity-0 transition-opacity duration-200">
+                            <div class="w-16 h-16 bg-black/50 backdrop-blur rounded-full flex items-center justify-center border border-white/20">
+                                <i data-lucide="play" class="fill-white text-white ml-1 w-6 h-6"></i>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Video Meta -->
+                    <div class="mt-4">
+                        <h1 id="player-title" class="text-2xl md:text-3xl font-bold leading-tight mb-2">Video Title</h1>
+                        
+                        <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-white/10 pb-4">
+                            <!-- Channel Info -->
+                            <div class="flex items-center gap-4">
+                                <div class="w-12 h-12 rounded-full p-[2px] bg-gradient-to-br from-acid to-lavender">
+                                    <img id="player-avatar" src="" class="w-full h-full rounded-full object-cover border-2 border-void">
+                                </div>
+                                <div>
+                                    <h3 id="player-creator" class="font-bold text-lg hover:text-acid cursor-pointer transition-colors">Creator Name</h3>
+                                    <p class="text-xs text-gray-400"><span id="player-followers">1.2M</span> followers</p>
+                                </div>
+                                <button id="follow-btn" class="ml-4 bg-white text-void px-5 py-2 rounded-full font-bold text-sm hover:bg-acid hover:scale-105 transition-all shadow-lg" onclick="toggleFollow()">
+                                    <span id="follow-btn-text">Follow</span>
+                                </button>
+                            </div>
+
+                            <!-- Actions Toolbar -->
+                            <div class="flex items-center gap-2 overflow-x-auto hide-scrollbar">
+                                <div class="flex items-center bg-white/5 rounded-full overflow-hidden border border-white/5">
+                                    <button class="flex items-center gap-2 px-4 py-2 hover:bg-white/10 transition-colors border-r border-white/10">
+                                        <i data-lucide="thumbs-up" class="w-5 h-5"></i>
+                                        <span class="font-bold text-sm">24K</span>
+                                    </button>
+                                    <button class="px-4 py-2 hover:bg-white/10 transition-colors">
+                                        <i data-lucide="thumbs-down" class="w-5 h-5"></i>
+                                    </button>
+                                </div>
+                                
+                                <button class="flex items-center gap-2 px-4 py-2 bg-white/5 rounded-full hover:bg-white/10 transition-colors border border-white/5 font-medium text-sm">
+                                    <i data-lucide="share-2" class="w-4 h-4"></i> Share
+                                </button>
+                                
+                                <button class="flex items-center gap-2 px-4 py-2 bg-white/5 rounded-full hover:bg-white/10 transition-colors border border-white/5 font-medium text-sm">
+                                    <i data-lucide="scissors" class="w-4 h-4"></i> Clip
+                                </button>
+                                
+                                <button class="flex items-center gap-2 px-4 py-2 bg-white/5 rounded-full hover:bg-white/10 transition-colors border border-white/5 font-medium text-sm">
+                                    <i data-lucide="bookmark" class="w-4 h-4"></i> Save
+                                </button>
+                                
+                                <button class="p-2 bg-white/5 rounded-full hover:bg-white/10 transition-colors border border-white/5">
+                                    <i data-lucide="more-horizontal" class="w-5 h-5"></i>
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Description Box -->
+                        <div class="mt-4 bg-voidLight/50 p-4 rounded-xl cursor-pointer hover:bg-voidLight transition-colors">
+                            <div class="flex gap-4 text-sm font-bold text-gray-200 mb-2">
+                                <span>245,032 Views</span>
+                                <span>•</span>
+                                <span id="player-time">Oct 24, 2025</span>
+                            </div>
+                            <p class="text-sm text-gray-400 leading-relaxed whitespace-pre-line">
+                                Welcome to Movia. Experience the highest fidelity streaming on the web. In this video, we breakdown the complexity of digital rendering in a post-silicon world. 
+                                <br><br>
+                                Timestamps:
+                                0:00 - Intro
+                                2:30 - The Setup
+                                8:45 - The Glitch
+                            </p>
+                            <button class="mt-2 text-sm font-bold text-gray-500 hover:text-white uppercase">Show More</button>
+                        </div>
+                        
+                        <!-- Comment Section (Vibe Check) -->
+                        <div class="mt-8">
+                            <div class="flex items-center gap-4 mb-6">
+                                <h3 class="text-xl font-bold">452 Comments</h3>
+                                <div class="flex gap-2 text-sm text-gray-500 cursor-pointer hover:text-white">
+                                    <i data-lucide="list-filter" class="w-4 h-4"></i> Sort by
+                                </div>
+                            </div>
+                            
+                            <!-- Add Comment -->
+                            <div class="flex gap-4 mb-8">
+                                <img src="https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=100&h=100" class="w-10 h-10 rounded-full object-cover">
+                                <div class="flex-1">
+                                    <input type="text" placeholder="Add a comment..." class="w-full bg-transparent border-b border-gray-700 focus:border-acid outline-none pb-2 text-white transition-colors text-sm">
+                                    <div class="flex justify-end gap-2 mt-2">
+                                        <button class="text-sm font-bold text-gray-500 hover:text-white px-3 py-1.5 rounded-full">Cancel</button>
+                                        <button class="text-sm font-bold bg-white/10 text-gray-400 hover:bg-acid hover:text-void px-4 py-1.5 rounded-full transition-colors">Comment</button>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Comment List -->
+                            <div class="space-y-6">
+                                <div class="flex gap-4">
+                                    <div class="w-10 h-10 rounded-full bg-purple-900/50 flex items-center justify-center font-bold text-purple-300 border border-purple-500/30">N</div>
+                                    <div>
+                                        <div class="flex items-baseline gap-2 mb-1">
+                                            <span class="font-bold text-sm hover:underline cursor-pointer">NeonDrifter</span>
+                                            <span class="text-xs text-gray-500">2 hours ago</span>
+                                        </div>
+                                        <p class="text-sm text-gray-300">The interface on this player is next level. No clutter, just vibes.</p>
+                                        <div class="flex items-center gap-4 mt-2">
+                                            <button class="flex items-center gap-1 text-xs text-gray-500 hover:text-white"><i data-lucide="thumbs-up" class="w-3 h-3"></i> 42</button>
+                                            <button class="flex items-center gap-1 text-xs text-gray-500 hover:text-white"><i data-lucide="thumbs-down" class="w-3 h-3"></i></button>
+                                            <button class="text-xs text-gray-500 hover:text-white font-bold">Reply</button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Sidebar Recommendations (Right) - Desktop -->
+                <div class="hidden lg:block w-[400px] flex-shrink-0">
+                    <div class="sticky top-20 bg-void/95 backdrop-blur-sm pb-4 mb-4 z-10">
+                        <h3 class="text-lg font-bold mb-3 flex items-center gap-2">
+                            <i data-lucide="list-video" class="text-acid w-5 h-5"></i>
+                            Up Next
+                        </h3>
+                        <div class="flex gap-2 overflow-x-auto hide-scrollbar pb-2">
+                            <button id="filter-all" class="filter-btn active bg-white text-void px-4 py-2 rounded-lg text-sm font-bold whitespace-nowrap transition-all hover:scale-105 shadow-neon" onclick="setFilter('all')">
+                                <i data-lucide="grid-3x3" class="w-4 h-4 inline mr-1.5"></i>All
+                            </button>
+                            <button id="filter-from" class="filter-btn bg-white/10 hover:bg-white/20 px-4 py-2 rounded-lg text-sm font-bold whitespace-nowrap transition-all hover:scale-105 flex items-center gap-1.5" onclick="setFilter('from')">
+                                <i data-lucide="user" class="w-4 h-4"></i>
+                                <span id="filter-from-text">From Creator</span>
+                            </button>
+                            <button id="filter-related" class="filter-btn bg-white/10 hover:bg-white/20 px-4 py-2 rounded-lg text-sm font-bold whitespace-nowrap transition-all hover:scale-105 flex items-center gap-1.5" onclick="setFilter('related')">
+                                <i data-lucide="sparkles" class="w-4 h-4"></i>Related
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <div id="up-next-list" class="flex flex-col gap-3 max-h-[calc(100vh-280px)] overflow-y-auto custom-scrollbar pr-2">
+                        <!-- Populated by JS -->
+                    </div>
+                </div>
+                
+                <!-- Mobile Recommendations (Below Video) -->
+                <div class="lg:hidden w-full mt-8">
+                    <div class="mb-6">
+                        <h3 class="text-xl font-bold mb-4 flex items-center gap-2">
+                            <i data-lucide="list-video" class="text-acid w-5 h-5"></i>
+                            Up Next
+                        </h3>
+                        <div class="flex gap-2 overflow-x-auto hide-scrollbar pb-2 mb-4">
+                            <button id="filter-all-mobile" class="filter-btn-mobile active bg-white text-void px-4 py-2 rounded-lg text-sm font-bold whitespace-nowrap transition-all hover:scale-105 shadow-neon" onclick="setFilter('all')">
+                                <i data-lucide="grid-3x3" class="w-4 h-4 inline mr-1.5"></i>All
+                            </button>
+                            <button id="filter-from-mobile" class="filter-btn-mobile bg-white/10 hover:bg-white/20 px-4 py-2 rounded-lg text-sm font-bold whitespace-nowrap transition-all hover:scale-105 flex items-center gap-1.5" onclick="setFilter('from')">
+                                <i data-lucide="user" class="w-4 h-4"></i>
+                                <span id="filter-from-text-mobile">From Creator</span>
+                            </button>
+                            <button id="filter-related-mobile" class="filter-btn-mobile bg-white/10 hover:bg-white/20 px-4 py-2 rounded-lg text-sm font-bold whitespace-nowrap transition-all hover:scale-105 flex items-center gap-1.5" onclick="setFilter('related')">
+                                <i data-lucide="sparkles" class="w-4 h-4"></i>Related
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <div id="up-next-list-mobile" class="grid grid-cols-1 gap-6">
+                        <!-- Populated by JS - Mobile Grid Style -->
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        lucide.createIcons();
+
+        // --- DATA ---
+        const videos = [
+            {
+                id: 1,
+                title: "Neon Genesis Realism: A Study in Light",
+                creator: "KaitoVFX",
+                avatar: "https://i.pravatar.cc/150?img=1",
+                image: "https://images.unsplash.com/photo-1555680202-c86f0e12f086?auto=format&fit=crop&w=600&q=80",
+                duration: "12:04",
+                heat: "heat-viral",
+                views: "2.4M",
+                time: "2 days ago"
+            },
+            {
+                id: 2,
+                title: "Abstract Fluid Simulations in Blender 4.0",
+                creator: "RenderQueen",
+                avatar: "https://i.pravatar.cc/150?img=5",
+                image: "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?auto=format&fit=crop&w=600&q=80",
+                duration: "04:20",
+                heat: "heat-hot",
+                views: "890K",
+                time: "5 hours ago"
+            },
+            {
+                id: 3,
+                title: "Lo-Fi Coding Session [No Talk]",
+                creator: "DevSleep",
+                avatar: "https://i.pravatar.cc/150?img=8",
+                image: "https://images.unsplash.com/photo-1550745165-9bc0b252726f?auto=format&fit=crop&w=600&q=80",
+                duration: "10:00:00",
+                heat: "heat-rising",
+                views: "45K",
+                time: "1 hour ago"
+            },
+            {
+                id: 4,
+                title: "Cyberpunk City Ambience",
+                creator: "Atmosphere",
+                avatar: "https://i.pravatar.cc/150?img=12",
+                image: "https://images.unsplash.com/photo-1515630278258-407f66498911?auto=format&fit=crop&w=600&q=80",
+                duration: "1:00:00",
+                heat: "heat-new",
+                views: "12K",
+                time: "Just now"
+            },
+            {
+                id: 5,
+                title: "How AI Dreams: Visualizing Neural Networks",
+                creator: "NeuralNet",
+                avatar: "https://i.pravatar.cc/150?img=15",
+                image: "https://images.unsplash.com/photo-1620641788421-7a1c342ea42e?auto=format&fit=crop&w=600&q=80",
+                duration: "08:45",
+                heat: "heat-hot",
+                views: "500K",
+                time: "1 day ago"
+            },
+            {
+                id: 6,
+                title: "Analog Synthesizer Restoration",
+                creator: "AnalogSoul",
+                avatar: "https://i.pravatar.cc/150?img=20",
+                image: "https://images.unsplash.com/photo-1594623930572-300a3011d9ae?auto=format&fit=crop&w=600&q=80",
+                duration: "24:12",
+                heat: "heat-new",
+                views: "5K",
+                time: "30 mins ago"
+            },
+            {
+                id: 7,
+                title: "Glitch Art Tutorial: Datamoshing",
+                creator: "PixelMosh",
+                avatar: "https://i.pravatar.cc/150?img=32",
+                image: "https://images.unsplash.com/photo-1506703719100-a0f3a48c0f86?auto=format&fit=crop&w=600&q=80",
+                duration: "15:30",
+                heat: "heat-rising",
+                views: "88K",
+                time: "6 hours ago"
+            },
+            {
+                id: 8,
+                title: "Speedrun: The Void (World Record)",
+                creator: "GamerX",
+                avatar: "https://i.pravatar.cc/150?img=50",
+                image: "https://images.unsplash.com/photo-1538481199705-c710c4e965fc?auto=format&fit=crop&w=600&q=80",
+                duration: "32:10",
+                heat: "heat-viral",
+                views: "3.2M",
+                time: "1 week ago"
+            },
+            {
+                id: 9,
+                title: "Neon Dreams: Cyberpunk Visual Effects",
+                creator: "KaitoVFX",
+                avatar: "https://i.pravatar.cc/150?img=1",
+                image: "https://images.unsplash.com/photo-1518709268805-4e9042af2176?auto=format&fit=crop&w=600&q=80",
+                duration: "15:30",
+                heat: "heat-hot",
+                views: "1.8M",
+                time: "3 days ago"
+            },
+            {
+                id: 10,
+                title: "Light Painting Tutorial: Long Exposure Magic",
+                creator: "KaitoVFX",
+                avatar: "https://i.pravatar.cc/150?img=1",
+                image: "https://images.unsplash.com/photo-1514525253161-7a46d19cd819?auto=format&fit=crop&w=600&q=80",
+                duration: "09:22",
+                heat: "heat-rising",
+                views: "650K",
+                time: "1 week ago"
+            },
+            {
+                id: 11,
+                title: "Advanced Particle Systems in Blender",
+                creator: "RenderQueen",
+                avatar: "https://i.pravatar.cc/150?img=5",
+                image: "https://images.unsplash.com/photo-1618005198919-d3d4b5a92ead?auto=format&fit=crop&w=600&q=80",
+                duration: "18:45",
+                heat: "heat-hot",
+                views: "720K",
+                time: "4 days ago"
+            },
+            {
+                id: 12,
+                title: "Real-Time Rendering: Unreal Engine 5",
+                creator: "RenderQueen",
+                avatar: "https://i.pravatar.cc/150?img=5",
+                image: "https://images.unsplash.com/photo-1633356122544-f134324a6cee?auto=format&fit=crop&w=600&q=80",
+                duration: "22:15",
+                heat: "heat-viral",
+                views: "1.2M",
+                time: "5 days ago"
+            },
+            {
+                id: 13,
+                title: "Neural Networks Explained: Deep Learning Basics",
+                creator: "NeuralNet",
+                avatar: "https://i.pravatar.cc/150?img=15",
+                image: "https://images.unsplash.com/photo-1555949963-aa79dcee981c?auto=format&fit=crop&w=600&q=80",
+                duration: "14:30",
+                heat: "heat-rising",
+                views: "380K",
+                time: "2 days ago"
+            },
+            {
+                id: 14,
+                title: "AI Art Generation: Midjourney to Reality",
+                creator: "NeuralNet",
+                avatar: "https://i.pravatar.cc/150?img=15",
+                image: "https://images.unsplash.com/photo-1677442136019-21780ecad995?auto=format&fit=crop&w=600&q=80",
+                duration: "11:20",
+                heat: "heat-hot",
+                views: "950K",
+                time: "6 hours ago"
+            },
+            {
+                id: 15,
+                title: "Gaming Setup Tour: RGB Paradise",
+                creator: "GamerX",
+                avatar: "https://i.pravatar.cc/150?img=50",
+                image: "https://images.unsplash.com/photo-1493711662062-fa541adb3fc8?auto=format&fit=crop&w=600&q=80",
+                duration: "16:45",
+                heat: "heat-rising",
+                views: "420K",
+                time: "1 day ago"
+            }
+        ];
+
+        // --- STATE MANAGEMENT ---
+        let currentVideo = null;
+        let currentFilter = 'all';
+        
+        // Follow & Notification System
+        let followedCreators = JSON.parse(localStorage.getItem('followedCreators') || '[]');
+        let notifications = JSON.parse(localStorage.getItem('notifications') || '[]');
+        let creatorFollowers = JSON.parse(localStorage.getItem('creatorFollowers') || '{}');
+        
+        // Initialize followers count for creators
+        if (Object.keys(creatorFollowers).length === 0) {
+            videos.forEach(video => {
+                if (!creatorFollowers[video.creator]) {
+                    creatorFollowers[video.creator] = Math.floor(Math.random() * 500000) + 100000; // Random followers between 100K-600K
+                }
+            });
+            localStorage.setItem('creatorFollowers', JSON.stringify(creatorFollowers));
+        }
+
+        // --- RENDER FUNCTIONS ---
+        const grid = document.getElementById('video-grid');
+        const nextList = document.getElementById('up-next-list');
+        const nextListMobile = document.getElementById('up-next-list-mobile');
+
+        function renderHome() {
+            grid.innerHTML = '';
+            videos.forEach(video => {
+                const card = document.createElement('div');
+                card.className = `video-card group flex flex-col gap-3 cursor-pointer`;
+                card.onclick = () => goToWatch(video);
+                
+                card.innerHTML = `
+                    <div class="relative w-full aspect-video rounded-xl overflow-hidden bg-voidLighter border-2 border-transparent hover:${video.heat.replace('heat-', 'border-')} transition-colors">
+                        <img src="${video.image}" class="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110 opacity-90 group-hover:opacity-100">
+                        <div class="absolute bottom-2 right-2 bg-black/80 backdrop-blur text-xs font-bold px-2 py-0.5 rounded text-white shadow-md">
+                            ${video.duration}
+                        </div>
+                        <div class="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                             <div class="w-12 h-12 rounded-full bg-acid/90 flex items-center justify-center shadow-neon">
+                                <i data-lucide="play" class="fill-void text-void ml-1 w-5 h-5"></i>
+                             </div>
+                        </div>
+                    </div>
+                    <div class="flex gap-3 px-1">
+                        <img src="${video.avatar}" class="w-9 h-9 rounded-full object-cover border border-white/10 mt-1 flex-shrink-0">
+                        <div class="flex-1">
+                            <h3 class="font-bold text-base leading-tight mb-1 text-gray-100 group-hover:text-acid transition-colors line-clamp-2">${video.title}</h3>
+                            <div class="text-xs text-gray-500 flex flex-col">
+                                <span class="hover:text-white transition-colors">${video.creator}</span>
+                                <span>${video.views} views • ${video.time}</span>
+                            </div>
+                        </div>
+                        <button class="self-start text-gray-500 hover:text-white opacity-0 group-hover:opacity-100 transition-opacity">
+                            <i data-lucide="more-vertical" class="w-4 h-4"></i>
+                        </button>
+                    </div>
+                `;
+                grid.appendChild(card);
+            });
+            lucide.createIcons();
+        }
+
+        // Filter videos based on current filter type
+        function getFilteredVideos() {
+            if (!currentVideo) return videos;
+            
+            let filtered = [];
+            
+            switch(currentFilter) {
+                case 'all':
+                    // Show all videos except the current one
+                    filtered = videos.filter(v => v.id !== currentVideo.id);
+                    break;
+                    
+                case 'from':
+                    // Show videos from the same creator, excluding current
+                    filtered = videos.filter(v => 
+                        v.creator === currentVideo.creator && v.id !== currentVideo.id
+                    );
+                    break;
+                    
+                case 'related':
+                    // Show related videos based on:
+                    // 1. Similar keywords in title
+                    // 2. Same heat level (trending)
+                    // 3. Exclude current video
+                    const currentTitleWords = currentVideo.title.toLowerCase().split(/\s+/);
+                    filtered = videos
+                        .filter(v => v.id !== currentVideo.id)
+                        .map(v => {
+                            // Calculate similarity score
+                            const titleWords = v.title.toLowerCase().split(/\s+/);
+                            const commonWords = titleWords.filter(word => 
+                                currentTitleWords.some(cw => 
+                                    word.includes(cw) || cw.includes(word) || 
+                                    word.length > 4 && cw.length > 4 && 
+                                    (word.substring(0, 4) === cw.substring(0, 4))
+                                )
+                            );
+                            
+                            // Bonus for same heat level
+                            const heatMatch = v.heat === currentVideo.heat ? 2 : 0;
+                            
+                            return {
+                                video: v,
+                                score: commonWords.length + heatMatch
+                            };
+                        })
+                        .sort((a, b) => b.score - a.score)
+                        .map(item => item.video);
+                    
+                    // If no good matches, show popular videos
+                    if (filtered.length === 0 || filtered[0].score === 0) {
+                        filtered = videos
+                            .filter(v => v.id !== currentVideo.id)
+                            .sort((a, b) => {
+                                // Sort by views (convert "2.4M" to number for comparison)
+                                const aViews = parseViews(a.views);
+                                const bViews = parseViews(b.views);
+                                return bViews - aViews;
+                            });
+                    }
+                    break;
+                    
+                default:
+                    filtered = videos.filter(v => v.id !== currentVideo.id);
+            }
+            
+            return filtered;
+        }
+
+        // Helper to parse view counts
+        function parseViews(viewStr) {
+            const num = parseFloat(viewStr);
+            if (viewStr.includes('M')) return num * 1000000;
+            if (viewStr.includes('K')) return num * 1000;
+            return num;
+        }
+
+        function renderUpNext() {
+            const filteredVideos = getFilteredVideos();
+            
+            // Render Desktop Sidebar (if exists)
+            if (nextList) {
+                nextList.innerHTML = '';
+                
+                if (filteredVideos.length === 0) {
+                    nextList.innerHTML = `
+                        <div class="text-center py-8 text-gray-500">
+                            <i data-lucide="video-off" class="w-12 h-12 mx-auto mb-3 opacity-50"></i>
+                            <p class="text-sm">No videos found</p>
+                        </div>
+                    `;
+                } else {
+                    filteredVideos.forEach((video, index) => {
+                        const item = document.createElement('div');
+                        item.className = `flex gap-3 cursor-pointer group rounded-xl hover:bg-white/5 transition-all duration-200 p-2 border border-transparent hover:border-acid/20 ${index === 0 ? 'bg-acidDim/30' : ''}`;
+                        item.onclick = () => goToWatch(video);
+                        item.innerHTML = `
+                            <div class="w-40 aspect-video rounded-lg overflow-hidden relative flex-shrink-0 bg-voidLighter group-hover:ring-2 ring-acid/50 transition-all">
+                                <img src="${video.image}" class="w-full h-full object-cover group-hover:scale-110 transition-transform duration-300">
+                                <div class="absolute bottom-1 right-1 bg-black/90 backdrop-blur-sm text-[10px] px-1.5 py-0.5 rounded font-bold text-white shadow-lg">${video.duration}</div>
+                                ${index === 0 ? '<div class="absolute top-1 left-1 bg-acid text-void text-[9px] px-1.5 py-0.5 rounded font-bold uppercase tracking-wide">Next</div>' : ''}
+                                <div class="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity bg-black/20">
+                                    <div class="w-10 h-10 rounded-full bg-acid/90 flex items-center justify-center shadow-neon">
+                                        <i data-lucide="play" class="fill-void text-void ml-0.5 w-4 h-4"></i>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="flex flex-col py-1 flex-1 min-w-0">
+                                <h4 class="font-bold text-sm text-gray-200 group-hover:text-acid transition-colors line-clamp-2 leading-tight mb-1.5">${video.title}</h4>
+                                <div class="flex items-center gap-2 mb-1">
+                                    <img src="${video.avatar}" class="w-5 h-5 rounded-full object-cover border border-white/10 flex-shrink-0">
+                                    <p class="text-xs text-gray-400 hover:text-white transition-colors truncate">${video.creator}</p>
+                                </div>
+                                <div class="flex items-center gap-2 text-xs text-gray-500">
+                                    <span>${video.views} views</span>
+                                    <span>•</span>
+                                    <span>${video.time}</span>
+                                </div>
+                                ${video.heat === 'heat-viral' ? '<span class="inline-block mt-1 text-[10px] bg-acid/20 text-acid px-1.5 py-0.5 rounded font-bold uppercase w-fit">Viral</span>' : ''}
+                            </div>
+                        `;
+                        nextList.appendChild(item);
+                    });
+                }
+            }
+            
+            // Render Mobile Grid (if exists) - Same style as homepage
+            if (nextListMobile) {
+                nextListMobile.innerHTML = '';
+                
+                if (filteredVideos.length === 0) {
+                    nextListMobile.innerHTML = `
+                        <div class="text-center py-12 text-gray-500 col-span-full">
+                            <i data-lucide="video-off" class="w-16 h-16 mx-auto mb-4 opacity-50"></i>
+                            <p class="text-base">No videos found</p>
+                        </div>
+                    `;
+                } else {
+                    filteredVideos.forEach((video, index) => {
+                        const card = document.createElement('div');
+                        card.className = `video-card group flex flex-col gap-3 cursor-pointer`;
+                        card.onclick = () => goToWatch(video);
+                        
+                        card.innerHTML = `
+                            <div class="relative w-full aspect-video rounded-xl overflow-hidden bg-voidLighter border-2 border-transparent hover:${video.heat.replace('heat-', 'border-')} transition-colors">
+                                <img src="${video.image}" class="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110 opacity-90 group-hover:opacity-100">
+                                <div class="absolute bottom-2 right-2 bg-black/80 backdrop-blur text-xs font-bold px-2 py-0.5 rounded text-white shadow-md">
+                                    ${video.duration}
+                                </div>
+                                ${index === 0 ? '<div class="absolute top-2 left-2 bg-acid text-void text-[10px] px-2 py-1 rounded font-bold uppercase tracking-wide shadow-lg">Next</div>' : ''}
+                                <div class="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                                    <div class="w-14 h-14 rounded-full bg-acid/90 flex items-center justify-center shadow-neon">
+                                        <i data-lucide="play" class="fill-void text-void ml-1 w-6 h-6"></i>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="flex gap-3 px-1">
+                                <img src="${video.avatar}" class="w-9 h-9 rounded-full object-cover border border-white/10 mt-1 flex-shrink-0">
+                                <div class="flex-1">
+                                    <h3 class="font-bold text-base leading-tight mb-1 text-gray-100 group-hover:text-acid transition-colors line-clamp-2">${video.title}</h3>
+                                    <div class="text-xs text-gray-500 flex flex-col">
+                                        <span class="hover:text-white transition-colors">${video.creator}</span>
+                                        <span>${video.views} views • ${video.time}</span>
+                                    </div>
+                                </div>
+                                <button class="self-start text-gray-500 hover:text-white opacity-0 group-hover:opacity-100 transition-opacity">
+                                    <i data-lucide="more-vertical" class="w-4 h-4"></i>
+                                </button>
+                            </div>
+                        `;
+                        nextListMobile.appendChild(card);
+                    });
+                }
+            }
+            
+            lucide.createIcons();
+        }
+
+        // Set active filter and update UI
+        function setFilter(filterType) {
+            currentFilter = filterType;
+            
+            // Update desktop button styles
+            document.querySelectorAll('.filter-btn').forEach(btn => {
+                btn.classList.remove('active', 'bg-white', 'text-void', 'shadow-neon');
+                btn.classList.add('bg-white/10', 'text-white');
+            });
+            
+            // Update mobile button styles
+            document.querySelectorAll('.filter-btn-mobile').forEach(btn => {
+                btn.classList.remove('active', 'bg-white', 'text-void', 'shadow-neon');
+                btn.classList.add('bg-white/10', 'text-white');
+            });
+            
+            // Update desktop active button
+            const activeBtn = document.getElementById(`filter-${filterType}`);
+            if (activeBtn) {
+                activeBtn.classList.add('active', 'bg-white', 'text-void', 'shadow-neon');
+                activeBtn.classList.remove('bg-white/10', 'text-white');
+            }
+            
+            // Update mobile active button
+            const activeBtnMobile = document.getElementById(`filter-${filterType}-mobile`);
+            if (activeBtnMobile) {
+                activeBtnMobile.classList.add('active', 'bg-white', 'text-void', 'shadow-neon');
+                activeBtnMobile.classList.remove('bg-white/10', 'text-white');
+            }
+            
+            // Update "From" button text if needed (both desktop and mobile)
+            if (filterType === 'from' && currentVideo) {
+                const fromTextDesktop = document.getElementById('filter-from-text');
+                const fromTextMobile = document.getElementById('filter-from-text-mobile');
+                if (fromTextDesktop) fromTextDesktop.textContent = `From ${currentVideo.creator}`;
+                if (fromTextMobile) fromTextMobile.textContent = `From ${currentVideo.creator}`;
+            }
+            
+            // Re-render the list
+            renderUpNext();
+        }
+
+        // --- NAVIGATION LOGIC (SPA) ---
+        const homeView = document.getElementById('home-view');
+        const watchView = document.getElementById('watch-view');
+
+        function goHome() {
+            window.scrollTo(0, 0);
+            watchView.classList.add('hidden', 'opacity-0');
+            homeView.classList.remove('hidden');
+            setTimeout(() => homeView.classList.remove('opacity-0'), 50);
+            renderHome();
+        }
+
+        function goToWatch(video) {
+            window.scrollTo(0, 0);
+            
+            // Set current video
+            currentVideo = video;
+            currentFilter = 'all'; // Reset to 'all' when switching videos
+            
+            // Populate Watch Data
+            document.getElementById('player-img').src = video.image;
+            document.getElementById('player-title').innerText = video.title;
+            document.getElementById('player-creator').innerText = video.creator;
+            document.getElementById('player-avatar').src = video.avatar;
+            document.getElementById('player-time').innerText = video.time;
+
+            // Update filter buttons (desktop and mobile)
+            const fromTextDesktop = document.getElementById('filter-from-text');
+            const fromTextMobile = document.getElementById('filter-from-text-mobile');
+            if (fromTextDesktop) fromTextDesktop.textContent = `From ${video.creator}`;
+            if (fromTextMobile) fromTextMobile.textContent = `From ${video.creator}`;
+            
+            // Update follow button state
+            updateFollowButton(video.creator);
+            
+            // Update followers count
+            updateFollowersCount(video.creator);
+            
+            // Reset filter UI (desktop and mobile)
+            document.querySelectorAll('.filter-btn, .filter-btn-mobile').forEach(btn => {
+                btn.classList.remove('active', 'bg-white', 'text-void', 'shadow-neon');
+                btn.classList.add('bg-white/10', 'text-white');
+            });
+            const allBtn = document.getElementById('filter-all');
+            const allBtnMobile = document.getElementById('filter-all-mobile');
+            if (allBtn) {
+                allBtn.classList.add('active', 'bg-white', 'text-void', 'shadow-neon');
+                allBtn.classList.remove('bg-white/10', 'text-white');
+            }
+            if (allBtnMobile) {
+                allBtnMobile.classList.add('active', 'bg-white', 'text-void', 'shadow-neon');
+                allBtnMobile.classList.remove('bg-white/10', 'text-white');
+            }
+
+            homeView.classList.add('opacity-0');
+            setTimeout(() => {
+                homeView.classList.add('hidden');
+                watchView.classList.remove('hidden');
+                renderUpNext(); // Render side list with current filter
+                setTimeout(() => {
+                    watchView.classList.remove('opacity-0');
+                }, 50);
+            }, 300);
+        }
+
+        // --- FOLLOW SYSTEM ---
+        function toggleFollow() {
+            if (!currentVideo) return;
+            
+            const creator = currentVideo.creator;
+            const isFollowing = followedCreators.includes(creator);
+            
+            if (isFollowing) {
+                // Unfollow
+                followedCreators = followedCreators.filter(c => c !== creator);
+                if (creatorFollowers[creator] > 0) {
+                    creatorFollowers[creator]--;
+                }
+            } else {
+                // Follow
+                followedCreators.push(creator);
+                creatorFollowers[creator] = (creatorFollowers[creator] || 0) + 1;
+            }
+            
+            // Save to localStorage
+            localStorage.setItem('followedCreators', JSON.stringify(followedCreators));
+            localStorage.setItem('creatorFollowers', JSON.stringify(creatorFollowers));
+            
+            // Update UI
+            updateFollowButton(creator);
+            updateFollowersCount(creator);
+        }
+        
+        function updateFollowButton(creator) {
+            const followBtn = document.getElementById('follow-btn');
+            const followBtnText = document.getElementById('follow-btn-text');
+            const isFollowing = followedCreators.includes(creator);
+            
+            if (isFollowing) {
+                followBtn.classList.remove('bg-white', 'text-void');
+                followBtn.classList.add('bg-white/10', 'text-white', 'border', 'border-acid/50');
+                followBtnText.textContent = 'Following';
+            } else {
+                followBtn.classList.remove('bg-white/10', 'text-white', 'border', 'border-acid/50');
+                followBtn.classList.add('bg-white', 'text-void');
+                followBtnText.textContent = 'Follow';
+            }
+        }
+        
+        function updateFollowersCount(creator) {
+            const followersEl = document.getElementById('player-followers');
+            const count = creatorFollowers[creator] || 0;
+            
+            if (count >= 1000000) {
+                followersEl.textContent = (count / 1000000).toFixed(1) + 'M';
+            } else if (count >= 1000) {
+                followersEl.textContent = (count / 1000).toFixed(1) + 'K';
+            } else {
+                followersEl.textContent = count.toString();
+            }
+        }
+        
+        // --- NOTIFICATION SYSTEM ---
+        function checkForNewVideos() {
+            // This would normally check with a backend API
+            // For demo, we'll simulate checking if any new videos from followed creators exist
+            // In a real app, this would be called when:
+            // 1. A creator uploads a new video (backend triggers notification)
+            // 2. User opens the app (check for new videos since last visit)
+            
+            // For demo purposes, we'll add a function to simulate new video uploads
+        }
+        
+        function addNotification(video, creator) {
+            // Only add notification if user is following the creator
+            if (!followedCreators.includes(creator)) return;
+            
+            // Check if notification already exists for this video
+            if (notifications.some(n => n.videoId === video.id)) return;
+            
+            const notification = {
+                id: Date.now(),
+                type: 'new_video',
+                videoId: video.id,
+                creator: creator,
+                title: video.title,
+                thumbnail: video.image,
+                avatar: video.avatar,
+                time: 'Just now',
+                read: false
+            };
+            
+            notifications.unshift(notification); // Add to beginning
+            localStorage.setItem('notifications', JSON.stringify(notifications));
+            
+            updateNotificationBadge();
+            renderNotifications();
+        }
+        
+        function renderNotifications() {
+            const notificationList = document.getElementById('notification-list');
+            
+            if (notifications.length === 0) {
+                notificationList.innerHTML = `
+                    <div class="p-8 text-center text-gray-500">
+                        <i data-lucide="bell-off" class="w-12 h-12 mx-auto mb-3 opacity-50"></i>
+                        <p class="text-sm">No notifications yet</p>
+                        <p class="text-xs mt-1">Follow creators to get notified when they upload new videos</p>
+                    </div>
+                `;
+                lucide.createIcons();
+                return;
+            }
+            
+            notificationList.innerHTML = notifications.map(notif => `
+                <div class="notification-item p-4 border-b border-glassBorder hover:bg-white/5 transition-colors cursor-pointer ${notif.read ? 'opacity-60' : ''}" 
+                     onclick="handleNotificationClick(${notif.videoId}, ${notif.id})">
+                    <div class="flex gap-3">
+                        <div class="relative flex-shrink-0">
+                            <img src="${notif.thumbnail}" class="w-20 h-12 rounded-lg object-cover">
+                            <div class="absolute -top-1 -right-1 w-6 h-6 bg-acid rounded-full flex items-center justify-center border-2 border-void">
+                                <i data-lucide="play" class="w-3 h-3 text-void fill-current"></i>
+                            </div>
+                        </div>
+                        <div class="flex-1 min-w-0">
+                            <div class="flex items-start justify-between gap-2 mb-1">
+                                <div class="flex items-center gap-2">
+                                    <img src="${notif.avatar}" class="w-5 h-5 rounded-full object-cover">
+                                    <span class="text-xs font-bold text-acid">${notif.creator}</span>
+                                </div>
+                                <span class="text-xs text-gray-500 flex-shrink-0">${notif.time}</span>
+                            </div>
+                            <p class="text-sm text-gray-300 line-clamp-2">Uploaded: ${notif.title}</p>
+                            ${!notif.read ? '<div class="w-2 h-2 bg-acid rounded-full mt-2"></div>' : ''}
+                        </div>
+                    </div>
+                </div>
+            `).join('');
+            
+            lucide.createIcons();
+        }
+        
+        function handleNotificationClick(videoId, notificationId) {
+            // Mark as read
+            const notification = notifications.find(n => n.id === notificationId);
+            if (notification) {
+                notification.read = true;
+                localStorage.setItem('notifications', JSON.stringify(notifications));
+                renderNotifications();
+                updateNotificationBadge();
+            }
+            
+            // Navigate to video
+            const video = videos.find(v => v.id === videoId);
+            if (video) {
+                goToWatch(video);
+                toggleNotifications(); // Close dropdown
+            }
+        }
+        
+        function updateNotificationBadge() {
+            const badge = document.getElementById('notification-badge');
+            const unreadCount = notifications.filter(n => !n.read).length;
+            
+            if (unreadCount > 0) {
+                badge.classList.remove('hidden');
+                badge.textContent = unreadCount > 9 ? '9+' : unreadCount.toString();
+                // Ensure proper styling
+                if (!badge.classList.contains('flex')) {
+                    badge.classList.add('flex', 'items-center', 'justify-center', 'text-[10px]', 'font-bold', 'min-w-[18px]', 'h-[18px]', 'px-1');
+                }
+            } else {
+                badge.classList.add('hidden');
+            }
+        }
+        
+        function toggleNotifications() {
+            const dropdown = document.getElementById('notification-dropdown');
+            dropdown.classList.toggle('hidden');
+            
+            if (!dropdown.classList.contains('hidden')) {
+                renderNotifications();
+            }
+        }
+        
+        function clearAllNotifications() {
+            notifications = [];
+            localStorage.setItem('notifications', JSON.stringify(notifications));
+            renderNotifications();
+            updateNotificationBadge();
+        }
+        
+        // Simulate new video upload (for demo - in real app, this would come from backend)
+        function simulateNewVideoUpload(creatorName, videoTitle, videoImage, videoId) {
+            const newVideo = {
+                id: videoId || Date.now(),
+                title: videoTitle,
+                creator: creatorName,
+                avatar: videos.find(v => v.creator === creatorName)?.avatar || "https://i.pravatar.cc/150?img=1",
+                image: videoImage,
+                duration: "10:00",
+                heat: "heat-new",
+                views: "0",
+                time: "Just now"
+            };
+            
+            // Add to videos array
+            videos.unshift(newVideo);
+            
+            // Add notification if user follows this creator
+            addNotification(newVideo, creatorName);
+            
+            // Update home view if visible
+            if (!watchView.classList.contains('hidden')) {
+                renderHome();
+            }
+        }
+        
+        // Close notification dropdown when clicking outside
+        document.addEventListener('click', (e) => {
+            const dropdown = document.getElementById('notification-dropdown');
+            const btn = document.getElementById('notification-btn');
+            
+            if (dropdown && !dropdown.contains(e.target) && !btn.contains(e.target)) {
+                dropdown.classList.add('hidden');
+            }
+        });
+
+        // --- SIDEBAR LOGIC ---
+        const drawer = document.getElementById('sidebar-drawer');
+        const backdrop = document.getElementById('sidebar-backdrop');
+        
+        function toggleSidebar() {
+            const isOpen = drawer.classList.contains('open');
+            if (isOpen) {
+                drawer.classList.remove('open');
+                backdrop.classList.remove('open');
+            } else {
+                drawer.classList.add('open');
+                backdrop.classList.add('open');
+            }
+        }
+
+        // Init
+        renderHome();
+        updateNotificationBadge();
+        
+        // Demo: Simulate a new video upload after 5 seconds (for testing)
+        // Uncomment the line below to test notifications
+        // Make sure to follow a creator first, then wait 5 seconds
+        // setTimeout(() => {
+        //     simulateNewVideoUpload('KaitoVFX', 'New Tutorial: Advanced Lighting Techniques', 'https://images.unsplash.com/photo-1557683316-973673baf926?auto=format&fit=crop&w=600&q=80');
+        // }, 5000);
+        
+        // For testing: You can call simulateNewVideoUpload() from browser console
+        // Example: simulateNewVideoUpload('KaitoVFX', 'Test Video', 'https://images.unsplash.com/photo-1557683316-973673baf926?auto=format&fit=crop&w=600&q=80');
+
+    </script>
+</body>
+</html>

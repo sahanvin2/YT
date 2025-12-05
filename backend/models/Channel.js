@@ -76,3 +76,6 @@ ChannelSchema.index({ channelName: 1 });
 
 module.exports = mongoose.model('Channel', ChannelSchema);
 
+
+
+

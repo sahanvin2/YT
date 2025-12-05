@@ -1,3 +1,5 @@
+@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&display=swap');
+
 * {
   margin: 0;
   padding: 0;
@@ -5,35 +7,59 @@
 }
 
 :root {
-  --primary-color: #FF0000;
-  --primary-color-hover: #CC0000;
-  --primary-color-dark: #990000;
-  --secondary-color: #282828;
-  --bg-color: #0f0f0f;
-  --sidebar-bg: #212121;
-  --text-primary: #ffffff;
-  --text-secondary: #aaaaaa;
-  --border-color: #303030;
-  --hover-bg: #3f3f3f;
-  --card-bg: #1a1a1a;
+  /* Modern Movia Color Palette */
+  --void: #050308;
+  --voidLight: #130d1f;
+  --voidLighter: #1f1633;
+  --acid: #CCFF00;
+  --acidDim: rgba(204, 255, 0, 0.1);
+  --lavender: #B084CC;
+  --hologram: #E0E0E0;
+  --glass: rgba(20, 15, 30, 0.85);
+  --glassBorder: rgba(255, 255, 255, 0.08);
+  --surface: #1c142b;
+  
+  /* Legacy variable mappings for compatibility */
+  --primary-color: #CCFF00;
+  --primary-color-hover: #B8E600;
+  --primary-color-dark: #A3CC00;
+  --secondary-color: #130d1f;
+  --bg-color: #050308;
+  --sidebar-bg: #050308;
+  --text-primary: #E0E0E0;
+  --text-secondary: #9ca3af;
+  --border-color: rgba(255, 255, 255, 0.08);
+  --hover-bg: rgba(255, 255, 255, 0.05);
+  --card-bg: #130d1f;
 }
 
-/* Dark Mode (Red theme) */
+/* Dark Mode (Modern Movia theme) */
 [data-theme="dark"] {
-  --primary-color: #FF0000;
-  --primary-color-hover: #CC0000;
-  --primary-color-dark: #990000;
-  --secondary-color: #282828;
-  --bg-color: #0f0f0f;
-  --sidebar-bg: #212121;
-  --text-primary: #ffffff;
-  --text-secondary: #aaaaaa;
-  --border-color: #303030;
-  --hover-bg: #3f3f3f;
-  --card-bg: #1a1a1a;
+  --void: #050308;
+  --voidLight: #130d1f;
+  --voidLighter: #1f1633;
+  --acid: #CCFF00;
+  --acidDim: rgba(204, 255, 0, 0.1);
+  --lavender: #B084CC;
+  --hologram: #E0E0E0;
+  --glass: rgba(20, 15, 30, 0.85);
+  --glassBorder: rgba(255, 255, 255, 0.08);
+  --surface: #1c142b;
+  
+  --primary-color: #CCFF00;
+  --primary-color-hover: #B8E600;
+  --primary-color-dark: #A3CC00;
+  --secondary-color: #130d1f;
+  --bg-color: #050308;
+  --sidebar-bg: #050308;
+  --text-primary: #E0E0E0;
+  --text-secondary: #9ca3af;
+  --border-color: rgba(255, 255, 255, 0.08);
+  --hover-bg: rgba(255, 255, 255, 0.05);
+  --card-bg: #130d1f;
 }
 
-/* Light Mode (Navy Blue theme) */
+/* Light Mode (Navy Blue theme - kept for compatibility) */
 [data-theme="light"] {
   --primary-color: #1e3a8a;
   --primary-color-hover: #1e40af;
@@ -49,7 +75,7 @@
 }
 
 body {
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
+  font-family: 'Space Grotesk', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
     'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
     sans-serif;
   -webkit-font-smoothing: antialiased;
@@ -57,6 +83,7 @@ body {
   background-color: var(--bg-color);
   color: var(--text-primary);
   transition: background-color 0.3s ease, color 0.3s ease;
+  overflow-x: hidden;
 }
 
 code {
@@ -88,23 +115,28 @@ textarea {
   padding: 0 20px;
 }
 
-/* Scrollbar */
+/* Smooth Scroll */
+html {
+  scroll-behavior: smooth;
+}
+
+/* Custom Scrollbar */
 ::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
+  width: 6px;
+  height: 6px;
 }
 
 ::-webkit-scrollbar-track {
-  background: var(--bg-color);
+  background: var(--void);
 }
 
 ::-webkit-scrollbar-thumb {
-  background: var(--border-color);
+  background: #333;
   border-radius: 4px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: var(--hover-bg);
+  background: var(--acid);
 }
 
 /* Utility Classes */
@@ -119,12 +151,16 @@ textarea {
 }
 
 .btn-primary {
-  background-color: var(--primary-color);
-  color: white;
+  background-color: var(--acid);
+  color: var(--void);
+  font-weight: 600;
+  box-shadow: 0 0 20px rgba(204, 255, 0, 0.15);
 }
 
 .btn-primary:hover {
-  background-color: var(--primary-color-hover);
+  background-color: #B8E600;
+  transform: translateY(-1px);
+  box-shadow: 0 0 30px rgba(204, 255, 0, 0.3);
 }
 
 .btn-secondary {
@@ -149,12 +185,24 @@ textarea {
 /* Loading Spinner */
 .spinner {
   border: 3px solid rgba(255, 255, 255, 0.1);
-  border-top: 3px solid var(--primary-color);
+  border-top: 3px solid var(--acid);
   border-radius: 50%;
   width: 40px;
   height: 40px;
   animation: spin 1s linear infinite;
   margin: 40px auto;
+}
+
+/* Animated Background Mesh */
+.hero-mesh {
+  position: fixed;
+  top: -50%;
+  left: -50%;
+  width: 200%;
+  height: 200%;
+  background: radial-gradient(circle at center, rgba(110, 60, 180, 0.08) 0%, rgba(5, 3, 8, 0) 60%);
+  z-index: -1;
+  pointer-events: none;
 }
 
 @keyframes spin {

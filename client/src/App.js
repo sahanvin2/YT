@@ -19,7 +19,6 @@ import Liked from './pages/Library/Liked';
 import Saved from './pages/Library/Saved';
 import Clips from './pages/Library/Clips';
 import Subscriptions from './pages/Library/Subscriptions';
-import Download from './pages/Download/Download';
 import './App.css';
 
 function App() {
@@ -87,6 +86,7 @@ function App() {
         <AdProvider>
           <Router>
             <div className="app">
+              <div className="hero-mesh"></div>
               <Navbar toggleSidebar={toggleSidebar} />
               <div className="app-content">
                 <Sidebar isOpen={sidebarOpen} />
@@ -109,7 +109,6 @@ function App() {
                     <Route path="/clips" element={<Clips />} />
                     <Route path="/subscriptions" element={<Subscriptions />} />
                     <Route path="/profile" element={<Profile />} />
-                    <Route path="/download/:id" element={<Download />} />
                   </Routes>
                 </main>
               </div>

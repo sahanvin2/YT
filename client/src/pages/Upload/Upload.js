@@ -123,16 +123,16 @@ const Upload = () => {
 
       if (!usePresigned) {
         // Standard upload with progress tracking
-        const data = new FormData();
-        data.append('title', title);
-        data.append('description', description);
-        data.append('category', category);
-        data.append('tags', tags);
-        data.append('visibility', visibility);
-        data.append('video', videoFile);
-        if (thumbnailFile) {
-          data.append('thumbnail', thumbnailFile);
-        }
+    const data = new FormData();
+    data.append('title', title);
+    data.append('description', description);
+    data.append('category', category);
+    data.append('tags', tags);
+    data.append('visibility', visibility);
+    data.append('video', videoFile);
+    if (thumbnailFile) {
+      data.append('thumbnail', thumbnailFile);
+    }
 
         const res = await uploadVideo(data, {
           onUploadProgress: (progressEvent) => {
@@ -169,21 +169,21 @@ const Upload = () => {
           
           // Navigate after 2 seconds
           setTimeout(() => {
-            navigate(`/watch/${res.data.data._id}`);
+        navigate(`/watch/${res.data.data._id}`);
           }, 2000);
         }, 3000);
       } else {
         // Presigned upload
         setUploadStatus('uploading');
-        const presignRes = await presignPut(videoFile.name, videoFile.type || 'application/octet-stream');
-        if (!presignRes.data?.url) {
-          throw new Error('Presign did not return a URL');
-        }
-        const putUrl = presignRes.data.url;
-        const publicUrl = presignRes.data.publicUrl;
+      const presignRes = await presignPut(videoFile.name, videoFile.type || 'application/octet-stream');
+      if (!presignRes.data?.url) {
+        throw new Error('Presign did not return a URL');
+      }
+      const putUrl = presignRes.data.url;
+      const publicUrl = presignRes.data.publicUrl;
 
         // Upload with progress
-        await axios.put(putUrl, videoFile, {
+      await axios.put(putUrl, videoFile, {
           headers: { 'Content-Type': videoFile.type || 'application/octet-stream' },
           onUploadProgress: (progressEvent) => {
             const percentCompleted = Math.round(
@@ -191,27 +191,27 @@ const Upload = () => {
             );
             setUploadProgress(percentCompleted);
           }
-        });
+      });
 
         setUploadProgress(100);
         setUploadStatus('processing');
         setProcessingProgress(50);
 
-        const createRes = await createVideoFromUrl({
-          title,
-          description,
-          category,
-          tags,
-          visibility,
-          videoUrl: publicUrl
-        });
+      const createRes = await createVideoFromUrl({
+        title,
+        description,
+        category,
+        tags,
+        visibility,
+        videoUrl: publicUrl
+      });
 
         setProcessingProgress(100);
         setUploadStatus('completed');
         setVideoLink(`/watch/${createRes.data.data._id}`);
         
         setTimeout(() => {
-          navigate(`/watch/${createRes.data.data._id}`);
+      navigate(`/watch/${createRes.data.data._id}`);
         }, 2000);
       }
     } catch (err) {
@@ -248,11 +248,11 @@ const Upload = () => {
           <span>Videos</span>
           <span className="breadcrumb-separator">›</span>
           <span className="breadcrumb-current">Add video</span>
-        </div>
+              </div>
         <button className="upload-another-btn">
           Upload another video
         </button>
-      </div>
+            </div>
 
       {/* Upload progress bar */}
       {(uploadStatus === 'uploading' || uploadStatus === 'processing') && (
@@ -280,7 +280,7 @@ const Upload = () => {
               }}
             />
           </div>
-        </div>
+              </div>
       )}
 
       <div className="upload-container">
@@ -313,35 +313,35 @@ const Upload = () => {
                 <>
                   <div className="form-section">
                     <h3 className="section-title">General</h3>
-                    
-                    <div className="form-group">
-                      <label htmlFor="title">Title</label>
-                      <input
-                        type="text"
-                        id="title"
-                        name="title"
-                        value={title}
-                        onChange={onChange}
-                        required
-                        maxLength="100"
-                        placeholder="Enter video title"
-                        className="form-input"
-                      />
-                    </div>
 
-                    <div className="form-group">
+          <div className="form-group">
+                      <label htmlFor="title">Title</label>
+            <input
+              type="text"
+              id="title"
+              name="title"
+              value={title}
+              onChange={onChange}
+              required
+              maxLength="100"
+              placeholder="Enter video title"
+                        className="form-input"
+            />
+          </div>
+
+          <div className="form-group">
                       <label htmlFor="description">Description</label>
-                      <textarea
-                        id="description"
-                        name="description"
-                        value={description}
-                        onChange={onChange}
+            <textarea
+              id="description"
+              name="description"
+              value={description}
+              onChange={onChange}
                         rows="4"
-                        maxLength="5000"
+              maxLength="5000"
                         placeholder="What's your video about?"
                         className="form-textarea"
-                      />
-                    </div>
+            />
+          </div>
                   </div>
 
                   <div className="form-section">
@@ -409,36 +409,36 @@ const Upload = () => {
                 <>
                   <div className="form-section">
                     <h3 className="section-title">Category</h3>
-                    <div className="form-group">
-                      <select
-                        id="category"
-                        name="category"
-                        value={category}
-                        onChange={onChange}
+            <div className="form-group">
+              <select
+                id="category"
+                name="category"
+                value={category}
+                onChange={onChange}
                         className="form-select"
-                      >
-                        <option value="Animation">Animation</option>
-                        <option value="Art and Design">Art & Design</option>
-                        <option value="Cameras and Drones">Cameras & Drones</option>
-                        <option value="Comedy">Comedy</option>
-                        <option value="Documentary">Documentary</option>
-                        <option value="Experimental">Experimental</option>
-                        <option value="Fashion">Fashion</option>
-                        <option value="Food">Food</option>
-                        <option value="Instructional">Instructional</option>
-                        <option value="Reporting and Journalism">Reporting & Journalism</option>
-                        <option value="Music">Music</option>
-                        <option value="Narrative">Narrative</option>
-                        <option value="Sports">Sports</option>
-                        <option value="Talks">Talks</option>
-                        <option value="Travel and Vlog">Travel & Vlog</option>
-                        <option value="Astrology and Astronomy">Astrology & Astronomy</option>
-                        <option value="Biology">Biology</option>
-                        <option value="Physics">Physics</option>
-                        <option value="Chemistry">Chemistry</option>
-                        <option value="Other">Other</option>
-                      </select>
-                    </div>
+              >
+                <option value="Animation">Animation</option>
+                <option value="Art and Design">Art & Design</option>
+                <option value="Cameras and Drones">Cameras & Drones</option>
+                <option value="Comedy">Comedy</option>
+                <option value="Documentary">Documentary</option>
+                <option value="Experimental">Experimental</option>
+                <option value="Fashion">Fashion</option>
+                <option value="Food">Food</option>
+                <option value="Instructional">Instructional</option>
+                <option value="Reporting and Journalism">Reporting & Journalism</option>
+                <option value="Music">Music</option>
+                <option value="Narrative">Narrative</option>
+                <option value="Sports">Sports</option>
+                <option value="Talks">Talks</option>
+                <option value="Travel and Vlog">Travel & Vlog</option>
+                <option value="Astrology and Astronomy">Astrology & Astronomy</option>
+                <option value="Biology">Biology</option>
+                <option value="Physics">Physics</option>
+                <option value="Chemistry">Chemistry</option>
+                <option value="Other">Other</option>
+              </select>
+            </div>
                   </div>
 
                   <div className="form-section">
@@ -463,33 +463,33 @@ const Upload = () => {
                 <>
                   <div className="form-section">
                     <h3 className="section-title">Visibility</h3>
-                    <div className="form-group">
-                      <select
-                        id="visibility"
-                        name="visibility"
-                        value={visibility}
-                        onChange={onChange}
+            <div className="form-group">
+              <select
+                id="visibility"
+                name="visibility"
+                value={visibility}
+                onChange={onChange}
                         className="form-select"
-                      >
-                        <option value="public">Public</option>
-                        <option value="unlisted">Unlisted</option>
-                        <option value="private">Private</option>
-                      </select>
-                    </div>
-                  </div>
+              >
+                <option value="public">Public</option>
+                <option value="unlisted">Unlisted</option>
+                <option value="private">Private</option>
+              </select>
+            </div>
+          </div>
 
                   <div className="form-section">
                     <h3 className="section-title">Upload Method</h3>
-                    <div className="form-group">
+          <div className="form-group">
                       <label className="checkbox-label">
-                        <input
-                          type="checkbox"
-                          checked={usePresigned}
-                          onChange={(e) => setUsePresigned(e.target.checked)}
+              <input
+                type="checkbox"
+                checked={usePresigned}
+                onChange={(e) => setUsePresigned(e.target.checked)}
                         />
                         <span>Use direct browser upload (presigned) for large files</span>
-                      </label>
-                    </div>
+            </label>
+          </div>
                   </div>
                 </>
               )}
@@ -501,20 +501,20 @@ const Upload = () => {
                 </div>
               )}
 
-              <div className="form-actions">
-                <button
-                  type="button"
-                  className="btn btn-secondary"
+          <div className="form-actions">
+            <button
+              type="button"
+              className="btn btn-secondary"
                   onClick={handleCancel}
                   disabled={uploadStatus === 'uploading' || uploadStatus === 'processing'}
-                >
+            >
                   {uploadStatus === 'uploading' || uploadStatus === 'processing' ? 'Cancel' : 'Delete video'}
-                </button>
-                <button
-                  type="submit"
-                  className="btn btn-primary"
+            </button>
+            <button
+              type="submit"
+              className="btn btn-primary"
                   disabled={loading || !videoFile || !title.trim() || uploadStatus === 'uploading' || uploadStatus === 'processing'}
-                >
+            >
                   {uploadStatus === 'completed' ? (
                     <>
                       <FiCheck size={18} />
