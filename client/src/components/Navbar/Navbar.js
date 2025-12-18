@@ -4,7 +4,7 @@ import { FiSearch, FiMenu, FiVideo, FiUser, FiLogOut, FiX, FiSun, FiMoon, FiPlus
 import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../context/ThemeContext';
 import { getSearchSuggestions } from '../../utils/api';
-import MoviaLogo from '../Logo/MoviaLogo';
+import XclubLogo from '../Logo/MoviaLogo';
 import './Navbar.css';
 
 const Navbar = ({ toggleSidebar }) => {
@@ -111,7 +111,7 @@ const Navbar = ({ toggleSidebar }) => {
           <FiMenu size={24} />
         </button>
         <Link to="/" className="logo">
-          <MoviaLogo size={28} showText={true} />
+          <XclubLogo size={28} showText={true} />
         </Link>
       </div>
 

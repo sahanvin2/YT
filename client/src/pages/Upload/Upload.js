@@ -13,8 +13,8 @@ const Upload = () => {
   const [activeTab, setActiveTab] = useState('information');
   const [formData, setFormData] = useState({
     title: '',
-    description: '',
-    category: 'Other',
+    description: ' ',
+    category: 'Indian',
     tags: '',
     visibility: 'public',
     playlist: ''
@@ -125,7 +125,7 @@ const Upload = () => {
         // Standard upload with progress tracking
     const data = new FormData();
     data.append('title', title);
-    data.append('description', description);
+    data.append('description', description || ' ');
     data.append('category', category);
     data.append('tags', tags);
     data.append('visibility', visibility);
@@ -417,25 +417,31 @@ const Upload = () => {
                 onChange={onChange}
                         className="form-select"
               >
-                <option value="Animation">Animation</option>
-                <option value="Art and Design">Art & Design</option>
-                <option value="Cameras and Drones">Cameras & Drones</option>
-                <option value="Comedy">Comedy</option>
-                <option value="Documentary">Documentary</option>
-                <option value="Experimental">Experimental</option>
-                <option value="Fashion">Fashion</option>
-                <option value="Food">Food</option>
-                <option value="Instructional">Instructional</option>
-                <option value="Reporting and Journalism">Reporting & Journalism</option>
-                <option value="Music">Music</option>
-                <option value="Narrative">Narrative</option>
-                <option value="Sports">Sports</option>
-                <option value="Talks">Talks</option>
-                <option value="Travel and Vlog">Travel & Vlog</option>
-                <option value="Astrology and Astronomy">Astrology & Astronomy</option>
-                <option value="Biology">Biology</option>
-                <option value="Physics">Physics</option>
-                <option value="Chemistry">Chemistry</option>
+                <option value="Indian">Indian</option>
+                <option value="Milfs">Milfs</option>
+                <option value="Big Cock">Big Cock</option>
+                <option value="Step Mom">Step Mom</option>
+                <option value="Teen">Teen</option>
+                <option value="Lesbian">Lesbian</option>
+                <option value="Latina">Latina</option>
+                <option value="Blowjobs">Blowjobs</option>
+                <option value="Anal">Anal</option>
+                <option value="Big Tits">Big Tits</option>
+                <option value="Big Ass">Big Ass</option>
+                <option value="Hardcore">Hardcore</option>
+                <option value="POV">POV</option>
+                <option value="Amateur">Amateur</option>
+                <option value="Ebony">Ebony</option>
+                <option value="Asian">Asian</option>
+                <option value="Mature">Mature</option>
+                <option value="Creampie">Creampie</option>
+                <option value="Cumshot">Cumshot</option>
+                <option value="Blonde">Blonde</option>
+                <option value="Brunette">Brunette</option>
+                <option value="Threesome">Threesome</option>
+                <option value="Gangbang">Gangbang</option>
+                <option value="Interracial">Interracial</option>
+                <option value="HD Porn">HD Porn</option>
                 <option value="Other">Other</option>
               </select>
             </div>

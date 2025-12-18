@@ -12,13 +12,13 @@ export const useTheme = () => {
 
 export const ThemeProvider = ({ children }) => {
   const [theme, setTheme] = useState(() => {
-    const savedTheme = localStorage.getItem('movia-theme');
+    const savedTheme = localStorage.getItem('xclub-theme');
     return savedTheme || 'dark';
   });
 
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', theme);
-    localStorage.setItem('movia-theme', theme);
+    localStorage.setItem('xclub-theme', theme);
   }, [theme]);
 
   const toggleTheme = () => {

@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
-import MoviaLogo from '../../components/Logo/MoviaLogo';
+import XclubLogo from '../../components/Logo/MoviaLogo';
 import './Auth.css';
 
 const Register = () => {
@@ -56,8 +56,8 @@ const Register = () => {
     <div className="auth-page">
       <div className="auth-container">
         <div className="auth-header">
-          <MoviaLogo size={28} showText={true} />
-          <h1>Join Movia</h1>
+          <XclubLogo size={28} showText={true} />
+          <h1>Join Xclub</h1>
           <p>Create your account</p>
         </div>
 

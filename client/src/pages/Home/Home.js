@@ -22,14 +22,14 @@ const Home = ({ mode }) => {
   const navigate = useNavigate();
 
   const topCategories = [
-    { id: 'gaming', label: 'Gaming', icon: FiMonitor, color: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)' },
-    { id: 'music', label: 'Music', icon: FiMusic, color: 'linear-gradient(135deg, #f093fb 0%, #f5576c 100%)' },
-    { id: 'sci-fi', label: 'Sci-Fi', icon: FiTarget, color: 'linear-gradient(135deg, #4facfe 0%, #00f2fe 100%)' },
-    { id: 'comedy', label: 'Comedy', icon: FiSmile, color: 'linear-gradient(135deg, #fa709a 0%, #fee140 100%)' },
-    { id: 'tech', label: 'Tech', icon: FiRadio, color: 'linear-gradient(135deg, #30cfd0 0%, #330867 100%)' },
-    { id: 'creative', label: 'Creative', icon: FiCompass, color: 'linear-gradient(135deg, #a8edea 0%, #fed6e3 100%)' },
-    { id: 'live', label: 'Live', icon: FiTv, color: 'linear-gradient(135deg, #ff9a9e 0%, #fecfef 100%)' },
-    { id: 'deep-focus', label: 'Deep Focus', icon: FiZap, color: 'linear-gradient(135deg, #ffecd2 0%, #fcb69f 100%)' }
+    { id: 'Indian', label: 'Indian', icon: FiCompass, color: 'linear-gradient(135deg, #FF6B35 0%, #F7931E 100%)' },
+    { id: 'Milfs', label: 'Milfs', icon: FiMusic, color: 'linear-gradient(135deg, #E94057 0%, #F27121 100%)' },
+    { id: 'Big Cock', label: 'Big Cock', icon: FiZap, color: 'linear-gradient(135deg, #8E2DE2 0%, #4A00E0 100%)' },
+    { id: 'Teen', label: 'Teen', icon: FiSmile, color: 'linear-gradient(135deg, #ff0844 0%, #ffb199 100%)' },
+    { id: 'Lesbian', label: 'Lesbian', icon: FiRadio, color: 'linear-gradient(135deg, #fc6767 0%, #ec008c 100%)' },
+    { id: 'Latina', label: 'Latina', icon: FiCompass, color: 'linear-gradient(135deg, #fdbb2d 0%, #22c1c3 100%)' },
+    { id: 'Anal', label: 'Anal', icon: FiTv, color: 'linear-gradient(135deg, #ff9a9e 0%, #fecfef 100%)' },
+    { id: 'POV', label: 'POV', icon: FiTarget, color: 'linear-gradient(135deg, #fa8bff 0%, #2bff88 100%)' }
   ];
 
   useEffect(() => {

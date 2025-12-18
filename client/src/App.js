@@ -28,6 +28,21 @@ function App() {
     setSidebarOpen(!sidebarOpen);
   };
 
+  // Load popunder ad once when app starts
+  useEffect(() => {
+    const script = document.createElement('script');
+    script.type = 'text/javascript';
+    script.src = 'https://pl28286630.effectivegatecpm.com/d1/48/b5/d148b54051a7b565d24645ac34f56899.js';
+    script.async = true;
+    document.body.appendChild(script);
+
+    return () => {
+      if (script.parentNode) {
+        document.body.removeChild(script);
+      }
+    };
+  }, []);
+
   // Detect mobile device and auto-minimize sidebar
   useEffect(() => {
     const checkMobile = () => {

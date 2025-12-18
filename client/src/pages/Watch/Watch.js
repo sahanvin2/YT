@@ -48,6 +48,9 @@ const Watch = () => {
   const [videoFilter, setVideoFilter] = useState('all'); // 'all', 'from', 'related'
   const [isSaved, setIsSaved] = useState(false);
   const [showDescription, setShowDescription] = useState(false);
+  const [lastAdTime, setLastAdTime] = useState(0);
+  const [videoDuration, setVideoDuration] = useState(0);
+  const [needsRecurringAd, setNeedsRecurringAd] = useState(false);
   const [playbackRate, setPlaybackRate] = useState(1);
   const [pipEnabled, setPipEnabled] = useState(false);
   const [showSpeedMenu, setShowSpeedMenu] = useState(false);
@@ -320,7 +323,7 @@ const Watch = () => {
 
   // Track video progress to count views only when actually watched
   const handleProgress = (state) => {
-    if (!video || viewCountedRef.current) return;
+    if (!video) return;
 
     const { playedSeconds } = state;
     const videoDuration = video.duration || 0;
@@ -333,11 +336,37 @@ const Watch = () => {
     // Count view if:
     // 1. User watched at least 30 seconds, OR
     // 2. User watched at least 50% of the video
-    const watched30Seconds = maxWatchedDurationRef.current >= 30;
-    const watched50Percent = videoDuration > 0 && (maxWatchedDurationRef.current / videoDuration) >= 0.5;
+    if (!viewCountedRef.current) {
+      const watched30Seconds = maxWatchedDurationRef.current >= 30;
+      const watched50Percent = videoDuration > 0 && (maxWatchedDurationRef.current / videoDuration) >= 0.5;
 
-    if (watched30Seconds || watched50Percent) {
-      incrementView();
+      if (watched30Seconds || watched50Percent) {
+        incrementView();
+      }
+    }
+
+    // Show recurring smartlink ad every 3 minutes for videos longer than 3 minutes
+    if (videoDuration > 180 && adConfig.smartlinkEnabled && adConfig.smartlinkUrl) {
+      const currentMinuteMark = Math.floor(playedSeconds / 180); // Every 180 seconds (3 minutes)
+      const lastAdMinuteMark = Math.floor(lastAdTime / 180);
+      
+      // Pause video at 3-minute mark and wait for user to click play
+      if (currentMinuteMark > lastAdMinuteMark && currentMinuteMark > 0 && !needsRecurringAd) {
+        setLastAdTime(playedSeconds);
+        setNeedsRecurringAd(true);
+        
+        // Pause video
+        if (playerRef.current) {
+          try {
+            const player = playerRef.current.getInternalPlayer();
+            if (player && typeof player.pause === 'function') {
+              player.pause();
+            }
+          } catch (error) {
+            console.error('Error pausing video for recurring ad:', error);
+          }
+        }
+      }
     }
   };
 
@@ -557,60 +586,91 @@ const Watch = () => {
                 // Hide sidebar when video starts playing
                 window.dispatchEvent(new CustomEvent('collapseSidebar'));
                 
-                // Advertisement functionality commented out - not needed
-                // // Intercept play event - show smartlink ad first
-                // // Check if ad was already shown for this specific video ID
-                // const adShownForThisVideo = sessionStorage.getItem(`adShown_${id}`) === 'true';
+                // Check if recurring ad needs to be shown
+                if (needsRecurringAd && adConfig.smartlinkEnabled && adConfig.smartlinkUrl) {
+                  // Pause video immediately
+                  if (playerRef.current) {
+                    try {
+                      const player = playerRef.current.getInternalPlayer();
+                      if (player && typeof player.pause === 'function') {
+                        player.pause();
+                      }
+                    } catch (error) {
+                      console.error('Error pausing video:', error);
+                    }
+                  }
+                  
+                  // Open smartlink ad when user tries to play
+                  openSmartlink(() => {
+                    // Ad closed - allow video to play
+                    setNeedsRecurringAd(false);
+                    setTimeout(() => {
+                      if (playerRef.current && video) {
+                        try {
+                          const player = playerRef.current.getInternalPlayer();
+                          if (player && typeof player.play === 'function') {
+                            player.play().catch(err => {
+                              console.error('Error resuming video after recurring ad:', err);
+                            });
+                          }
+                        } catch (error) {
+                          console.error('Error accessing player after recurring ad:', error);
+                        }
+                      }
+                    }, 300);
+                  });
+                  return;
+                }
                 
-                // if (!adShownForThisVideo && !adShown && adConfig.smartlinkEnabled && adConfig.smartlinkUrl) {
-                //   setShouldPlayAfterAd(true);
-                //   // Pause video immediately
-                //   if (playerRef.current) {
-                //     try {
-                //       const player = playerRef.current.getInternalPlayer();
-                //       if (player && typeof player.pause === 'function') {
-                //         player.pause();
-                //       }
-                //     } catch (error) {
-                //       console.error('Error pausing video:', error);
-                //     }
-                //   }
-                //   // Open smartlink ad
-                //   openSmartlink(() => {
-                //     // Ad closed/completed - mark as watched for this video and play video
-                //     setAdShown(true);
-                //     sessionStorage.setItem(`adShown_${id}`, 'true'); // Store per video ID
-                //     setVideoPlayed(true);
-                //     setShouldPlayAfterAd(false);
-                //     setTimeout(() => {
-                //       if (playerRef.current && video) {
-                //         try {
-                //           const player = playerRef.current.getInternalPlayer();
-                //           if (player && typeof player.play === 'function') {
-                //             player.play().catch(err => {
-                //               console.error('Error playing video after ad:', err);
-                //               // If play fails, try reloading
-                //               if (playerRef.current) {
-                //                 const currentTime = playerRef.current.getCurrentTime();
-                //                 playerRef.current.seekTo(currentTime || 0);
-                //               }
-                //             });
-                //           }
-                //         } catch (error) {
-                //           console.error('Error accessing player after ad:', error);
-                //         }
-                //       }
-                //     }, 300);
-                //   });
-                // } else {
-                //   // Ad already shown for this video or disabled - play normally
-                //   setVideoPlayed(true);
-                //   setShouldPlayAfterAd(false);
-                // }
+                // Intercept play event - show smartlink ad first
+                // Check if ad was already shown for this specific video ID
+                const adShownForThisVideo = sessionStorage.getItem(`adShown_${id}`) === 'true';
                 
-                // Play video normally without ad
-                setVideoPlayed(true);
-                setShouldPlayAfterAd(false);
+                if (!adShownForThisVideo && !adShown && adConfig.smartlinkEnabled && adConfig.smartlinkUrl) {
+                  setShouldPlayAfterAd(true);
+                  // Pause video immediately
+                  if (playerRef.current) {
+                    try {
+                      const player = playerRef.current.getInternalPlayer();
+                      if (player && typeof player.pause === 'function') {
+                        player.pause();
+                      }
+                    } catch (error) {
+                      console.error('Error pausing video:', error);
+                    }
+                  }
+                  // Open smartlink ad
+                  openSmartlink(() => {
+                    // Ad closed/completed - mark as watched for this video and play video
+                    setAdShown(true);
+                    sessionStorage.setItem(`adShown_${id}`, 'true'); // Store per video ID
+                    setVideoPlayed(true);
+                    setShouldPlayAfterAd(false);
+                    setTimeout(() => {
+                      if (playerRef.current && video) {
+                        try {
+                          const player = playerRef.current.getInternalPlayer();
+                          if (player && typeof player.play === 'function') {
+                            player.play().catch(err => {
+                              console.error('Error playing video after ad:', err);
+                              // If play fails, try reloading
+                              if (playerRef.current) {
+                                const currentTime = playerRef.current.getCurrentTime();
+                                playerRef.current.seekTo(currentTime || 0);
+                              }
+                            });
+                          }
+                        } catch (error) {
+                          console.error('Error accessing player after ad:', error);
+                        }
+                      }
+                    }, 300);
+                  });
+                } else {
+                  // Ad already shown for this video or disabled - play normally
+                  setVideoPlayed(true);
+                  setShouldPlayAfterAd(false);
+                }
               }}
               onError={(e) => {
                 console.error('ReactPlayer error:', e);

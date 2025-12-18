@@ -1,7 +1,7 @@
 import React from 'react';
-import { FiPlay } from 'react-icons/fi';
+import { FiX } from 'react-icons/fi';
 
-const MoviaLogo = ({ size = 24, showText = true }) => {
+const XclubLogo = ({ size = 24, showText = true }) => {
     return (
         <div className="logo" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
             <div className="logo-icon" style={{
@@ -14,7 +14,7 @@ const MoviaLogo = ({ size = 24, showText = true }) => {
                 justifyContent: 'center',
                 boxShadow: '0 0 20px rgba(204, 255, 0, 0.15)'
             }}>
-                <FiPlay size={size * 0.625} color="#050308" style={{ marginLeft: '2px' }} fill="#050308" />
+                <FiX size={size * 0.625} color="#050308" style={{ strokeWidth: 3 }} />
             </div>
             {showText && (
                 <span style={{
@@ -24,11 +24,11 @@ const MoviaLogo = ({ size = 24, showText = true }) => {
                     letterSpacing: '-0.5px',
                     fontFamily: "'Space Grotesk', sans-serif"
                 }}>
-                    MOVIA
+                    XCLUB
                 </span>
             )}
         </div>
     );
 };
 
-export default MoviaLogo;
+export default XclubLogo;

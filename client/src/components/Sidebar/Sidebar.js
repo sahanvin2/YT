@@ -23,7 +23,14 @@ import {
   FiMessageSquare,
   FiMail,
   FiHeart,
-  FiInfo
+  FiInfo,
+  FiStar,
+  FiSun,
+  FiCircle,
+  FiTriangle,
+  FiGlobe,
+  FiEye,
+  FiMoon
 } from 'react-icons/fi';
 import { useAuth } from '../../context/AuthContext';
 import './Sidebar.css';
@@ -60,20 +67,25 @@ const Sidebar = ({ isOpen }) => {
     { path: '/saved', icon: FiClock, label: 'Watch Later' }
   ];
 
-  const projectLinks = [
-    { path: '#', icon: FiMail, label: 'Contact Us' },
-    { path: '#', icon: FiHeart, label: 'Support Us' },
-    { path: '#', icon: FiSmile, label: 'Team' },
-    { path: '#', icon: FiInfo, label: 'About Movia' }
-  ];
-
   const categories = [
-    { path: '/category/Music', icon: FiMusic, label: 'Music' },
-    { path: '/category/Gaming', icon: FiMonitor, label: 'Gaming' },
-    { path: '/category/Education', icon: FiBook, label: 'Education' },
-    { path: '/category/Entertainment', icon: FiSmile, label: 'Entertainment' },
-    { path: '/category/News', icon: FiRadio, label: 'News' },
-    { path: '/category/Sports', icon: FiTarget, label: 'Sports' }
+    { path: '/category/Indian', icon: FiCompass, label: 'Indian' },
+    { path: '/category/Milfs', icon: FiHeart, label: 'Milfs' },
+    { path: '/category/Big Cock', icon: FiZap, label: 'Big Cock' },
+    { path: '/category/Step Mom', icon: FiUsers, label: 'Step Mom' },
+    { path: '/category/Granny', icon: FiStar, label: 'Granny' },
+    { path: '/category/Blonde', icon: FiSun, label: 'Blonde' },
+    { path: '/category/Big Tits', icon: FiCircle, label: 'Big Tits' },
+    { path: '/category/Anal', icon: FiTriangle, label: 'Anal' },
+    { path: '/category/Hardcore', icon: FiZap, label: 'Hardcore' },
+    { path: '/category/Ebony', icon: FiMoon, label: 'Ebony' },
+    { path: '/category/Asia', icon: FiGlobe, label: 'Asia' },
+    { path: '/category/Teen', icon: FiHeart, label: 'Teen' },
+    { path: '/category/Lesbian', icon: FiUsers, label: 'Lesbian' },
+    { path: '/category/Latina', icon: FiGlobe, label: 'Latina' },
+    { path: '/category/Blowjobs', icon: FiCircle, label: 'Blowjobs' },
+    { path: '/category/Amateur', icon: FiVideo, label: 'Amateur' },
+    { path: '/category/POV', icon: FiEye, label: 'POV' },
+    { path: '/category/HD Porn', icon: FiVideo, label: 'HD Porn' }
   ];
 
   const isActive = (path) => {
@@ -156,27 +168,10 @@ const Sidebar = ({ isOpen }) => {
             </Link>
           ))}
         </div>
-        <div className="sidebar-divider"></div>
-
-        {/* Section 5: Project */}
-        <div className="sidebar-section">
-          <div className="sidebar-title">Project</div>
-          {projectLinks.map((link) => (
-            <Link
-              key={link.path}
-              to={link.path}
-              className={`sidebar-link ${isActive(link.path)}`}
-              onClick={handleLinkClick}
-            >
-              <link.icon size={20} />
-              <span>{link.label}</span>
-            </Link>
-          ))}
-        </div>
       </div>
 
       <div className="sidebar-footer">
-        <p>&copy; 2025 Movia Inc.</p>
+        <p>&copy; 2025 Xclub Inc.</p>
         <p>The Future of Stream.</p>
       </div>
     </aside>

@@ -1,7 +1,7 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
-  <!-- Background circle -->
-  <circle cx="32" cy="32" r="30" fill="#ff0000"/>
-  <!-- Play icon -->
-  <path d="M24 20 L24 44 L44 32 Z" fill="white"/>
+  <!-- Background rounded square -->
+  <rect width="64" height="64" rx="10" fill="#CCFF00"/>
+  <!-- X mark -->
+  <path d="M 18 18 L 46 46 M 46 18 L 18 46" stroke="#050308" stroke-width="6" stroke-linecap="round"/>
 </svg>
 
