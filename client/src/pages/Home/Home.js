@@ -320,7 +320,7 @@ const Home = ({ mode }) => {
         <div className="trending-videos-section">
           <h3 className="section-title">
             <FiZap size={24} />
-            Trending in the Void
+            Trending in Videos
           </h3>
           <div className="trending-videos-grid">
             {allTrendingVideos.slice(0, displayedVideosCount).map((video) => (

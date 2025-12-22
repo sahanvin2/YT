@@ -668,10 +668,10 @@ const Upload = () => {
                           />
                           <label htmlFor="thumbnail" className="cover-upload-label">
                             <FiImage size={32} />
-                            <span>Upload cover (Optional)</span>
+                            <span>Upload Custom Thumbnail</span>
                           </label>
                           <p className="cover-hint">
-                            Upload a custom thumbnail now or auto-generate after processing
+                            Choose your own thumbnail from your device. Recommended: 1280x720px (16:9) or 1080x1920px (9:16)
                           </p>
                         </div>
                       )}

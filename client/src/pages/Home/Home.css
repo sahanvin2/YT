@@ -246,7 +246,7 @@
 
 .featured-video-item {
   flex-shrink: 0;
-  width: 280px;
+  width: 200px;
   cursor: pointer;
   transition: transform 0.2s;
   position: relative;
@@ -261,7 +261,7 @@
 .featured-video-thumbnail {
   position: relative;
   width: 100%;
-  aspect-ratio: 16 / 9;
+  aspect-ratio: 9 / 16;
   border-radius: 12px;
   overflow: visible;
   background-color: var(--voidLighter);
