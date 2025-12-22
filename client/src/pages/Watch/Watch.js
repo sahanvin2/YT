@@ -47,7 +47,6 @@ const Watch = () => {
   const [isSaved, setIsSaved] = useState(false);
   const [showDescription, setShowDescription] = useState(false);
   const [lastAdTime, setLastAdTime] = useState(0);
-  const [waitingForAdPlay, setWaitingForAdPlay] = useState(false);
   const [videoDuration, setVideoDuration] = useState(0);
   const [playbackRate, setPlaybackRate] = useState(1);
   const [pipEnabled, setPipEnabled] = useState(false);
@@ -65,7 +64,6 @@ const Watch = () => {
     watchedDurationRef.current = 0;
     maxWatchedDurationRef.current = 0;
     setLastAdTime(0);
-    setWaitingForAdPlay(false);
     
     // Clear sessionStorage for this video ID
     if (id) {
@@ -287,45 +285,7 @@ const Watch = () => {
     }
   };
 
-  // Handle play button click - show ads if waiting for ad
-  const handlePlayClick = () => {
-    if (waitingForAdPlay) {
-      // Open all 3 smartlink ads simultaneously in new tabs
-      const adUrls = [
-        'https://ferntravelleddeduct.com/ngw7f9w7ar?key=1d03ce84598475a5c0ae7b0e970be386',
-        'https://ferntravelleddeduct.com/tnku73k6e8?key=447538fcc223d88734b4f7f5f5be2b54',
-        'https://ferntravelleddeduct.com/gtrc1veb7i?key=b0b98b004d66f73292231e7413bd2b3d'
-      ];
-      
-      console.log('Opening 3 ads...');
-      
-      // Open all 3 ads with larger delay to avoid popup blocking
-      adUrls.forEach((url, index) => {
-        setTimeout(() => {
-          console.log(`Opening ad ${index + 1}:`, url);
-          const newWindow = window.open(url, `_blank_ad_${index}`);
-          if (!newWindow || newWindow.closed || typeof newWindow.closed == 'undefined') {
-            console.warn(`Ad ${index + 1} may have been blocked by popup blocker`);
-          } else {
-            console.log(`Ad ${index + 1} opened successfully`);
-          }
-        }, index * 300); // Increased delay to 300ms between each ad
-      });
-      
-      // Allow video to play after opening ads
-      setWaitingForAdPlay(false);
-      
-      // Auto-resume video after short delay
-      setTimeout(() => {
-        if (playerRef.current) {
-          const player = playerRef.current.getInternalPlayer();
-          if (player && typeof player.play === 'function') {
-            player.play().catch(err => console.error('Error resuming video after ads:', err));
-          }
-        }
-      }, 1000); // Increased delay to allow ads to open
-    }
-  };
+
 
   const fetchRelatedVideos = async (category) => {
     try {
@@ -383,16 +343,16 @@ const Watch = () => {
       }
     }
 
-    // Pause video every 10 minutes for ads - user must click play to watch ads and continue
-    if (videoDuration > 600 && !waitingForAdPlay) {
-      const currentMinuteMark = Math.floor(playedSeconds / 600); // Every 600 seconds (10 minutes)
-      const lastAdMinuteMark = Math.floor(lastAdTime / 600);
+    // Auto-pause and show 1 random ad every 5 minutes
+    if (videoDuration > 300) {
+      const currentMinuteMark = Math.floor(playedSeconds / 300); // Every 300 seconds (5 minutes)
+      const lastAdMinuteMark = Math.floor(lastAdTime / 300);
       
-      // Pause video when crossing a 10-minute mark (at 10:00, 20:00, 30:00, etc.)
+      // Show ad when crossing a 5-minute mark (at 5:00, 10:00, 15:00, etc.)
       if (currentMinuteMark > lastAdMinuteMark && currentMinuteMark > 0) {
-        console.log(`Pausing for ads at ${Math.floor(playedSeconds / 60)}:${Math.floor(playedSeconds % 60).toString().padStart(2, '0')}...`);
-        setWaitingForAdPlay(true);
+        console.log(`Opening ad at ${Math.floor(playedSeconds / 60)}:${Math.floor(playedSeconds % 60).toString().padStart(2, '0')}...`);
         setLastAdTime(playedSeconds);
+        
         // Pause the video
         if (playerRef.current) {
           const player = playerRef.current.getInternalPlayer();
@@ -400,6 +360,16 @@ const Watch = () => {
             player.pause();
           }
         }
+        
+        // Pick 1 random ad from the 3 URLs
+        const adUrls = [
+          'https://ferntravelleddeduct.com/ngw7f9w7ar?key=1d03ce84598475a5c0ae7b0e970be386',
+          'https://ferntravelleddeduct.com/tnku73k6e8?key=447538fcc223d88734b4f7f5f5be2b54',
+          'https://ferntravelleddeduct.com/gtrc1veb7i?key=b0b98b004d66f73292231e7413bd2b3d'
+        ];
+        const randomAd = adUrls[Math.floor(Math.random() * adUrls.length)];
+        console.log('Opening random ad:', randomAd);
+        window.open(randomAd, '_blank');
       }
     }
   };
@@ -660,12 +630,6 @@ const Watch = () => {
                 pip={pipEnabled}
                 onProgress={handleProgress}
                 onPlay={() => {
-                  // If waiting for ad, trigger ad first
-                  if (waitingForAdPlay) {
-                    handlePlayClick();
-                    return;
-                  }
-                  
                   window.dispatchEvent(new CustomEvent('collapseSidebar'));
                   const smartlinkShown = sessionStorage.getItem(`smartlinkShown_${id}`);
                   if (!smartlinkShown && adConfig.smartlinkEnabled) {
@@ -772,20 +736,6 @@ const Watch = () => {
                   }
                 }}
               />
-            )}
-            
-            {/* Ad Pause Overlay */}
-            {waitingForAdPlay && (
-              <div className="ad-overlay">
-                <div className="ad-overlay-content">
-                  <div className="ad-icon">▶️</div>
-                  <h3>Time for a short break</h3>
-                  <p>Click play to watch ads and continue watching</p>
-                  <button className="ad-play-button" onClick={handlePlayClick}>
-                    ▶ Watch Ads & Continue
-                  </button>
-                </div>
-              </div>
             )}
           </div>
 
