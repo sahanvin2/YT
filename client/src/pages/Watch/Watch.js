@@ -47,6 +47,9 @@ const Watch = () => {
   const [isSaved, setIsSaved] = useState(false);
   const [showDescription, setShowDescription] = useState(false);
   const [lastAdTime, setLastAdTime] = useState(0);
+  const [isPlayingAd, setIsPlayingAd] = useState(false);
+  const [currentTime, setCurrentTime] = useState(0);
+  const adCheckIntervalRef = useRef(null);
   const [videoDuration, setVideoDuration] = useState(0);
   const [playbackRate, setPlaybackRate] = useState(1);
   const [pipEnabled, setPipEnabled] = useState(false);
@@ -64,6 +67,20 @@ const Watch = () => {
     watchedDurationRef.current = 0;
     maxWatchedDurationRef.current = 0;
     setLastAdTime(0);
+    setIsPlayingAd(false);
+    setCurrentTime(0);
+    
+    // Clear any existing ad check interval
+    if (adCheckIntervalRef.current) {
+      clearInterval(adCheckIntervalRef.current);
+      adCheckIntervalRef.current = null;
+    }
+    
+    // Clear any existing ad check interval
+    if (adCheckIntervalRef.current) {
+      clearInterval(adCheckIntervalRef.current);
+      adCheckIntervalRef.current = null;
+    }
     
     // Clear sessionStorage for this video ID
     if (id) {
@@ -77,6 +94,13 @@ const Watch = () => {
       }
     };
     loadVideo();
+    
+    // Cleanup on unmount
+    return () => {
+      if (adCheckIntervalRef.current) {
+        clearInterval(adCheckIntervalRef.current);
+      }
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
 
@@ -110,6 +134,51 @@ const Watch = () => {
     }
     setFilteredVideos(filtered);
   }, [videoFilter, relatedVideos, video]);
+
+  // Monitor video progress for mid-roll ads every 3 minutes
+  const handleProgress = (state) => {
+    if (isPlayingAd) return; // Don't track while ad is playing
+    
+    const playedSeconds = Math.floor(state.playedSeconds);
+    setCurrentTime(playedSeconds);
+    
+    // Check if 3 minutes (180 seconds) have passed since last ad
+    const timeSinceLastAd = playedSeconds - lastAdTime;
+    
+    // Show ad every 3 minutes (180 seconds)
+    if (timeSinceLastAd >= 180 && playedSeconds > 0) {
+      showMidRollAd(playedSeconds);
+    }
+  };
+
+  const showMidRollAd = (currentPlayTime) => {
+    if (isPlayingAd) return;
+    
+    setIsPlayingAd(true);
+    setLastAdTime(currentPlayTime);
+    
+    // Pause the video
+    if (playerRef.current) {
+      const player = playerRef.current.getInternalPlayer();
+      if (player && typeof player.pause === 'function') {
+        player.pause();
+      }
+    }
+    
+    // Open smartlink ad
+    openSmartlink(() => {
+      // Resume video after ad
+      setIsPlayingAd(false);
+      if (playerRef.current) {
+        const player = playerRef.current.getInternalPlayer();
+        if (player && typeof player.play === 'function') {
+          player.play().catch(err => {
+            console.error('Error resuming video after ad:', err);
+          });
+        }
+      }
+    });
+  };
 
   // Check if user returned from smartlink redirect
   useEffect(() => {
@@ -718,9 +787,20 @@ const Watch = () => {
                 }}
               />
             )}
+            
+            {/* Ad Playing Overlay */}
+            {isPlayingAd && (
+              <div className="ad-overlay">
+                <div className="ad-overlay-content">
+                  <div className="ad-spinner"></div>
+                  <p>Advertisement will play now</p>
+                  <p className="ad-subtitle">Video will resume shortly</p>
+                </div>
+              </div>
+            )}
           </div>
 
-          <div className="video-info-section">
+          <div className="video-info-section">{
             <h1 className="video-title">{video.title}</h1>
 
             <div className="video-meta-row">
