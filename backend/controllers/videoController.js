@@ -55,7 +55,17 @@ exports.getVideos = async (req, res, next) => {
 
     const query = { visibility: 'public' };
     if (category && category !== 'all') {
-      query.category = category;
+      // Check if category is a main category (movies, series, documentaries, animation)
+      const mainCategories = ['movies', 'series', 'documentaries', 'animation'];
+      if (mainCategories.includes(category)) {
+        query.mainCategory = category;
+      } else {
+        // Otherwise it's a genre, search in primaryGenre or secondaryGenres
+        query.$or = [
+          { primaryGenre: category },
+          { secondaryGenres: category }
+        ];
+      }
     }
     
     // Filter for clips (videos under 2 minutes / less than 120 seconds)
