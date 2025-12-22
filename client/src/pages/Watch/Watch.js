@@ -343,23 +343,15 @@ const Watch = () => {
       }
     }
 
-    // Auto-pause and show 1 random ad every 5 minutes
+    // Auto-open 1 random ad every 5 minutes (video continues playing)
     if (videoDuration > 300) {
       const currentMinuteMark = Math.floor(playedSeconds / 300); // Every 300 seconds (5 minutes)
       const lastAdMinuteMark = Math.floor(lastAdTime / 300);
       
       // Show ad when crossing a 5-minute mark (at 5:00, 10:00, 15:00, etc.)
       if (currentMinuteMark > lastAdMinuteMark && currentMinuteMark > 0) {
-        console.log(`Opening ad at ${Math.floor(playedSeconds / 60)}:${Math.floor(playedSeconds % 60).toString().padStart(2, '0')}...`);
+        console.log(`Auto-opening ad at ${Math.floor(playedSeconds / 60)}:${Math.floor(playedSeconds % 60).toString().padStart(2, '0')}...`);
         setLastAdTime(playedSeconds);
-        
-        // Pause the video
-        if (playerRef.current) {
-          const player = playerRef.current.getInternalPlayer();
-          if (player && typeof player.pause === 'function') {
-            player.pause();
-          }
-        }
         
         // Pick 1 random ad from the 3 URLs
         const adUrls = [
