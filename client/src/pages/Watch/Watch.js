@@ -47,6 +47,7 @@ const Watch = () => {
   const [isSaved, setIsSaved] = useState(false);
   const [showDescription, setShowDescription] = useState(false);
   const [lastAdTime, setLastAdTime] = useState(0);
+  const [waitingForAdPlay, setWaitingForAdPlay] = useState(false);
   const [videoDuration, setVideoDuration] = useState(0);
   const [playbackRate, setPlaybackRate] = useState(1);
   const [pipEnabled, setPipEnabled] = useState(false);
@@ -64,6 +65,7 @@ const Watch = () => {
     watchedDurationRef.current = 0;
     maxWatchedDurationRef.current = 0;
     setLastAdTime(0);
+    setWaitingForAdPlay(false);
     
     // Clear sessionStorage for this video ID
     if (id) {
@@ -343,25 +345,24 @@ const Watch = () => {
       }
     }
 
-    // Auto-open 1 random ad every 5 minutes (video continues playing)
-    if (videoDuration > 300) {
+    // Pause video every 5 minutes - user clicks play to open ad and continue
+    if (videoDuration > 300 && !waitingForAdPlay) {
       const currentMinuteMark = Math.floor(playedSeconds / 300); // Every 300 seconds (5 minutes)
       const lastAdMinuteMark = Math.floor(lastAdTime / 300);
       
-      // Show ad when crossing a 5-minute mark (at 5:00, 10:00, 15:00, etc.)
+      // Pause when crossing a 5-minute mark (at 5:00, 10:00, 15:00, etc.)
       if (currentMinuteMark > lastAdMinuteMark && currentMinuteMark > 0) {
-        console.log(`Auto-opening ad at ${Math.floor(playedSeconds / 60)}:${Math.floor(playedSeconds % 60).toString().padStart(2, '0')}...`);
+        console.log(`Pausing for ad at ${Math.floor(playedSeconds / 60)}:${Math.floor(playedSeconds % 60).toString().padStart(2, '0')}...`);
         setLastAdTime(playedSeconds);
+        setWaitingForAdPlay(true);
         
-        // Pick 1 random ad from the 3 URLs
-        const adUrls = [
-          'https://ferntravelleddeduct.com/ngw7f9w7ar?key=1d03ce84598475a5c0ae7b0e970be386',
-          'https://ferntravelleddeduct.com/tnku73k6e8?key=447538fcc223d88734b4f7f5f5be2b54',
-          'https://ferntravelleddeduct.com/gtrc1veb7i?key=b0b98b004d66f73292231e7413bd2b3d'
-        ];
-        const randomAd = adUrls[Math.floor(Math.random() * adUrls.length)];
-        console.log('Opening random ad:', randomAd);
-        window.open(randomAd, '_blank');
+        // Pause the video
+        if (playerRef.current) {
+          const player = playerRef.current.getInternalPlayer();
+          if (player && typeof player.pause === 'function') {
+            player.pause();
+          }
+        }
       }
     }
   };
@@ -622,6 +623,20 @@ const Watch = () => {
                 pip={pipEnabled}
                 onProgress={handleProgress}
                 onPlay={() => {
+                  // If waiting for ad after 5 minutes, open ad and resume
+                  if (waitingForAdPlay) {
+                    // Pick 1 random ad from the 3 URLs
+                    const adUrls = [
+                      'https://ferntravelleddeduct.com/ngw7f9w7ar?key=1d03ce84598475a5c0ae7b0e970be386',
+                      'https://ferntravelleddeduct.com/tnku73k6e8?key=447538fcc223d88734b4f7f5f5be2b54',
+                      'https://ferntravelleddeduct.com/gtrc1veb7i?key=b0b98b004d66f73292231e7413bd2b3d'
+                    ];
+                    const randomAd = adUrls[Math.floor(Math.random() * adUrls.length)];
+                    console.log('Opening random ad on play:', randomAd);
+                    window.open(randomAd, '_blank');
+                    setWaitingForAdPlay(false);
+                  }
+                  
                   window.dispatchEvent(new CustomEvent('collapseSidebar'));
                   const smartlinkShown = sessionStorage.getItem(`smartlinkShown_${id}`);
                   if (!smartlinkShown && adConfig.smartlinkEnabled) {
