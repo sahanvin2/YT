@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import {
   FiHome,
@@ -21,6 +21,7 @@ import {
 } from 'react-icons/fi';
 import { useAuth } from '../../context/AuthContext';
 import { MAIN_CATEGORIES, GENRES } from '../../utils/categories';
+import { getSearchSuggestions } from '../../utils/api';
 import './Sidebar.css';
 
 const Sidebar = ({ isOpen }) => {
@@ -28,14 +29,81 @@ const Sidebar = ({ isOpen }) => {
   const navigate = useNavigate();
   const { isAuthenticated, user } = useAuth();
   const [searchQuery, setSearchQuery] = useState('');
+  const [suggestions, setSuggestions] = useState([]);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const [isLoadingSuggestions, setIsLoadingSuggestions] = useState(false);
+  const searchRef = useRef(null);
+  const suggestionsRef = useRef(null);
+
+  // Debounce search suggestions
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (searchQuery.trim().length >= 2) {
+        fetchSuggestions(searchQuery.trim());
+      } else {
+        setSuggestions([]);
+        setShowSuggestions(false);
+      }
+    }, 300);
+
+    return () => clearTimeout(timer);
+  }, [searchQuery]);
+
+  // Close suggestions when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (
+        searchRef.current &&
+        !searchRef.current.contains(event.target) &&
+        suggestionsRef.current &&
+        !suggestionsRef.current.contains(event.target)
+      ) {
+        setShowSuggestions(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  const fetchSuggestions = async (query) => {
+    try {
+      setIsLoadingSuggestions(true);
+      const res = await getSearchSuggestions(query, 5);
+      setSuggestions(res.data.data || res.data.suggestions || []);
+      setShowSuggestions(true);
+    } catch (err) {
+      console.error('Error fetching suggestions:', err);
+      setSuggestions([]);
+    } finally {
+      setIsLoadingSuggestions(false);
+    }
+  };
 
   const handleSearch = (e) => {
     e.preventDefault();
     if (searchQuery.trim()) {
       navigate(`/search?q=${encodeURIComponent(searchQuery.trim())}`);
       setSearchQuery('');
+      setShowSuggestions(false);
       // Don't auto-close sidebar on mobile after search - let user see results
       // They can close it manually if needed
+    }
+  };
+
+  const handleSuggestionClick = (suggestion) => {
+    navigate(`/search?q=${suggestion.title}`);
+    setSearchQuery('');
+    setShowSuggestions(false);
+  };
+
+  const handleInputChange = (e) => {
+    setSearchQuery(e.target.value);
+  };
+
+  const handleInputFocus = () => {
+    if (suggestions.length > 0) {
+      setShowSuggestions(true);
     }
   };
 
@@ -101,16 +169,50 @@ const Sidebar = ({ isOpen }) => {
         {/* Search Section */}
         <div className="sidebar-section sidebar-search-section">
           <form onSubmit={handleSearch} className="sidebar-search-form">
-            <div className="sidebar-search-input-wrapper">
+            <div className="sidebar-search-input-wrapper" ref={searchRef}>
               <FiSearch className="sidebar-search-icon" />
               <input
                 type="text"
                 placeholder="Search videos..."
                 value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
+                onChange={handleInputChange}
+                onFocus={handleInputFocus}
                 className="sidebar-search-input"
               />
             </div>
+            
+            {/* Search Suggestions Dropdown */}
+            {showSuggestions && (
+              <div className="sidebar-search-suggestions" ref={suggestionsRef}>
+                {isLoadingSuggestions ? (
+                  <div className="sidebar-search-loading">Loading...</div>
+                ) : suggestions.length > 0 ? (
+                  suggestions.map((suggestion) => (
+                    <div
+                      key={suggestion._id}
+                      className="sidebar-search-suggestion-item"
+                      onClick={() => handleSuggestionClick(suggestion)}
+                    >
+                      <div className="sidebar-suggestion-thumbnail">
+                        <img 
+                          src={suggestion.thumbnailUrl || suggestion.thumbnail} 
+                          alt={suggestion.title}
+                          loading="lazy"
+                        />
+                      </div>
+                      <div className="sidebar-suggestion-info">
+                        <div className="sidebar-suggestion-title">{suggestion.title}</div>
+                        <div className="sidebar-suggestion-meta">
+                          {suggestion.user?.username || suggestion.user?.name}
+                        </div>
+                      </div>
+                    </div>
+                  ))
+                ) : (
+                  <div className="sidebar-search-no-results">No videos found</div>
+                )}
+              </div>
+            )}
           </form>
         </div>
         <div className="sidebar-divider"></div>
