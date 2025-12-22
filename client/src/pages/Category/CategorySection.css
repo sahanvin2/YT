@@ -53,7 +53,7 @@
 
 .trending-video-item:hover .trending-video-thumbnail {
     border-color: var(--acid);
-    box-shadow: 0 8px 24px rgba(204, 255, 0, 0.2);
+    box-shadow: 0 8px 24px rgba(255, 107, 53, 0.2);
 }
 
 .trending-video-thumbnail img {

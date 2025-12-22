@@ -20,7 +20,7 @@ if (CDN_BASE) {
   console.warn('\n⚠️  CDN_BASE not set in environment variables!');
   console.warn('   Videos will be served directly from B2 storage.');
   console.warn('   To enable Bunny CDN, add to your .env file:');
-  console.warn('   CDN_BASE=https://movia-1.b-cdn.net\n');
+  console.warn('   CDN_BASE=https://Xclub.b-cdn.net\n');
 }
 
 // Route files
@@ -33,12 +33,13 @@ const uploads = require('./routes/uploads');
 const health = require('./routes/health');
 const playlists = require('./routes/playlists');
 const channels = require('./routes/channels');
+const transcode = require('./routes/transcode');
 
 const app = express();
 
 // Body parser
-app.use(express.json({ limit: "2500mb" }));
-app.use(express.urlencoded({ extended: true, limit: "2500mb" }));
+app.use(express.json({ limit: "3000mb" }));
+app.use(express.urlencoded({ extended: true, limit: "3000mb" }));
 
 // Cookie parser
 app.use(cookieParser());
@@ -49,14 +50,17 @@ if (process.env.NODE_ENV === 'development') {
 }
 
 // File uploading
-const maxSizeMb = parseInt(process.env.MAX_VIDEO_SIZE_MB || '2048');
+const maxSizeMb = parseInt(process.env.MAX_VIDEO_SIZE_MB || '5120'); // 5GB default
 const tempDir = path.join(__dirname, '../tmp');
 if (!fs.existsSync(tempDir)) fs.mkdirSync(tempDir, { recursive: true });
 app.use(fileUpload({
   createParentPath: true,
   useTempFiles: true,
   tempFileDir: tempDir,
-  limits: { fileSize: maxSizeMb * 1024 * 1024 }
+  limits: { fileSize: maxSizeMb * 1024 * 1024 },
+  abortOnLimit: false,
+  responseOnLimit: 'File size limit exceeded. Maximum allowed: 5GB',
+  uploadTimeout: 600000 // 10 minutes timeout
 }));
 
 // Enable CORS
@@ -78,6 +82,7 @@ app.use('/api/admin', admin);
 app.use('/api/uploads', uploads);
 app.use('/api/playlists', playlists);
 app.use('/api/channels', channels);
+app.use('/api/transcode', transcode);
 
 // Error handler
 app.use(errorHandler);

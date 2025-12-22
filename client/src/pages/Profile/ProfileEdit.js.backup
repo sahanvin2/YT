@@ -1,0 +1,251 @@
+import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { 
+  FiX, FiCamera, FiUser, FiMail, FiMapPin, FiLink, FiAlertCircle, 
+  FiCheckCircle, FiMonitor, FiShield, FiBell, FiSettings, 
+  FiZap, FiAtSign, FiActivity, FiChevronRight, FiSave, FiCheck
+} from 'react-icons/fi';
+import { useAuth } from '../../context/AuthContext';
+import { useTheme } from '../../context/ThemeContext';
+import axios from 'axios';
+import './ProfileEdit.css';
+
+const ProfileEdit = () => {
+  const { user, setUser } = useAuth();
+  const navigate = useNavigate();
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
+  
+  const [formData, setFormData] = useState({
+    username: user?.username || '',
+    email: user?.email || '',
+    bio: user?.bio || '',
+    location: user?.location || '',
+    website: user?.website || ''
+  });
+
+  const maxBioLength = 160;
+
+  useEffect(() => {
+    if (user) {
+      setFormData({
+        username: user.username || '',
+        email: user.email || '',
+        bio: user.bio || '',
+        location: user.location || '',
+        website: user.website || ''
+      });
+    }
+  }, [user]);
+
+  const handleChange = (e) => {
+    const { name, value } = e.target;
+    
+    if (name === 'bio' && value.length > maxBioLength) {
+      return;
+    }
+    
+    setFormData({
+      ...formData,
+      [name]: value
+    });
+    setError('');
+    setSuccess('');
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    
+    if (!formData.username.trim()) {
+      setError('Username is required');
+      return;
+    }
+
+    if (!formData.email.trim()) {
+      setError('Email is required');
+      return;
+    }
+
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(formData.email)) {
+      setError('Please enter a valid email address');
+      return;
+    }
+
+    if (formData.website && !formData.website.match(/^https?:\/\//)) {
+      setError('Website URL must start with http:// or https://');
+      return;
+    }
+
+    setLoading(true);
+    setError('');
+    setSuccess('');
+
+    try {
+      const response = await axios.put('/api/users/profile', formData);
+      
+      if (response.data) {
+        setUser(response.data.user);
+        setSuccess('Your profile has been updated successfully!');
+        
+        setTimeout(() => {
+          navigate('/profile');
+        }, 1500);
+      }
+    } catch (err) {
+      console.error('Error updating profile:', err);
+      setError(err.response?.data?.message || 'Failed to update profile. Please try again.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="profile-edit-page">
+      <div className="profile-edit-modal">
+        {/* Header */}
+        <div className="profile-edit-header">
+          <div className="header-left">
+            <button className="close-btn" onClick={() => navigate('/profile')}>
+              <FiX size={24} />
+            </button>
+            <h1>Edit profile</h1>
+          </div>
+          <button 
+            className="save-button"
+            onClick={handleSubmit}
+            disabled={loading}
+          >
+            {loading ? 'Saving...' : 'Save'}
+          </button>
+        </div>
+
+        {/* Banner Section */}
+        <div className="banner-section">
+          <div className="banner-overlay">
+            <button className="banner-btn" title="Add photo">
+              <FiCamera size={20} />
+            </button>
+            <button className="banner-btn" title="Remove photo">
+              <FiX size={20} />
+            </button>
+          </div>
+        </div>
+
+        {/* Avatar Section */}
+        <div className="avatar-section">
+          <div className="avatar-wrapper">
+            <div className="avatar-circle">
+              {user?.avatar ? (
+                <img src={user.avatar} alt={user.username} />
+              ) : (
+                <FiUser className="avatar-icon" />
+              )}
+            </div>
+            <button className="avatar-overlay-btn" title="Change avatar">
+              <FiCamera size={20} />
+            </button>
+          </div>
+        </div>
+
+        {/* Form */}
+        <form onSubmit={handleSubmit} className="profile-edit-form">
+          {error && (
+            <div className="error-message">
+              <FiAlertCircle size={18} />
+              {error}
+            </div>
+          )}
+
+          {success && (
+            <div className="success-message">
+              <FiCheckCircle size={18} />
+              {success}
+            </div>
+          )}
+
+          <div className="form-group">
+            <label htmlFor="username">Name</label>
+            <div className="input-wrapper">
+              <input
+                type="text"
+                id="username"
+                name="username"
+                value={formData.username}
+                onChange={handleChange}
+                placeholder="Your name"
+                required
+              />
+            </div>
+          </div>
+
+          <div className="form-group">
+            <label htmlFor="bio">Bio</label>
+            <div className="input-wrapper">
+              <textarea
+                id="bio"
+                name="bio"
+                value={formData.bio}
+                onChange={handleChange}
+                placeholder="Tell us about yourself"
+                maxLength={maxBioLength}
+              />
+            </div>
+            <div className="char-count">
+              {formData.bio.length} / {maxBioLength}
+            </div>
+          </div>
+
+          <div className="form-group">
+            <label htmlFor="location">Location</label>
+            <div className="input-wrapper">
+              <input
+                type="text"
+                id="location"
+                name="location"
+                value={formData.location}
+                onChange={handleChange}
+                placeholder="Where are you from?"
+              />
+              <FiMapPin className="input-icon" size={18} />
+            </div>
+          </div>
+
+          <div className="form-group">
+            <label htmlFor="website">Website</label>
+            <div className="input-wrapper">
+              <input
+                type="url"
+                id="website"
+                name="website"
+                value={formData.website}
+                onChange={handleChange}
+                placeholder="https://yourwebsite.com"
+              />
+              <FiLink className="input-icon" size={18} />
+            </div>
+          </div>
+
+          <div className="form-group">
+            <label htmlFor="email">Email</label>
+            <div className="input-wrapper">
+              <input
+                type="email"
+                id="email"
+                name="email"
+                value={formData.email}
+                onChange={handleChange}
+                placeholder="your@email.com"
+                required
+              />
+              <FiMail className="input-icon" size={18} />
+            </div>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+};
+
+export default ProfileEdit;

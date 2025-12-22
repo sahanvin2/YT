@@ -7,6 +7,13 @@ const VariantSchema = new mongoose.Schema({
   filePath: String  // B2 storage path
 });
 
+const SubtitleSchema = new mongoose.Schema({
+  language: { type: String, required: true }, // 'en', 'es', 'fr', etc.
+  label: { type: String, required: true }, // 'English', 'Spanish', 'French', etc.
+  url: { type: String, required: true }, // URL to .vtt or .srt file
+  isDefault: { type: Boolean, default: false }
+});
+
 const VideoSchema = new mongoose.Schema({
   title: { type: String, required: true, trim: true, maxlength: 100 },
   description: { type: String, required: true, maxlength: 2000 },
@@ -17,9 +24,36 @@ const VideoSchema = new mongoose.Schema({
   likes: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
   dislikes: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
   user: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
+  
+  // Hierarchical Category System
+  mainCategory: { 
+    type: String, 
+    enum: ['movies', 'series', 'documentaries', 'animation'],
+    required: true,
+    default: 'movies'
+  },
+  primaryGenre: { 
+    type: String, 
+    required: true,
+    default: 'action'
+  },
+  secondaryGenres: [{ 
+    type: String,
+    validate: {
+      validator: function(v) {
+        return v.length <= 2; // Max 2 secondary genres
+      },
+      message: 'Maximum 2 secondary genres allowed'
+    }
+  }],
+  subCategory: { type: String, default: null }, // Optional level 3
+  
+  // Legacy field for backwards compatibility (deprecated)
   category: { type: String, default: 'Other' },
+  
   tags: [String],
   variants: [VariantSchema],
+  subtitles: [SubtitleSchema], // Subtitle tracks
   hlsUrl: String,
   originalName: String,
   checksum: String,
@@ -33,6 +67,15 @@ const VideoSchema = new mongoose.Schema({
 
   cutStart: { type: Number, default: 0 },
   cutEnd: { type: Number, default: null },
+
+  // Video processing status
+  processingStatus: {
+    type: String,
+    enum: ['queued', 'processing', 'completed', 'failed', 'pending'],
+    default: 'pending'
+  },
+  processingError: { type: String, default: null },
+  processingCompleted: { type: Date, default: null },
 
   createdAt: { type: Date, default: Date.now },
   comments: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Comment' }],

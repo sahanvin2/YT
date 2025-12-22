@@ -17,7 +17,7 @@ if (CDN_BASE) {
   console.log(`🌐 Bunny CDN configured: ${CDN_BASE}`);
 } else {
   console.warn('⚠️ CDN_BASE not set - videos will be served directly from B2');
-  console.warn('   To enable CDN, add CDN_BASE=https://movia-1.b-cdn.net to your .env file');
+  console.warn('   To enable CDN, add CDN_BASE=https://Xclub.b-cdn.net to your .env file');
 }
 
 const axios = require('axios');

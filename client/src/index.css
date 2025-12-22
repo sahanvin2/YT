@@ -7,71 +7,115 @@
 }
 
 :root {
-  /* Modern Movia Color Palette */
-  --void: #050308;
-  --voidLight: #130d1f;
-  --voidLighter: #1f1633;
-  --acid: #CCFF00;
-  --acidDim: rgba(204, 255, 0, 0.1);
-  --lavender: #B084CC;
-  --hologram: #E0E0E0;
-  --glass: rgba(20, 15, 30, 0.85);
-  --glassBorder: rgba(255, 255, 255, 0.08);
-  --surface: #1c142b;
+  /* 🎬 Cinematic Cinema Theme - Dark Mode Primary */
+  --void: #0B0F14;
+  --voidLight: #111827;
+  --voidLighter: #161B22;
+  --acid: #E50914;
+  --acidDim: rgba(229, 9, 20, 0.15);
+  --acidHover: #FF1E25;
+  --lavender: #E50914;
+  --hologram: #E5E7EB;
+  --glass: rgba(11, 15, 20, 0.9);
+  --glassBorder: #1F2937;
+  --surface: #161B22;
+  --neonBlue: #E50914;
+  --accentGreen: #E50914;
+  
+  /* Text Colors */
+  --text-primary: #E5E7EB;
+  --text-secondary: #9CA3AF;
+  --text-muted: #6B7280;
+  --text-disabled: #6B7280;
   
   /* Legacy variable mappings for compatibility */
-  --primary-color: #CCFF00;
-  --primary-color-hover: #B8E600;
-  --primary-color-dark: #A3CC00;
-  --secondary-color: #130d1f;
-  --bg-color: #050308;
-  --sidebar-bg: #050308;
-  --text-primary: #E0E0E0;
-  --text-secondary: #9ca3af;
-  --border-color: rgba(255, 255, 255, 0.08);
-  --hover-bg: rgba(255, 255, 255, 0.05);
-  --card-bg: #130d1f;
-}
-
-/* Dark Mode (Modern Movia theme) */
-[data-theme="dark"] {
-  --void: #050308;
-  --voidLight: #130d1f;
-  --voidLighter: #1f1633;
-  --acid: #CCFF00;
-  --acidDim: rgba(204, 255, 0, 0.1);
-  --lavender: #B084CC;
-  --hologram: #E0E0E0;
-  --glass: rgba(20, 15, 30, 0.85);
-  --glassBorder: rgba(255, 255, 255, 0.08);
-  --surface: #1c142b;
+  --primary-color: #E50914;
+  --primary-color-hover: #FF1E25;
+  --primary-color-dark: #B8070F;
+  --secondary-color: #1F2937;
+  --bg-color: #0B0F14;
+  --sidebar-bg: #0B0F14;
+  --border-color: #1F2937;
+  --hover-bg: rgba(229, 9, 20, 0.1);
+  --card-bg: #161B22;
+  --danger: #E50914;
+  --success: #46D369;
+  --warning: #FFA502;
   
-  --primary-color: #CCFF00;
-  --primary-color-hover: #B8E600;
-  --primary-color-dark: #A3CC00;
-  --secondary-color: #130d1f;
-  --bg-color: #050308;
-  --sidebar-bg: #050308;
-  --text-primary: #E0E0E0;
-  --text-secondary: #9ca3af;
-  --border-color: rgba(255, 255, 255, 0.08);
-  --hover-bg: rgba(255, 255, 255, 0.05);
-  --card-bg: #130d1f;
+  /* Video Player Colors */
+  --player-controls-bg: rgba(0, 0, 0, 0.6);
+  --player-progress-loaded: #6B7280;
+  --player-progress-played: #E50914;
+  --player-icon-color: #FFFFFF;
+  --player-hover-glow: rgba(229, 9, 20, 0.4);
 }
 
-/* Light Mode (Navy Blue theme - kept for compatibility) */
+/* Dark Mode (Cinematic Cinema Red) */
+[data-theme="dark"] {
+  --void: #0B0F14;
+  --voidLight: #111827;
+  --voidLighter: #161B22;
+  --acid: #E50914;
+  --acidDim: rgba(229, 9, 20, 0.15);
+  --acidHover: #FF1E25;
+  --lavender: #E50914;
+  --hologram: #E5E7EB;
+  --glass: rgba(11, 15, 20, 0.9);
+  --glassBorder: #1F2937;
+  --surface: #161B22;
+  --neonBlue: #E50914;
+  --accentGreen: #E50914;
+  
+  --text-primary: #E5E7EB;
+  --text-secondary: #9CA3AF;
+  --text-muted: #6B7280;
+  
+  --primary-color: #E50914;
+  --primary-color-hover: #FF1E25;
+  --primary-color-dark: #B8070F;
+  --secondary-color: #1F2937;
+  --bg-color: #0B0F14;
+  --sidebar-bg: #0B0F14;
+  --border-color: #1F2937;
+  --hover-bg: rgba(229, 9, 20, 0.1);
+  --card-bg: #161B22;
+  --danger: #E50914;
+  --success: #46D369;
+  --warning: #FFA502;
+}
+
+/* Light Mode - Clean Professional Theme */
 [data-theme="light"] {
-  --primary-color: #1e3a8a;
-  --primary-color-hover: #1e40af;
-  --primary-color-dark: #1e293b;
-  --secondary-color: #e2e8f0;
-  --bg-color: #f8fafc;
-  --sidebar-bg: #ffffff;
-  --text-primary: #0f172a;
-  --text-secondary: #475569;
-  --border-color: #e2e8f0;
-  --hover-bg: #f1f5f9;
-  --card-bg: #ffffff;
+  --void: #F9FAFB;
+  --voidLight: #FFFFFF;
+  --voidLighter: #F3F4F6;
+  --acid: #E50914;
+  --acidDim: rgba(229, 9, 20, 0.1);
+  --acidHover: #FF1E25;
+  --lavender: #E50914;
+  --hologram: #111827;
+  --glass: rgba(255, 255, 255, 0.95);
+  --glassBorder: #D1D5DB;
+  --surface: #FFFFFF;
+  --neonBlue: #E50914;
+  --accentGreen: #E50914;
+  
+  --text-primary: #111827;
+  --text-secondary: #4B5563;
+  --text-muted: #6B7280;
+  
+  --primary-color: #E50914;
+  --primary-color-hover: #FF1E25;
+  --primary-color-dark: #B8070F;
+  --secondary-color: #E5E7EB;
+  --bg-color: #F9FAFB;
+  --sidebar-bg: #FFFFFF;
+  --border-color: #D1D5DB;
+  --hover-bg: rgba(229, 9, 20, 0.05);
+  --card-bg: #FFFFFF;
+  --danger: #ef4444;
+  --success: #22c55e;
+  --warning: #f59e0b;
 }
 
 body {
@@ -152,15 +196,15 @@ html {
 
 .btn-primary {
   background-color: var(--acid);
-  color: var(--void);
+  color: #FFFFFF;
   font-weight: 600;
-  box-shadow: 0 0 20px rgba(204, 255, 0, 0.15);
+  box-shadow: 0 0 20px rgba(255, 107, 53, 0.2);
 }
 
 .btn-primary:hover {
-  background-color: #B8E600;
+  background-color: #FF8555;
   transform: translateY(-1px);
-  box-shadow: 0 0 30px rgba(204, 255, 0, 0.3);
+  box-shadow: 0 0 30px rgba(255, 107, 53, 0.4);
 }
 
 .btn-secondary {

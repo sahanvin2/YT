@@ -14,6 +14,7 @@ import CategoryPage from './pages/Category/CategoryPage';
 import Channel from './pages/Channel/Channel';
 import VideoManager from './pages/VideoManager/VideoManager';
 import Profile from './pages/Profile/Profile';
+import ProfileEdit from './pages/Profile/ProfileEdit';
 import History from './pages/Library/History';
 import Liked from './pages/Library/Liked';
 import Saved from './pages/Library/Saved';
@@ -124,6 +125,7 @@ function App() {
                     <Route path="/clips" element={<Clips />} />
                     <Route path="/subscriptions" element={<Subscriptions />} />
                     <Route path="/profile" element={<Profile />} />
+                    <Route path="/profile/edit" element={<ProfileEdit />} />
                   </Routes>
                 </main>
               </div>

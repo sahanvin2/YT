@@ -52,13 +52,13 @@ const History = () => {
   return (
     <div className="library-page">
       <h2>Watch History</h2>
-      <div className="videos-grid">
-        {items.length === 0 ? (
-          <div className="no-content"><p>No history yet</p></div>
-        ) : (
-          items.map(item => item.video && <VideoCard key={item.video._id} video={item.video} />)
-        )}
-      </div>
+      {items.length === 0 ? (
+        <div className="no-content"><p>No history yet</p></div>
+      ) : (
+        <div className="videos-grid">
+          {items.map(item => item.video && <VideoCard key={item.video._id} video={item.video} />)}
+        </div>
+      )}
     </div>
   );
 };

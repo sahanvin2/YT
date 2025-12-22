@@ -18,7 +18,7 @@ function cdnUrlFrom(originalUrl) {
     // Only warn once to avoid spam
     if (!cdnUrlFrom._warned) {
       console.warn('⚠️ CDN_BASE or CDN_URL not set in environment variables');
-      console.warn('   Set CDN_BASE=https://movia-1.b-cdn.net in your .env file');
+      console.warn('   Set CDN_BASE=https://Xclub.b-cdn.net in your .env file');
       cdnUrlFrom._warned = true;
     }
     return originalUrl;
@@ -61,7 +61,7 @@ function cdnUrlFrom(originalUrl) {
     }
 
     // Build CDN URL
-    // Bunny CDN format: https://movia-1.b-cdn.net/<key> or https://cdn.movia.club/<key>
+    // Bunny CDN format: https://Xclub.b-cdn.net/<key>
     const cleanBase = CDN_BASE.replace(/\/$/, '');
     const cleanKey = key.replace(/^\//, '');
     const cdnUrl = `${cleanBase}/${cleanKey}`;

@@ -8,6 +8,7 @@ const ffprobePath = require('ffprobe-static').path;
 const mime = require('mime-types');
 const crypto = require('crypto');
 const { uploadFile, deleteFile, presignPut, publicUrl } = require('../utils/b2');
+const { addToQueue } = require('../utils/videoQueue');
 
 
 ffmpeg.setFfmpegPath(ffmpegPath);
@@ -21,10 +22,27 @@ function computeChecksum(filePath) {
 // Upload video + optional thumbnail
 exports.uploadVideo = async (req, res) => {
   try {
-    const { title, description, category, tags, visibility } = req.body;
+    const { 
+      title, 
+      description, 
+      mainCategory, 
+      primaryGenre, 
+      secondaryGenres, 
+      subCategory,
+      tags, 
+      visibility 
+    } = req.body;
 
     if (!req.files || !req.files.video) {
       return res.status(400).json({ success: false, message: 'No video file provided' });
+    }
+
+    // Check file size (5GB = 5368709120 bytes)
+    if (req.files.video.size > 3221225472) {
+      return res.status(413).json({ 
+        success: false, 
+        message: 'File too large. Maximum size is 5GB' 
+      });
     }
 
     const videoFile = req.files.video;
@@ -57,6 +75,42 @@ exports.uploadVideo = async (req, res) => {
       fs.unlinkSync(tmpThumbPath);
     }
 
+    // Upload subtitles
+    let subtitleTracks = [];
+    if (req.files && req.files.subtitles) {
+      const subtitleFilesArray = Array.isArray(req.files.subtitles) 
+        ? req.files.subtitles 
+        : [req.files.subtitles];
+      
+      const subtitleLanguages = req.body.subtitleLanguages 
+        ? (Array.isArray(req.body.subtitleLanguages) ? req.body.subtitleLanguages : [req.body.subtitleLanguages])
+        : [];
+      
+      const subtitleLabels = req.body.subtitleLabels 
+        ? (Array.isArray(req.body.subtitleLabels) ? req.body.subtitleLabels : [req.body.subtitleLabels])
+        : [];
+
+      for (let i = 0; i < subtitleFilesArray.length; i++) {
+        const subFile = subtitleFilesArray[i];
+        const subExt = path.extname(subFile.name) || '.vtt';
+        const tmpSubPath = path.join(tmpDir, `subtitle_${ts}_${i}${subExt}`);
+        await subFile.mv(tmpSubPath);
+        
+        const subKey = `subtitles/${req.user.id}/${ts}_${i}${subExt}`;
+        const subCT = mime.lookup(tmpSubPath) || 'text/vtt';
+        const subUrl = await uploadFile(tmpSubPath, subKey, subCT);
+        
+        subtitleTracks.push({
+          language: subtitleLanguages[i] || 'en',
+          label: subtitleLabels[i] || `Subtitle ${i + 1}`,
+          url: subUrl,
+          isDefault: i === 0 // First subtitle is default
+        });
+        
+        fs.unlinkSync(tmpSubPath);
+      }
+    }
+
     // Get duration
     const duration = await new Promise((resolve, reject) => {
       ffmpeg.ffprobe(tmpVideoPath, (err, data) => {
@@ -67,26 +121,91 @@ exports.uploadVideo = async (req, res) => {
 
     fs.unlinkSync(tmpVideoPath);
 
-    // Create DB record
+    // Parse secondary genres if it's a JSON string
+    let parsedSecondaryGenres = [];
+    if (secondaryGenres) {
+      try {
+        parsedSecondaryGenres = typeof secondaryGenres === 'string' 
+          ? JSON.parse(secondaryGenres) 
+          : secondaryGenres;
+      } catch (e) {
+        parsedSecondaryGenres = [];
+      }
+    }
+
+    // Create DB record with new category structure
     const video = await Video.create({
       title,
       description,
       videoUrl,
       thumbnailUrl,
+      subtitles: subtitleTracks,
       duration,
-      category,
+      mainCategory: mainCategory || 'movies',
+      primaryGenre: primaryGenre || 'action',
+      secondaryGenres: parsedSecondaryGenres || [],
+      subCategory: subCategory || null,
+      category: primaryGenre || 'action', // Legacy field for backwards compatibility
       tags: tags ? tags.split(',').map(t => t.trim()) : [],
       visibility: visibility || 'public',
       user: req.user.id,
       originalName: videoFile.name,
-      checksum
+      checksum,
+      processingStatus: 'queued' // Mark as queued for transcoding
     });
 
     await User.findByIdAndUpdate(req.user.id, { $push: { videos: video._id } });
 
-    res.status(201).json({ success: true, data: video });
+    // Send to worker EC2 for transcoding (non-blocking)
+    addToQueue(video._id.toString(), videoUrl, req.user.id).catch(err => {
+      console.error('Failed to queue video for transcoding:', err);
+    });
+
+    res.status(201).json({ 
+      success: true, 
+      data: video,
+      message: 'Video uploaded successfully. Processing will begin shortly.' 
+    });
   } catch (error) {
-    res.status(500).json({ success: false, message: error.message });
+    console.error('Upload error:', error);
+    
+    // Clean up any temp files on error
+    try {
+      const tmpDir = '/tmp/movia';
+      if (fs.existsSync(tmpDir)) {
+        const files = fs.readdirSync(tmpDir);
+        files.forEach(file => {
+          try {
+            fs.unlinkSync(path.join(tmpDir, file));
+          } catch (e) {
+            // Ignore cleanup errors
+          }
+        });
+      }
+    } catch (cleanupError) {
+      console.error('Cleanup error:', cleanupError);
+    }
+
+    // Send user-friendly error message
+    let errorMessage = 'An internal error occurred. Please retry your upload.';
+    
+    if (error.message.includes('ENOSPC')) {
+      errorMessage = 'Server storage full. Please contact support.';
+    } else if (error.message.includes('timeout') || error.message.includes('ETIMEDOUT')) {
+      errorMessage = 'Upload timeout. Please try again with a stable connection.';
+    } else if (error.message.includes('ECONNRESET')) {
+      errorMessage = 'Connection lost during upload. Please retry.';
+    } else if (error.message.includes('file size')) {
+      errorMessage = 'File too large. Maximum size is 5GB.';
+    } else if (error.message.includes('B2') || error.message.includes('storage')) {
+      errorMessage = 'Storage service error. Please try again later.';
+    }
+
+    res.status(500).json({ 
+      success: false, 
+      message: errorMessage,
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
   }
 };
 

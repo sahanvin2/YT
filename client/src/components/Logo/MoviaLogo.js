@@ -7,14 +7,14 @@ const XclubLogo = ({ size = 24, showText = true }) => {
             <div className="logo-icon" style={{
                 width: `${size}px`,
                 height: `${size}px`,
-                background: '#CCFF00',
+                background: 'linear-gradient(135deg, #FF6B35 0%, #FF8555 100%)',
                 borderRadius: '6px',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                boxShadow: '0 0 20px rgba(204, 255, 0, 0.15)'
+                boxShadow: '0 0 20px rgba(255, 107, 53, 0.3)'
             }}>
-                <FiX size={size * 0.625} color="#050308" style={{ strokeWidth: 3 }} />
+                <FiX size={size * 0.625} color="#FFFFFF" style={{ strokeWidth: 3 }} />
             </div>
             {showText && (
                 <span style={{

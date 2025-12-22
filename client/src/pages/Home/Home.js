@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { useLocation, useParams, useNavigate, Link } from 'react-router-dom';
-import { FiPlay, FiPlus, FiZap, FiMusic, FiMonitor, FiTarget, FiSmile, FiRadio, FiTv, FiCompass } from 'react-icons/fi';
+import { FiPlay, FiPlus, FiZap, FiMusic, FiMonitor, FiTarget, FiSmile, FiRadio, FiTv, FiCompass, FiFilm, FiVideo, FiBook } from 'react-icons/fi';
 import AdBanner from '../../components/Ad/AdBanner';
 import { getVideos, getTrendingVideos, searchVideos } from '../../utils/api';
 import { formatDuration } from '../../utils/helpers';
+import { MAIN_CATEGORIES } from '../../utils/categories';
 import './Home.css';
 
 const Home = ({ mode }) => {
@@ -22,14 +23,14 @@ const Home = ({ mode }) => {
   const navigate = useNavigate();
 
   const topCategories = [
-    { id: 'Indian', label: 'Indian', icon: FiCompass, color: 'linear-gradient(135deg, #FF6B35 0%, #F7931E 100%)' },
-    { id: 'Milfs', label: 'Milfs', icon: FiMusic, color: 'linear-gradient(135deg, #E94057 0%, #F27121 100%)' },
-    { id: 'Big Cock', label: 'Big Cock', icon: FiZap, color: 'linear-gradient(135deg, #8E2DE2 0%, #4A00E0 100%)' },
-    { id: 'Teen', label: 'Teen', icon: FiSmile, color: 'linear-gradient(135deg, #ff0844 0%, #ffb199 100%)' },
-    { id: 'Lesbian', label: 'Lesbian', icon: FiRadio, color: 'linear-gradient(135deg, #fc6767 0%, #ec008c 100%)' },
-    { id: 'Latina', label: 'Latina', icon: FiCompass, color: 'linear-gradient(135deg, #fdbb2d 0%, #22c1c3 100%)' },
-    { id: 'Anal', label: 'Anal', icon: FiTv, color: 'linear-gradient(135deg, #ff9a9e 0%, #fecfef 100%)' },
-    { id: 'POV', label: 'POV', icon: FiTarget, color: 'linear-gradient(135deg, #fa8bff 0%, #2bff88 100%)' }
+    { id: 'movies', label: 'Movies', icon: FiFilm, color: 'linear-gradient(135deg, #FF6B35 0%, #F7931E 100%)' },
+    { id: 'series', label: 'Series', icon: FiTv, color: 'linear-gradient(135deg, #E94057 0%, #F27121 100%)' },
+    { id: 'documentaries', label: 'Documentaries', icon: FiVideo, color: 'linear-gradient(135deg, #8E2DE2 0%, #4A00E0 100%)' },
+    { id: 'animation', label: 'Animation', icon: FiSmile, color: 'linear-gradient(135deg, #ff0844 0%, #ffb199 100%)' },
+    { id: 'action', label: 'Action', icon: FiZap, color: 'linear-gradient(135deg, #fc6767 0%, #ec008c 100%)' },
+    { id: 'comedy', label: 'Comedy', icon: FiSmile, color: 'linear-gradient(135deg, #fdbb2d 0%, #22c1c3 100%)' },
+    { id: 'drama', label: 'Drama', icon: FiCompass, color: 'linear-gradient(135deg, #ff9a9e 0%, #fecfef 100%)' },
+    { id: 'horror', label: 'Horror', icon: FiTarget, color: 'linear-gradient(135deg, #fa8bff 0%, #2bff88 100%)' }
   ];
 
   useEffect(() => {

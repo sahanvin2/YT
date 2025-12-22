@@ -27,7 +27,7 @@
   border-radius: 12px;
   overflow: hidden;
   border: 1px solid var(--glassBorder);
-  box-shadow: 0 0 30px rgba(204, 255, 0, 0.2);
+  box-shadow: 0 0 30px rgba(255, 107, 53, 0.2);
   user-select: none;
 }
 
@@ -127,7 +127,7 @@
 }
 
 .player-setting-btn.active {
-  background: rgba(204, 255, 0, 0.3);
+  background: rgba(255, 107, 53, 0.3);
   border-color: var(--acid);
   color: var(--acid);
 }
@@ -162,17 +162,17 @@
 }
 
 .player-setting-option:hover {
-  background: rgba(204, 255, 0, 0.1);
+  background: rgba(255, 107, 53, 0.1);
 }
 
 .player-setting-option.active {
-  background: rgba(204, 255, 0, 0.2);
+  background: rgba(255, 107, 53, 0.2);
   color: var(--acid);
   font-weight: 600;
 }
 
 .video-player:hover {
-  box-shadow: 0 0 40px rgba(204, 255, 0, 0.3);
+  box-shadow: 0 0 40px rgba(255, 107, 53, 0.3);
 }
 
 /* Hide default ReactPlayer controls and style custom ones */
@@ -215,7 +215,7 @@
   height: 100%;
   background: var(--acid);
   border-radius: 3px;
-  box-shadow: 0 0 10px rgba(204, 255, 0, 0.8);
+  box-shadow: 0 0 10px rgba(255, 107, 53, 0.8);
   position: relative;
 }
 
@@ -309,7 +309,7 @@
 
 .video-player :global(.react-player__progress-played) {
   background: var(--acid) !important;
-  box-shadow: 0 0 10px rgba(204, 255, 0, 0.8) !important;
+  box-shadow: 0 0 10px rgba(255, 107, 53, 0.8) !important;
   height: 6px !important;
   border-radius: 3px !important;
 }
@@ -592,7 +592,7 @@
 .action-btn.active {
   background-color: var(--acid);
   color: var(--void);
-  box-shadow: 0 0 20px rgba(204, 255, 0, 0.15);
+  box-shadow: 0 0 20px rgba(255, 107, 53, 0.15);
 }
 
 /* Like/Dislike combined button */

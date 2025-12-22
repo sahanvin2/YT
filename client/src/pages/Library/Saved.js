@@ -53,13 +53,13 @@ const Saved = () => {
   return (
     <div className="library-page">
       <h2>Saved Videos</h2>
-      <div className="videos-grid">
-        {videos.length === 0 ? (
-          <div className="no-content"><p>No saved videos yet</p></div>
-        ) : (
-          videos.map(v => <VideoCard key={v._id} video={v} />)
-        )}
-      </div>
+      {videos.length === 0 ? (
+        <div className="no-content"><p>No saved videos yet</p></div>
+      ) : (
+        <div className="videos-grid">
+          {videos.map(v => <VideoCard key={v._id} video={v} />)}
+        </div>
+      )}
     </div>
   );
 };

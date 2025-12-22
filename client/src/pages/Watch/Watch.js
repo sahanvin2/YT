@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import ReactPlayer from 'react-player';
-import { FiThumbsUp, FiThumbsDown, FiShare2, FiBookmark, FiChevronDown, FiChevronUp, FiZap, FiMaximize2, FiMinimize2, FiPlay } from 'react-icons/fi';
+import { FiThumbsUp, FiThumbsDown, FiShare2, FiBookmark, FiChevronDown, FiChevronUp, FiZap, FiMaximize2, FiMinimize2, FiPlay, FiClosedCaptioning } from 'react-icons/fi';
 import { getVideo, likeVideo, dislikeVideo, addView, addToHistory, saveVideo, getSavedVideos } from '../../utils/api';
 import { formatViews, formatDate, formatDuration } from '../../utils/helpers';
 import { useAuth } from '../../context/AuthContext';
@@ -37,11 +37,9 @@ const Watch = () => {
   const [selectedSource, setSelectedSource] = useState(null);
   const [dislikesCount, setDislikesCount] = useState(0);
   const playerRef = useRef(null);
-  const { openSmartlink } = useSmartlinkAd();
   const { adConfig } = useAds();
+  const { openSmartlink } = useSmartlinkAd();
   const [videoPlayed, setVideoPlayed] = useState(false);
-  const [adShown, setAdShown] = useState(false);
-  const [shouldPlayAfterAd, setShouldPlayAfterAd] = useState(false);
   const [showShareModal, setShowShareModal] = useState(false);
   const [relatedVideos, setRelatedVideos] = useState([]);
   const [filteredVideos, setFilteredVideos] = useState([]);
@@ -50,7 +48,6 @@ const Watch = () => {
   const [showDescription, setShowDescription] = useState(false);
   const [lastAdTime, setLastAdTime] = useState(0);
   const [videoDuration, setVideoDuration] = useState(0);
-  const [needsRecurringAd, setNeedsRecurringAd] = useState(false);
   const [playbackRate, setPlaybackRate] = useState(1);
   const [pipEnabled, setPipEnabled] = useState(false);
   const [showSpeedMenu, setShowSpeedMenu] = useState(false);
@@ -60,18 +57,17 @@ const Watch = () => {
   const maxWatchedDurationRef = useRef(0);
 
   useEffect(() => {
-    // Reset ad and video states when video ID changes
-    setAdShown(false);
+    // Reset video states when video ID changes
     setVideoPlayed(false);
-    setShouldPlayAfterAd(false);
     setError('');
     viewCountedRef.current = false;
     watchedDurationRef.current = 0;
     maxWatchedDurationRef.current = 0;
+    setLastAdTime(0);
     
-    // Clear sessionStorage for this video ID to ensure ads play
+    // Clear sessionStorage for this video ID
     if (id) {
-      sessionStorage.removeItem(`adShown_${id}`);
+      sessionStorage.removeItem(`smartlinkShown_${id}`);
     }
     
     const loadVideo = async () => {
@@ -124,11 +120,9 @@ const Watch = () => {
         sessionStorage.removeItem('smartlinkCallback');
         sessionStorage.removeItem('smartlinkRedirect');
         
-        // User returned from smartlink - mark ad as watched for this video and allow video to play
-        setAdShown(true); // Mark as shown so video can play
-        sessionStorage.setItem(`adShown_${id}`, 'true'); // Store per video ID
+        // User returned from smartlink
+        sessionStorage.setItem(`smartlinkShown_${id}`, 'true');
         setVideoPlayed(true);
-        setShouldPlayAfterAd(false);
         setError(''); // Clear any errors
         
         // Execute callback if exists
@@ -183,6 +177,8 @@ const Watch = () => {
       window.removeEventListener('focus', handleFocus);
     };
   }, [video, id]);
+
+  // Timed ads are now handled in handleProgress based on actual video playback time
 
   // Close download menu and speed menu when clicking outside
   useEffect(() => {
@@ -345,27 +341,16 @@ const Watch = () => {
       }
     }
 
-    // Show recurring smartlink ad every 3 minutes for videos longer than 3 minutes
-    if (videoDuration > 180 && adConfig.smartlinkEnabled && adConfig.smartlinkUrl) {
+    // Show recurring smartlink ad every 3 minutes of actual playback time
+    if (videoDuration > 180 && adConfig.timedAdEnabled && adConfig.timedAdUrl) {
       const currentMinuteMark = Math.floor(playedSeconds / 180); // Every 180 seconds (3 minutes)
       const lastAdMinuteMark = Math.floor(lastAdTime / 180);
       
-      // Pause video at 3-minute mark and wait for user to click play
-      if (currentMinuteMark > lastAdMinuteMark && currentMinuteMark > 0 && !needsRecurringAd) {
+      // Show ad when crossing a 3-minute mark (at 3:00, 6:00, 9:00, etc.)
+      if (currentMinuteMark > lastAdMinuteMark && currentMinuteMark > 0) {
+        console.log(`Opening timed ad at ${Math.floor(playedSeconds / 60)}:${Math.floor(playedSeconds % 60).toString().padStart(2, '0')}...`);
         setLastAdTime(playedSeconds);
-        setNeedsRecurringAd(true);
-        
-        // Pause video
-        if (playerRef.current) {
-          try {
-            const player = playerRef.current.getInternalPlayer();
-            if (player && typeof player.pause === 'function') {
-              player.pause();
-            }
-          } catch (error) {
-            console.error('Error pausing video for recurring ad:', error);
-          }
-        }
+        window.open(adConfig.timedAdUrl, '_blank');
       }
     }
   };
@@ -430,10 +415,10 @@ const Watch = () => {
 
   // Auto-collapse sidebar when video starts playing
   useEffect(() => {
-    if (videoPlayed && !shouldPlayAfterAd && adShown) {
+    if (videoPlayed) {
       window.dispatchEvent(new CustomEvent('collapseSidebar'));
     }
-  }, [videoPlayed, shouldPlayAfterAd, adShown]);
+  }, [videoPlayed]);
 
   if (loading) {
     return (
@@ -553,140 +538,94 @@ const Watch = () => {
               </button>
             </div>
 
-            <ReactPlayer
-              ref={playerRef}
-              url={
-                selectedSource
-                ? (selectedSource.cdnUrl || selectedSource.url || selectedSource.videoUrl || video.cdnUrl || video.videoUrl)
-                : (video.cdnUrl || video.videoUrl)
-              }
-              controls
-              width="100%"
-              height="100%"
-              playing={videoPlayed && !error}
-              key={`${video?._id || 'video'}-${selectedSource ? selectedSource.quality : 'original'}-${adShown ? 'ad-shown' : 'ad-not-shown'}`} // Force re-render when ad status changes
-              config={{
-                file: {
-                  attributes: {
-                    controlsList: 'nodownload noremoteplayback'
-                  }
-                },
-                youtube: {
-                  playerVars: {
-                    controls: 1,
-                    modestbranding: 1,
-                    rel: 0
-                  }
+            {/* Use native HTML5 video if subtitles are available, otherwise use ReactPlayer */}
+            {video.subtitles && video.subtitles.length > 0 ? (
+              <video
+                ref={playerRef}
+                src={selectedSource
+                  ? (selectedSource.cdnUrl || selectedSource.url || selectedSource.videoUrl || video.cdnUrl || video.videoUrl)
+                  : (video.cdnUrl || video.videoUrl)
                 }
-              }}
-              playbackRate={playbackRate}
-              pip={pipEnabled}
-              onProgress={handleProgress}
-              onPlay={() => {
-                // Hide sidebar when video starts playing
-                window.dispatchEvent(new CustomEvent('collapseSidebar'));
-                
-                // Check if recurring ad needs to be shown
-                if (needsRecurringAd && adConfig.smartlinkEnabled && adConfig.smartlinkUrl) {
-                  // Pause video immediately
-                  if (playerRef.current) {
-                    try {
-                      const player = playerRef.current.getInternalPlayer();
-                      if (player && typeof player.pause === 'function') {
-                        player.pause();
-                      }
-                    } catch (error) {
-                      console.error('Error pausing video:', error);
-                    }
+                controls
+                controlsList="nodownload"
+                playsInline
+                crossOrigin="anonymous"
+                style={{ width: '100%', height: '100%', objectFit: 'contain' }}
+                onPlay={() => {
+                  window.dispatchEvent(new CustomEvent('collapseSidebar'));
+                  const smartlinkShown = sessionStorage.getItem(`smartlinkShown_${id}`);
+                  if (!smartlinkShown && adConfig.smartlinkEnabled) {
+                    openSmartlink();
+                    sessionStorage.setItem(`smartlinkShown_${id}`, 'true');
                   }
-                  
-                  // Open smartlink ad when user tries to play
-                  openSmartlink(() => {
-                    // Ad closed - allow video to play
-                    setNeedsRecurringAd(false);
-                    setTimeout(() => {
-                      if (playerRef.current && video) {
-                        try {
-                          const player = playerRef.current.getInternalPlayer();
-                          if (player && typeof player.play === 'function') {
-                            player.play().catch(err => {
-                              console.error('Error resuming video after recurring ad:', err);
-                            });
-                          }
-                        } catch (error) {
-                          console.error('Error accessing player after recurring ad:', error);
-                        }
-                      }
-                    }, 300);
-                  });
-                  return;
-                }
-                
-                // Intercept play event - show smartlink ad first
-                // Check if ad was already shown for this specific video ID
-                const adShownForThisVideo = sessionStorage.getItem(`adShown_${id}`) === 'true';
-                
-                if (!adShownForThisVideo && !adShown && adConfig.smartlinkEnabled && adConfig.smartlinkUrl) {
-                  setShouldPlayAfterAd(true);
-                  // Pause video immediately
-                  if (playerRef.current) {
-                    try {
-                      const player = playerRef.current.getInternalPlayer();
-                      if (player && typeof player.pause === 'function') {
-                        player.pause();
-                      }
-                    } catch (error) {
-                      console.error('Error pausing video:', error);
-                    }
-                  }
-                  // Open smartlink ad
-                  openSmartlink(() => {
-                    // Ad closed/completed - mark as watched for this video and play video
-                    setAdShown(true);
-                    sessionStorage.setItem(`adShown_${id}`, 'true'); // Store per video ID
-                    setVideoPlayed(true);
-                    setShouldPlayAfterAd(false);
-                    setTimeout(() => {
-                      if (playerRef.current && video) {
-                        try {
-                          const player = playerRef.current.getInternalPlayer();
-                          if (player && typeof player.play === 'function') {
-                            player.play().catch(err => {
-                              console.error('Error playing video after ad:', err);
-                              // If play fails, try reloading
-                              if (playerRef.current) {
-                                const currentTime = playerRef.current.getCurrentTime();
-                                playerRef.current.seekTo(currentTime || 0);
-                              }
-                            });
-                          }
-                        } catch (error) {
-                          console.error('Error accessing player after ad:', error);
-                        }
-                      }
-                    }, 300);
-                  });
-                } else {
-                  // Ad already shown for this video or disabled - play normally
                   setVideoPlayed(true);
-                  setShouldPlayAfterAd(false);
+                }}
+                onTimeUpdate={(e) => {
+                  handleProgress({ playedSeconds: e.target.currentTime });
+                }}
+                onError={(e) => {
+                  console.error('Video error:', e);
+                  setError('Failed to play video. Please check if the video URL is accessible.');
+                }}
+              >
+                {video.subtitles.map((subtitle, index) => (
+                  <track
+                    key={index}
+                    kind="subtitles"
+                    src={subtitle.url}
+                    srcLang={subtitle.language}
+                    label={subtitle.label}
+                    default={subtitle.isDefault || index === 0}
+                  />
+                ))}
+                Your browser does not support the video tag.
+              </video>
+            ) : (
+              <ReactPlayer
+                ref={playerRef}
+                url={
+                  selectedSource
+                  ? (selectedSource.cdnUrl || selectedSource.url || selectedSource.videoUrl || video.cdnUrl || video.videoUrl)
+                  : (video.cdnUrl || video.videoUrl)
                 }
-              }}
-              onError={(e) => {
-                console.error('ReactPlayer error:', e);
-                const errorDetails = e?.target?.error || e;
-                console.log('Error details:', errorDetails);
-                
-                // Don't show error if we're waiting for ad
-                if (shouldPlayAfterAd) {
-                  // Error occurred while waiting for ad - this is normal, will retry after ad
-                  console.log('Video error while waiting for ad - will retry after ad closes');
-                  return;
-                }
-                
-                // If ad was just shown, try to recover silently
-                if (adShown) {
-                  console.log('Video error after ad - attempting recovery');
+                controls
+                width="100%"
+                height="100%"
+                playing={videoPlayed && !error}
+                key={`${video?._id || 'video'}-${selectedSource ? selectedSource.quality : 'original'}`}
+                config={{
+                  file: {
+                    attributes: {
+                      controlsList: 'nodownload noremoteplayback'
+                    }
+                  },
+                  youtube: {
+                    playerVars: {
+                      controls: 1,
+                      modestbranding: 1,
+                      rel: 0
+                    }
+                  }
+                }}
+                playbackRate={playbackRate}
+                pip={pipEnabled}
+                onProgress={handleProgress}
+                onPlay={() => {
+                  window.dispatchEvent(new CustomEvent('collapseSidebar'));
+                  const smartlinkShown = sessionStorage.getItem(`smartlinkShown_${id}`);
+                  if (!smartlinkShown && adConfig.smartlinkEnabled) {
+                    openSmartlink();
+                    sessionStorage.setItem(`smartlinkShown_${id}`, 'true');
+                  }
+                  setVideoPlayed(true);
+                }}
+                onError={(e) => {
+                  console.error('ReactPlayer error:', e);
+                  const errorDetails = e?.target?.error || e;
+                  console.log('Error details:', errorDetails);
+                  
+                  // Try to recover from error
+                  console.log('Video error - attempting recovery');
                   setTimeout(() => {
                     if (playerRef.current && video) {
                       try {
@@ -700,91 +639,85 @@ const Watch = () => {
                       }
                     }
                   }, 1000);
-                  return;
-                }
-                
-                // Only show error if ad was not shown and we're not waiting
-                if (!adShown && video) {
-                  // Check if video URL exists (prefer CDN URL)
-                  const videoUrl = selectedSource
-                    ? (selectedSource.cdnUrl || selectedSource.url || selectedSource.videoUrl || video.cdnUrl || video.videoUrl)
-                    : (video.cdnUrl || video.videoUrl);
                   
-                  if (!videoUrl) {
-                    setError('Video URL is missing. Please try refreshing the page.');
-                  } else {
-                    setError('Failed to play video. Please check if the video URL is accessible.');
-                    // Try to recover after 3 seconds
-                    setTimeout(() => {
-                      if (playerRef.current && video) {
-                        try {
-                          const player = playerRef.current.getInternalPlayer();
-                          if (player && typeof player.load === 'function') {
-                            player.load();
-                          }
-                        } catch (error) {
-                          console.error('Error recovering video player:', error);
-                        }
-                      }
-                    }, 3000);
-                  }
-                }
-              }}
-              onReady={() => {
-                // Video is ready - clear any errors
-                if (error && error.includes('Failed to play')) {
-                  setError('');
-                }
-                
-                // If ad was shown and video should play, try to play
-                if (adShown && videoPlayed && !shouldPlayAfterAd && playerRef.current) {
-                  setTimeout(() => {
-                    try {
-                      const player = playerRef.current.getInternalPlayer();
-                      if (player && typeof player.play === 'function') {
-                        player.play().catch(err => {
-                          console.error('Error playing video on ready:', err);
-                          // If play fails, try again after a delay
-                          setTimeout(() => {
-                            if (playerRef.current) {
-                              try {
-                                const retryPlayer = playerRef.current.getInternalPlayer();
-                                if (retryPlayer && typeof retryPlayer.play === 'function') {
-                                  retryPlayer.play();
-                                }
-                              } catch (retryError) {
-                                console.error('Error retrying video play:', retryError);
-                              }
+                  // Show error if video exists but can't play
+                  if (video) {
+                    // Check if video URL exists (prefer CDN URL)
+                    const videoUrl = selectedSource
+                      ? (selectedSource.cdnUrl || selectedSource.url || selectedSource.videoUrl || video.cdnUrl || video.videoUrl)
+                      : (video.cdnUrl || video.videoUrl);
+                    
+                    if (!videoUrl) {
+                      setError('Video URL is missing. Please try refreshing the page.');
+                    } else {
+                      setError('Failed to play video. Please check if the video URL is accessible.');
+                      // Try to recover after 3 seconds
+                      setTimeout(() => {
+                        if (playerRef.current && video) {
+                          try {
+                            const player = playerRef.current.getInternalPlayer();
+                            if (player && typeof player.load === 'function') {
+                              player.load();
                             }
-                          }, 1000);
-                        });
-                      }
-                    } catch (error) {
-                      console.error('Error accessing player on ready:', error);
+                          } catch (error) {
+                            console.error('Error recovering video player:', error);
+                          }
+                        }
+                      }, 3000);
                     }
-                  }, 500);
-                }
-                
-                // Also check if we returned from smartlink redirect
-                if (sessionStorage.getItem('smartlinkCallback') === 'true') {
-                  // Video is ready and we returned from smartlink - play it
-                  setTimeout(() => {
-                    if (playerRef.current && video) {
+                  }
+                }}
+                onReady={() => {
+                  if (error && error.includes('Failed to play')) {
+                    setError('');
+                  }
+                  
+                  if (videoPlayed && playerRef.current) {
+                    setTimeout(() => {
                       try {
                         const player = playerRef.current.getInternalPlayer();
                         if (player && typeof player.play === 'function') {
                           player.play().catch(err => {
-                            console.error('Error playing video after smartlink return on ready:', err);
+                            console.error('Error playing video on ready:', err);
+                            setTimeout(() => {
+                              if (playerRef.current) {
+                                try {
+                                  const retryPlayer = playerRef.current.getInternalPlayer();
+                                  if (retryPlayer && typeof retryPlayer.play === 'function') {
+                                    retryPlayer.play();
+                                  }
+                                } catch (retryError) {
+                                  console.error('Error retrying video play:', retryError);
+                                }
+                              }
+                            }, 1000);
                           });
                         }
                       } catch (error) {
-                        console.error('Error accessing player after smartlink return on ready:', error);
+                        console.error('Error accessing player on ready:', error);
                       }
-                    }
-                  }, 500);
-                }
-              }}
-            />
+                    }, 500);
+                  }
+                  
+                  if (sessionStorage.getItem('smartlinkCallback') === 'true') {
+                    setTimeout(() => {
+                      if (playerRef.current && video) {
+                        try {
+                          const player = playerRef.current.getInternalPlayer();
+                          if (player && typeof player.play === 'function') {
+                            player.play().catch(err => {
+                              console.error('Error playing video after smartlink return on ready:', err);
+                            });
+                          }
+                        } catch (error) {
+                          console.error('Error accessing player after smartlink return on ready:', error);
+                        }
+                      }
+                    }, 500);
+                  }
+                }}
+              />
+            )}
           </div>
 
           <div className="video-info-section">

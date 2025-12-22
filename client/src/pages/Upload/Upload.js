@@ -5,6 +5,7 @@ import { FiUpload, FiX, FiImage, FiFile, FiCheck, FiAlertCircle } from 'react-ic
 import { uploadVideo, presignPut, createVideoFromUrl } from '../../utils/api';
 import { useAuth } from '../../context/AuthContext';
 import { formatFileSize } from '../../utils/helpers';
+import { MAIN_CATEGORIES, GENRES, SUB_CATEGORIES, validateGenreSelection } from '../../utils/categories';
 import './Upload.css';
 
 const Upload = () => {
@@ -14,13 +15,17 @@ const Upload = () => {
   const [formData, setFormData] = useState({
     title: '',
     description: ' ',
-    category: 'Indian',
+    mainCategory: 'movies',
+    primaryGenre: 'action',
+    secondaryGenres: [],
+    subCategory: '',
     tags: '',
     visibility: 'public',
     playlist: ''
   });
   const [videoFile, setVideoFile] = useState(null);
   const [thumbnailFile, setThumbnailFile] = useState(null);
+  const [subtitleFiles, setSubtitleFiles] = useState([]); // Array of {file, language, label}
   const [videoPreview, setVideoPreview] = useState(null);
   const [thumbnailPreview, setThumbnailPreview] = useState(null);
   const [uploadProgress, setUploadProgress] = useState(0);
@@ -32,6 +37,11 @@ const Upload = () => {
   const [videoLink, setVideoLink] = useState('');
   const fileInputRef = useRef(null);
   const thumbnailInputRef = useRef(null);
+  const subtitleInputRef = useRef(null);
+  
+  // Multi-upload state
+  const [uploadQueue, setUploadQueue] = useState([]); // Array of upload jobs
+  const [isMultiUpload, setIsMultiUpload] = useState(false);
 
   // Collapse sidebar when component mounts or when upload starts
   useEffect(() => {
@@ -49,23 +59,85 @@ const Upload = () => {
     return null;
   }
 
-  const { title, description, category, tags, visibility, playlist } = formData;
+  const { title, description, mainCategory, primaryGenre, secondaryGenres, subCategory, tags, visibility, playlist } = formData;
 
   const onChange = (e) => {
-    setFormData({ ...formData, [e.target.name]: e.target.value });
+    const { name, value } = e.target;
+    
+    // Reset sub-category when primary genre changes
+    if (name === 'primaryGenre') {
+      setFormData({ ...formData, [name]: value, subCategory: '' });
+    } else {
+      setFormData({ ...formData, [name]: value });
+    }
   };
 
-  const onVideoChange = (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
+  const handleSecondaryGenreToggle = (genreId) => {
+    const currentSecondary = [...secondaryGenres];
+    const index = currentSecondary.indexOf(genreId);
+    
+    if (index > -1) {
+      // Remove genre
+      currentSecondary.splice(index, 1);
+    } else {
+      // Add genre (max 2)
+      if (currentSecondary.length < 2) {
+        currentSecondary.push(genreId);
+      } else {
+        setError('Maximum 2 secondary genres allowed');
+        setTimeout(() => setError(''), 3000);
+        return;
+      }
+    }
+    
+    setFormData({ ...formData, secondaryGenres: currentSecondary });
+  };
 
-    if (file.size > 2147483648) { // 2GB
-      setError('Video file must be less than 2GB');
+  const availableSubCategories = SUB_CATEGORIES[primaryGenre] || [];
+
+  const onVideoChange = (e) => {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+
+    // Check if multiple files selected
+    if (files.length > 1) {
+      setIsMultiUpload(true);
+      const newQueue = [];
+      
+      for (let i = 0; i < files.length; i++) {
+        const file = files[i];
+        
+        if (file.size > 5368709120) { // 5GB
+          alert(`${file.name} is too large (max 5GB). Skipping...`);
+          continue;
+        }
+        
+        newQueue.push({
+          id: Date.now() + i,
+          file: file,
+          title: file.name.replace(/\.[^/.]+$/, ''), // filename without extension
+          status: 'pending', // pending, uploading, completed, error
+          progress: 0,
+          error: null,
+          videoId: null
+        });
+      }
+      
+      setUploadQueue(newQueue);
+      setError('');
+      return;
+    }
+
+    // Single file upload (original behavior)
+    const file = files[0];
+    if (file.size > 5368709120) { // 5GB
+      setError('Video file must be less than 5GB');
       return;
     }
 
     setVideoFile(file);
     setError('');
+    setIsMultiUpload(false);
 
     // Create preview
     const videoUrl = URL.createObjectURL(file);
@@ -92,6 +164,29 @@ const Upload = () => {
     reader.readAsDataURL(file);
   };
 
+  const onSubtitleChange = (e) => {
+    const files = Array.from(e.target.files);
+    if (files.length === 0) return;
+
+    const newSubtitles = files.map((file, index) => ({
+      file,
+      language: 'en', // Default to English
+      label: file.name.replace(/\.(vtt|srt)$/i, '') // Use filename as label
+    }));
+
+    setSubtitleFiles(prev => [...prev, ...newSubtitles]);
+  };
+
+  const removeSubtitle = (index) => {
+    setSubtitleFiles(prev => prev.filter((_, i) => i !== index));
+  };
+
+  const updateSubtitleMeta = (index, field, value) => {
+    setSubtitleFiles(prev => prev.map((sub, i) => 
+      i === index ? { ...sub, [field]: value } : sub
+    ));
+  };
+
   const formatDuration = (seconds) => {
     if (!seconds) return '0:00';
     const mins = Math.floor(seconds / 60);
@@ -99,9 +194,102 @@ const Upload = () => {
     return `${mins}:${secs.toString().padStart(2, '0')}`;
   };
 
+  // Multi-upload handler
+  const handleMultiUpload = async () => {
+    if (uploadQueue.length === 0) return;
+    
+    // Upload all videos in parallel (max 3 at a time)
+    const maxConcurrent = 3;
+    let activeUploads = 0;
+    let currentIndex = 0;
+
+    const uploadNext = async () => {
+      if (currentIndex >= uploadQueue.length) return;
+      
+      const jobIndex = currentIndex;
+      currentIndex++;
+      activeUploads++;
+      
+      const job = uploadQueue[jobIndex];
+      
+      try {
+        // Update status to uploading
+        setUploadQueue(prev => prev.map((item, idx) => 
+          idx === jobIndex ? { ...item, status: 'uploading', progress: 0 } : item
+        ));
+
+        const data = new FormData();
+        data.append('title', job.title);
+        data.append('description', ' ');
+        data.append('mainCategory', mainCategory);
+        data.append('primaryGenre', primaryGenre);
+        data.append('secondaryGenres', JSON.stringify(secondaryGenres));
+        if (subCategory) data.append('subCategory', subCategory);
+        data.append('tags', tags);
+        data.append('visibility', visibility);
+        data.append('video', job.file);
+
+        const res = await uploadVideo(data, {
+          onUploadProgress: (progressEvent) => {
+            if (progressEvent.total) {
+              const percentCompleted = Math.round(
+                (progressEvent.loaded * 100) / progressEvent.total
+              );
+              setUploadQueue(prev => prev.map((item, idx) => 
+                idx === jobIndex ? { ...item, progress: percentCompleted } : item
+              ));
+            }
+          }
+        });
+
+        // Mark as completed
+        setUploadQueue(prev => prev.map((item, idx) => 
+          idx === jobIndex ? { 
+            ...item, 
+            status: 'completed', 
+            progress: 100,
+            videoId: res.data.data._id 
+          } : item
+        ));
+
+      } catch (err) {
+        // Mark as error
+        setUploadQueue(prev => prev.map((item, idx) => 
+          idx === jobIndex ? { 
+            ...item, 
+            status: 'error', 
+            error: err.response?.data?.message || err.message || 'Upload failed'
+          } : item
+        ));
+      } finally {
+        activeUploads--;
+        
+        // Start next upload if available
+        if (currentIndex < uploadQueue.length) {
+          uploadNext();
+        } else if (activeUploads === 0) {
+          // All uploads complete
+          const completedCount = uploadQueue.filter(j => j.status === 'completed').length;
+          alert(`✅ Upload complete!\\n${completedCount}/${uploadQueue.length} videos uploaded successfully.`);
+        }
+      }
+    };
+
+    // Start initial batch of uploads
+    for (let i = 0; i < Math.min(maxConcurrent, uploadQueue.length); i++) {
+      uploadNext();
+    }
+  };
+
   const onSubmit = async (e) => {
     e.preventDefault();
     setError('');
+
+    // Check if multi-upload mode
+    if (isMultiUpload && uploadQueue.length > 0) {
+      handleMultiUpload();
+      return;
+    }
 
     if (!videoFile) {
       setError('Please select a video file');
@@ -110,6 +298,14 @@ const Upload = () => {
 
     if (!title.trim()) {
       setError('Please enter a video title');
+      return;
+    }
+
+    // Validate genre selection
+    const allGenres = [primaryGenre, ...secondaryGenres];
+    const validation = validateGenreSelection(allGenres);
+    if (!validation.valid) {
+      setError(validation.message);
       return;
     }
 
@@ -126,12 +322,24 @@ const Upload = () => {
     const data = new FormData();
     data.append('title', title);
     data.append('description', description || ' ');
-    data.append('category', category);
+    data.append('mainCategory', mainCategory);
+    data.append('primaryGenre', primaryGenre);
+    data.append('secondaryGenres', JSON.stringify(secondaryGenres));
+    if (subCategory) data.append('subCategory', subCategory);
     data.append('tags', tags);
     data.append('visibility', visibility);
     data.append('video', videoFile);
     if (thumbnailFile) {
       data.append('thumbnail', thumbnailFile);
+    }
+    
+    // Add subtitles
+    if (subtitleFiles.length > 0) {
+      subtitleFiles.forEach((subtitle, index) => {
+        data.append(`subtitles`, subtitle.file);
+        data.append(`subtitleLanguages`, subtitle.language);
+        data.append(`subtitleLabels`, subtitle.label);
+      });
     }
 
         const res = await uploadVideo(data, {
@@ -165,11 +373,36 @@ const Upload = () => {
           clearInterval(processingInterval);
           setProcessingProgress(100);
           setUploadStatus('completed');
-          setVideoLink(`/watch/${res.data.data._id}`);
+          const uploadedVideoId = res.data.data._id;
+          setVideoLink(`/watch/${uploadedVideoId}`);
           
-          // Navigate after 2 seconds
+          // Show success message and reset form for next upload
           setTimeout(() => {
-        navigate(`/watch/${res.data.data._id}`);
+            // Reset form for next upload
+            setUploadStatus('idle');
+            setUploadProgress(0);
+            setProcessingProgress(0);
+            setVideoFile(null);
+            setThumbnailFile(null);
+            setVideoPreview(null);
+            setThumbnailPreview(null);
+            setFormData({
+              title: '',
+              description: ' ',
+              mainCategory: 'movies',
+              primaryGenre: 'action',
+              secondaryGenres: [],
+              subCategory: '',
+              tags: '',
+              visibility: 'public',
+              playlist: ''
+            });
+            setActiveTab('information');
+            if (fileInputRef.current) fileInputRef.current.value = '';
+            if (thumbnailInputRef.current) thumbnailInputRef.current.value = '';
+            
+            // Show success notification
+            alert(`✅ Video uploaded successfully! You can upload another video now.\n\nView video: ${window.location.origin}/watch/${uploadedVideoId}`);
           }, 2000);
         }, 3000);
       } else {
@@ -200,7 +433,10 @@ const Upload = () => {
       const createRes = await createVideoFromUrl({
         title,
         description,
-        category,
+        mainCategory,
+        primaryGenre,
+        secondaryGenres,
+        subCategory,
         tags,
         visibility,
         videoUrl: publicUrl
@@ -208,10 +444,35 @@ const Upload = () => {
 
         setProcessingProgress(100);
         setUploadStatus('completed');
-        setVideoLink(`/watch/${createRes.data.data._id}`);
+        const uploadedVideoId = createRes.data.data._id;
+        setVideoLink(`/watch/${uploadedVideoId}`);
         
         setTimeout(() => {
-      navigate(`/watch/${createRes.data.data._id}`);
+          // Reset form for next upload
+          setUploadStatus('idle');
+          setUploadProgress(0);
+          setProcessingProgress(0);
+          setVideoFile(null);
+          setThumbnailFile(null);
+          setVideoPreview(null);
+          setThumbnailPreview(null);
+          setFormData({
+            title: '',
+            description: ' ',
+            mainCategory: 'movies',
+            primaryGenre: 'action',
+            secondaryGenres: [],
+            subCategory: '',
+            tags: '',
+            visibility: 'public',
+            playlist: ''
+          });
+          setActiveTab('information');
+          if (fileInputRef.current) fileInputRef.current.value = '';
+          if (thumbnailInputRef.current) thumbnailInputRef.current.value = '';
+          
+          // Show success notification
+          alert(`✅ Video uploaded successfully! You can upload another video now.\n\nView video: ${window.location.origin}/watch/${uploadedVideoId}`);
         }, 2000);
       }
     } catch (err) {
@@ -249,7 +510,38 @@ const Upload = () => {
           <span className="breadcrumb-separator">›</span>
           <span className="breadcrumb-current">Add video</span>
               </div>
-        <button className="upload-another-btn">
+        <button 
+          className="upload-another-btn"
+          onClick={() => {
+            if (uploadStatus === 'uploading' || uploadStatus === 'processing') {
+              alert('Please wait for current upload to finish');
+              return;
+            }
+            // Reset form
+            setUploadStatus('idle');
+            setUploadProgress(0);
+            setProcessingProgress(0);
+            setVideoFile(null);
+            setThumbnailFile(null);
+            setVideoPreview(null);
+            setThumbnailPreview(null);
+            setFormData({
+              title: '',
+              description: ' ',
+              mainCategory: 'movies',
+              primaryGenre: 'action',
+              secondaryGenres: [],
+              subCategory: '',
+              tags: '',
+              visibility: 'public',
+              playlist: ''
+            });
+            setActiveTab('information');
+            setError('');
+            if (fileInputRef.current) fileInputRef.current.value = '';
+            if (thumbnailInputRef.current) thumbnailInputRef.current.value = '';
+          }}
+        >
           Upload another video
         </button>
             </div>
@@ -376,13 +668,83 @@ const Upload = () => {
                           />
                           <label htmlFor="thumbnail" className="cover-upload-label">
                             <FiImage size={32} />
-                            <span>Upload cover</span>
+                            <span>Upload cover (Optional)</span>
                           </label>
                           <p className="cover-hint">
-                            You can select a thumbnail after the video has been processed
+                            Upload a custom thumbnail now or auto-generate after processing
                           </p>
                         </div>
                       )}
+                    </div>
+                  </div>
+
+                  <div className="form-section">
+                    <h3 className="section-title">Subtitles (Optional)</h3>
+                    <div className="subtitle-upload-section">
+                      <input
+                        ref={subtitleInputRef}
+                        type="file"
+                        id="subtitles"
+                        accept=".vtt,.srt"
+                        multiple
+                        onChange={onSubtitleChange}
+                        style={{ display: 'none' }}
+                      />
+                      <label htmlFor="subtitles" className="subtitle-upload-btn">
+                        <FiFile size={20} />
+                        <span>Add Subtitle Files (.vtt, .srt)</span>
+                      </label>
+                      
+                      {subtitleFiles.length > 0 && (
+                        <div className="subtitle-list">
+                          {subtitleFiles.map((subtitle, index) => (
+                            <div key={index} className="subtitle-item">
+                              <div className="subtitle-info">
+                                <FiFile size={16} />
+                                <span className="subtitle-filename">{subtitle.file.name}</span>
+                              </div>
+                              <div className="subtitle-meta">
+                                <input
+                                  type="text"
+                                  placeholder="Label (e.g., English)"
+                                  value={subtitle.label}
+                                  onChange={(e) => updateSubtitleMeta(index, 'label', e.target.value)}
+                                  className="subtitle-input"
+                                />
+                                <select
+                                  value={subtitle.language}
+                                  onChange={(e) => updateSubtitleMeta(index, 'language', e.target.value)}
+                                  className="subtitle-select"
+                                >
+                                  <option value="en">English</option>
+                                  <option value="es">Spanish</option>
+                                  <option value="fr">French</option>
+                                  <option value="de">German</option>
+                                  <option value="it">Italian</option>
+                                  <option value="pt">Portuguese</option>
+                                  <option value="ru">Russian</option>
+                                  <option value="ja">Japanese</option>
+                                  <option value="ko">Korean</option>
+                                  <option value="zh">Chinese</option>
+                                  <option value="ar">Arabic</option>
+                                  <option value="hi">Hindi</option>
+                                </select>
+                                <button
+                                  type="button"
+                                  className="subtitle-remove-btn"
+                                  onClick={() => removeSubtitle(index)}
+                                  title="Remove subtitle"
+                                >
+                                  <FiX size={18} />
+                                </button>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                      <p className="subtitle-hint">
+                        Upload subtitle files in WebVTT (.vtt) or SRT (.srt) format. You can add multiple languages.
+                      </p>
                     </div>
                   </div>
 
@@ -408,44 +770,95 @@ const Upload = () => {
               {activeTab === 'additional' && (
                 <>
                   <div className="form-section">
-                    <h3 className="section-title">Category</h3>
-            <div className="form-group">
-              <select
-                id="category"
-                name="category"
-                value={category}
-                onChange={onChange}
+                    <h3 className="section-title">Category System</h3>
+                    
+                    {/* Level 1: Main Category */}
+                    <div className="form-group">
+                      <label htmlFor="mainCategory" className="form-label">
+                        Main Category <span className="required">*</span>
+                      </label>
+                      <select
+                        id="mainCategory"
+                        name="mainCategory"
+                        value={mainCategory}
+                        onChange={onChange}
                         className="form-select"
-              >
-                <option value="Indian">Indian</option>
-                <option value="Milfs">Milfs</option>
-                <option value="Big Cock">Big Cock</option>
-                <option value="Step Mom">Step Mom</option>
-                <option value="Teen">Teen</option>
-                <option value="Lesbian">Lesbian</option>
-                <option value="Latina">Latina</option>
-                <option value="Blowjobs">Blowjobs</option>
-                <option value="Anal">Anal</option>
-                <option value="Big Tits">Big Tits</option>
-                <option value="Big Ass">Big Ass</option>
-                <option value="Hardcore">Hardcore</option>
-                <option value="POV">POV</option>
-                <option value="Amateur">Amateur</option>
-                <option value="Ebony">Ebony</option>
-                <option value="Asian">Asian</option>
-                <option value="Mature">Mature</option>
-                <option value="Creampie">Creampie</option>
-                <option value="Cumshot">Cumshot</option>
-                <option value="Blonde">Blonde</option>
-                <option value="Brunette">Brunette</option>
-                <option value="Threesome">Threesome</option>
-                <option value="Gangbang">Gangbang</option>
-                <option value="Interracial">Interracial</option>
-                <option value="HD Porn">HD Porn</option>
-                <option value="Other">Other</option>
-              </select>
+                        required
+                      >
+                        {MAIN_CATEGORIES.map(cat => (
+                          <option key={cat.id} value={cat.id}>
+                            {cat.icon} {cat.name}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    {/* Level 2: Primary Genre */}
+                    <div className="form-group">
+                      <label htmlFor="primaryGenre" className="form-label">
+                        Primary Genre <span className="required">*</span>
+                      </label>
+                      <select
+                        id="primaryGenre"
+                        name="primaryGenre"
+                        value={primaryGenre}
+                        onChange={onChange}
+                        className="form-select"
+                        required
+                      >
+                        {GENRES.map(genre => (
+                          <option key={genre.id} value={genre.id}>
+                            {genre.name}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    {/* Level 2: Secondary Genres (optional, max 2) */}
+                    <div className="form-group">
+                      <label className="form-label">
+                        Secondary Genres (Optional - Max 2)
+                      </label>
+                      <div className="genre-chips">
+                        {GENRES.filter(g => g.id !== primaryGenre).map(genre => (
+                          <button
+                            key={genre.id}
+                            type="button"
+                            className={`genre-chip ${secondaryGenres.includes(genre.id) ? 'selected' : ''}`}
+                            onClick={() => handleSecondaryGenreToggle(genre.id)}
+                          >
+                            {genre.name}
+                          </button>
+                        ))}
+                      </div>
+                      <small className="form-hint">
+                        Selected: {secondaryGenres.length}/2
+                      </small>
+                    </div>
+
+                    {/* Level 3: Sub-category (optional, based on primary genre) */}
+                    {availableSubCategories.length > 0 && (
+                      <div className="form-group">
+                        <label htmlFor="subCategory" className="form-label">
+                          Sub-Category (Optional)
+                        </label>
+                        <select
+                          id="subCategory"
+                          name="subCategory"
+                          value={subCategory}
+                          onChange={onChange}
+                          className="form-select"
+                        >
+                          <option value="">None</option>
+                          {availableSubCategories.map(sub => (
+                            <option key={sub.id} value={sub.id}>
+                              {sub.name}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    )}
             </div>
-                  </div>
 
                   <div className="form-section">
                     <h3 className="section-title">Tags</h3>
@@ -519,9 +932,14 @@ const Upload = () => {
             <button
               type="submit"
               className="btn btn-primary"
-                  disabled={loading || !videoFile || !title.trim() || uploadStatus === 'uploading' || uploadStatus === 'processing'}
+                  disabled={loading || (!videoFile && uploadQueue.length === 0) || (!isMultiUpload && !title.trim()) || uploadStatus === 'uploading' || uploadStatus === 'processing'}
             >
-                  {uploadStatus === 'completed' ? (
+                  {isMultiUpload ? (
+                    <>
+                      <FiUpload size={18} />
+                      <span>Upload {uploadQueue.length} Videos</span>
+                    </>
+                  ) : uploadStatus === 'completed' ? (
                     <>
                       <FiCheck size={18} />
                       <span>Completed</span>
@@ -544,7 +962,49 @@ const Upload = () => {
               <FiX size={24} />
             </button>
 
-            {videoFile ? (
+            {/* Multi-upload queue display */}
+            {isMultiUpload && uploadQueue.length > 0 && (
+              <div className="multi-upload-queue">
+                <h3>Upload Queue ({uploadQueue.length} videos)</h3>
+                <div className="queue-list">
+                  {uploadQueue.map((job, index) => (
+                    <div key={job.id} className={`queue-item queue-${job.status}`}>
+                      <div className="queue-item-header">
+                        <span className="queue-number">#{index + 1}</span>
+                        <span className="queue-title">{job.title}</span>
+                        <span className={`queue-status status-${job.status}`}>
+                          {job.status === 'pending' && '⏳ Pending'}
+                          {job.status === 'uploading' && '📤 Uploading'}
+                          {job.status === 'completed' && '✅ Done'}
+                          {job.status === 'error' && '❌ Error'}
+                        </span>
+                      </div>
+                      {job.status === 'uploading' && (
+                        <div className="queue-progress">
+                          <div className="queue-progress-bar">
+                            <div 
+                              className="queue-progress-fill" 
+                              style={{ width: `${job.progress}%` }}
+                            />
+                          </div>
+                          <span className="queue-progress-text">{job.progress}%</span>
+                        </div>
+                      )}
+                      {job.status === 'error' && job.error && (
+                        <div className="queue-error">{job.error}</div>
+                      )}
+                      {job.status === 'completed' && job.videoId && (
+                        <Link to={`/watch/${job.videoId}`} className="queue-view-link">
+                          View Video →
+                        </Link>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {videoFile && !isMultiUpload ? (
               <div className="video-preview-container">
                 {uploadStatus === 'idle' && (
                   <>
@@ -652,13 +1112,14 @@ const Upload = () => {
                     id="video"
                     accept="video/*"
                     onChange={onVideoChange}
+                    multiple
                     style={{ display: 'none' }}
                   />
                   <label htmlFor="video" className="upload-file-btn">
                     <FiUpload size={18} />
-                    <span>Select Video</span>
+                    <span>Select Videos (Multiple)</span>
                   </label>
-                  <small className="upload-hint">Max file size: 2GB</small>
+                  <small className="upload-hint">Select one or multiple videos - Max 5GB each</small>
                 </div>
               </div>
             )}

@@ -8,25 +8,29 @@ const connectDB = async () => {
   }
 
   try {
-    mongoose.set('strictQuery', false);
-    
+    mongoose.set('strictQuery', false);  // Prevent strict query errors in mongoose
+    console.log('🌐 Attempting to connect to MongoDB...');
+
+    // Connect to MongoDB
     const conn = await mongoose.connect(uri, {
-      serverSelectionTimeoutMS: 10000,
-      socketTimeoutMS: 45000,
+      useNewUrlParser: true,
+      useUnifiedTopology: true,
+      serverSelectionTimeoutMS: 10000, // Set connection timeout
+      socketTimeoutMS: 45000,          // Set socket timeout
     });
 
     console.log(`✅ MongoDB Connected: ${conn.connection.host}`);
     console.log(`✅ Database: ${conn.connection.name}`);
-    
-    // Monitor connection events
+
+    // Monitor connection events for better troubleshooting
     mongoose.connection.on('error', (err) => {
       console.error('❌ MongoDB connection error:', err.message);
     });
-    
+
     mongoose.connection.on('disconnected', () => {
       console.warn('⚠️  MongoDB disconnected');
     });
-    
+
     mongoose.connection.on('reconnected', () => {
       console.log('✅ MongoDB reconnected');
     });
@@ -35,7 +39,7 @@ const connectDB = async () => {
   } catch (err) {
     console.error('❌ MongoDB Connection Failed');
     console.error('Error:', err.message);
-    
+
     // Provide helpful error messages
     if (err.message.includes('ENOTFOUND')) {
       console.error('💡 Check your internet connection and MongoDB cluster address');

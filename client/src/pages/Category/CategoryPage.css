@@ -144,3 +144,41 @@
     font-size: 1rem;
   }
 }
+
+/* New category page styles */
+.category-page-title {
+  color: var(--text-primary);
+  margin-bottom: 3rem;
+  font-size: 2.5rem;
+  font-weight: bold;
+  text-align: center;
+}
+
+.category-section {
+  margin-bottom: 3rem;
+}
+
+.section-title {
+  color: var(--text-primary);
+  font-size: 1.5rem;
+  font-weight: 600;
+  margin-bottom: 1.5rem;
+  padding-left: 0.5rem;
+  border-left: 4px solid var(--acid);
+}
+
+.category-card.main-category {
+  height: 220px;
+  border: 2px solid var(--acid);
+  box-shadow: 0 0 20px rgba(57, 255, 20, 0.2);
+}
+
+.category-card.main-category:hover {
+  border-color: var(--neonBlue);
+  box-shadow: 0 0 30px rgba(57, 255, 20, 0.4);
+}
+
+.category-card.main-category .category-name {
+  font-size: 1.3rem;
+  font-weight: 700;
+}

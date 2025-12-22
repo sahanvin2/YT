@@ -501,6 +501,10 @@ const Profile = () => {
             <FiSettings size={18} />
             Settings
           </button>
+          <Link to="/profile/edit" className="tab-btn edit-profile-btn">
+            <FiEdit2 size={18} />
+            Edit Profile
+          </Link>
         </div>
 
         {/* Tab Content */}

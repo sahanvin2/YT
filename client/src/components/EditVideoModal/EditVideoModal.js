@@ -6,6 +6,7 @@ import './EditVideoModal.css';
 const EditVideoModal = ({ video, onClose, onUpdate }) => {
     const [activeTab, setActiveTab] = useState('information');
     const [formData, setFormData] = useState({
+        title: video?.title || '',
         description: video?.description || '',
         tags: video?.tags?.join(', ') || '',
         category: video?.category || 'Other',
@@ -23,6 +24,7 @@ const EditVideoModal = ({ video, onClose, onUpdate }) => {
     useEffect(() => {
         if (video) {
             setFormData({
+                title: video.title || '',
                 description: video.description || '',
                 tags: video.tags?.join(', ') || '',
                 category: video.category || 'Other',
@@ -81,6 +83,9 @@ const EditVideoModal = ({ video, onClose, onUpdate }) => {
         try {
             setLoading(true);
             const formDataToSend = new FormData();
+            
+            // Add title
+            formDataToSend.append('title', formData.title);
             
             // Add description
             formDataToSend.append('description', formData.description);
@@ -163,15 +168,21 @@ const EditVideoModal = ({ video, onClose, onUpdate }) => {
                                 <h3 className="section-title">General</h3>
                                 
                                 <div className="form-group">
-                                    <label>Video Title</label>
+                                    <label htmlFor="title">Video Title</label>
                                     <input
                                         type="text"
-                                        value={video?.title || ''}
-                                        disabled
-                                        className="disabled-input"
-                                        title="Title cannot be changed"
+                                        id="title"
+                                        name="title"
+                                        value={formData.title}
+                                        onChange={handleInputChange}
+                                        maxLength={100}
+                                        placeholder="Enter video title"
+                                        required
+                                        className="form-input"
                                     />
-                                    <small className="form-hint">Title cannot be changed</small>
+                                    <small className="char-count">
+                                        {formData.title.length} / 100 characters
+                                    </small>
                                 </div>
 
                                 <div className="form-group">

@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import {
   FiHome,
@@ -6,41 +6,40 @@ import {
   FiClock,
   FiThumbsUp,
   FiUsers,
-  FiMusic,
-  FiMonitor,
-  FiBook,
-  FiSmile,
-  FiRadio,
-  FiTarget,
-  FiScissors,
   FiBookmark,
-  FiGrid,
   FiVideo,
   FiUser,
   FiZap,
   FiCompass,
   FiTv,
   FiMessageSquare,
-  FiMail,
   FiHeart,
-  FiInfo,
   FiStar,
-  FiSun,
-  FiCircle,
-  FiTriangle,
-  FiGlobe,
-  FiEye,
-  FiMoon
+  FiFilm,
+  FiSmile,
+  FiSearch
 } from 'react-icons/fi';
 import { useAuth } from '../../context/AuthContext';
+import { MAIN_CATEGORIES, GENRES } from '../../utils/categories';
 import './Sidebar.css';
 
 const Sidebar = ({ isOpen }) => {
   const location = useLocation();
   const navigate = useNavigate();
   const { isAuthenticated, user } = useAuth();
+  const [searchQuery, setSearchQuery] = useState('');
 
-  // Auto-minimize sidebar on mobile when clicking a link
+  const handleSearch = (e) => {
+    e.preventDefault();
+    if (searchQuery.trim()) {
+      navigate(`/search?q=${encodeURIComponent(searchQuery.trim())}`);
+      setSearchQuery('');
+      // Don't auto-close sidebar on mobile after search - let user see results
+      // They can close it manually if needed
+    }
+  };
+
+  // Auto-minimize sidebar on mobile when clicking a link (but not search)
   const handleLinkClick = () => {
     if (window.innerWidth <= 768) {
       // Dispatch event to close sidebar
@@ -67,25 +66,29 @@ const Sidebar = ({ isOpen }) => {
     { path: '/saved', icon: FiClock, label: 'Watch Later' }
   ];
 
+  const channelLinks = [
+    { path: `/channel/${user?._id || ''}`, icon: FiUser, label: 'Your Channel' },
+    { path: '/video-manager', icon: FiVideo, label: 'Video Manager' }
+  ];
+
   const categories = [
-    { path: '/category/Indian', icon: FiCompass, label: 'Indian' },
-    { path: '/category/Milfs', icon: FiHeart, label: 'Milfs' },
-    { path: '/category/Big Cock', icon: FiZap, label: 'Big Cock' },
-    { path: '/category/Step Mom', icon: FiUsers, label: 'Step Mom' },
-    { path: '/category/Granny', icon: FiStar, label: 'Granny' },
-    { path: '/category/Blonde', icon: FiSun, label: 'Blonde' },
-    { path: '/category/Big Tits', icon: FiCircle, label: 'Big Tits' },
-    { path: '/category/Anal', icon: FiTriangle, label: 'Anal' },
-    { path: '/category/Hardcore', icon: FiZap, label: 'Hardcore' },
-    { path: '/category/Ebony', icon: FiMoon, label: 'Ebony' },
-    { path: '/category/Asia', icon: FiGlobe, label: 'Asia' },
-    { path: '/category/Teen', icon: FiHeart, label: 'Teen' },
-    { path: '/category/Lesbian', icon: FiUsers, label: 'Lesbian' },
-    { path: '/category/Latina', icon: FiGlobe, label: 'Latina' },
-    { path: '/category/Blowjobs', icon: FiCircle, label: 'Blowjobs' },
-    { path: '/category/Amateur', icon: FiVideo, label: 'Amateur' },
-    { path: '/category/POV', icon: FiEye, label: 'POV' },
-    { path: '/category/HD Porn', icon: FiVideo, label: 'HD Porn' }
+    ...MAIN_CATEGORIES.map(cat => ({
+      path: `/category/${cat.id}`,
+      icon: cat.id === 'movies' ? FiFilm : cat.id === 'series' ? FiTv : cat.id === 'documentaries' ? FiVideo : FiSmile,
+      label: cat.name
+    })),
+    { path: '/category/action', icon: FiZap, label: 'Action' },
+    { path: '/category/comedy', icon: FiSmile, label: 'Comedy' },
+    { path: '/category/drama', icon: FiHeart, label: 'Drama' },
+    { path: '/category/horror', icon: FiStar, label: 'Horror' },
+    { path: '/category/thriller', icon: FiZap, label: 'Thriller' },
+    { path: '/category/romance', icon: FiHeart, label: 'Romance' },
+    { path: '/category/science-fiction', icon: FiZap, label: 'Sci-Fi' },
+    { path: '/category/fantasy', icon: FiStar, label: 'Fantasy' },
+    { path: '/category/crime', icon: FiZap, label: 'Crime' },
+    { path: '/category/mystery', icon: FiCompass, label: 'Mystery' },
+    { path: '/category/animation', icon: FiSmile, label: 'Animation' },
+    { path: '/category/adventure', icon: FiCompass, label: 'Adventure' }
   ];
 
   const isActive = (path) => {
@@ -95,9 +98,25 @@ const Sidebar = ({ isOpen }) => {
   return (
     <aside className={`sidebar ${isOpen ? 'open' : 'closed'}`}>
       <div className="sidebar-content">
+        {/* Search Section */}
+        <div className="sidebar-section sidebar-search-section">
+          <form onSubmit={handleSearch} className="sidebar-search-form">
+            <div className="sidebar-search-input-wrapper">
+              <FiSearch className="sidebar-search-icon" />
+              <input
+                type="text"
+                placeholder="Search videos..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="sidebar-search-input"
+              />
+            </div>
+          </form>
+        </div>
+        <div className="sidebar-divider"></div>
+
         {/* Section 1: Main Links */}
-        <div className="sidebar-section">
-          {mainLinks.map((link) => (
+        <div className="sidebar-section">{mainLinks.map((link) => (
             <Link
               key={link.path}
               to={link.path}
@@ -153,7 +172,28 @@ const Sidebar = ({ isOpen }) => {
           </>
         )}
 
-        {/* Section 4: Categories */}
+        {/* Section 4: Channel */}
+        {isAuthenticated && user && (
+          <>
+            <div className="sidebar-section">
+              <div className="sidebar-title">Channel</div>
+              {channelLinks.map((link) => (
+                <Link
+                  key={link.path}
+                  to={link.path}
+                  className={`sidebar-link ${isActive(link.path)}`}
+                  onClick={handleLinkClick}
+                >
+                  <link.icon size={20} />
+                  <span>{link.label}</span>
+                </Link>
+              ))}
+            </div>
+            <div className="sidebar-divider"></div>
+          </>
+        )}
+
+        {/* Section 5: Categories */}
         <div className="sidebar-section">
           <div className="sidebar-title">Categories</div>
           {categories.map((category) => (

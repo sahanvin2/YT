@@ -35,10 +35,13 @@ export const AdProvider = ({ children }) => {
     popUnderDelay: 5000, // milliseconds before showing pop-under
     popUnderTriggers: ['video-play', 'page-load'], // when to trigger
     
-    // Smartlink ad settings
+    // VAST In-Stream Video Ad settings
     smartlinkEnabled: true,
-    smartlinkUrl: 'https://www.effectivegatecpm.com/b467swwk68?key=83daee009e4befaeaba7c9dea1c856e8',
-    smartlinkFrequency: 'once-per-video', // 'once-per-video' | 'once-per-session' | 'always'
+    smartlinkUrl: 'https://otieu.com/4/10271171',
+    smartlinkFrequency: 'once-per-video',
+    timedAdEnabled: true,
+    timedAdInterval: 180000, // 3 minutes in milliseconds
+    timedAdUrl: 'https://otieu.com/4/10271171',
     
     // Custom ad codes (for custom ad networks)
     // 728x90 Banner Ad Key: f3d1a518f166a74bea90e44208c34ab0
@@ -83,7 +86,8 @@ export const AdProvider = ({ children }) => {
   const [adImpressions, setAdImpressions] = useState({
     banners: {},
     natives: {},
-    popUnder: false
+    popUnder: false,
+    smartlink: false
   });
 
   // Check if ad should be shown based on frequency
@@ -109,6 +113,16 @@ export const AdProvider = ({ children }) => {
         }
         return true;
 
+      case 'smartlink':
+        if (!adConfig.smartlinkEnabled) return false;
+        if (adConfig.smartlinkFrequency === 'once-per-session') {
+          return !adImpressions.smartlink;
+        }
+        if (adConfig.smartlinkFrequency === 'once-per-video') {
+          return !adImpressions.smartlink;
+        }
+        return true;
+
       default:
         return false;
     }
@@ -125,6 +139,8 @@ export const AdProvider = ({ children }) => {
         newImpressions.natives[position || 'default'] = true;
       } else if (adType === 'popUnder') {
         newImpressions.popUnder = true;
+      } else if (adType === 'smartlink') {
+        newImpressions.smartlink = true;
       }
       
       return newImpressions;
@@ -136,7 +152,8 @@ export const AdProvider = ({ children }) => {
     setAdImpressions({
       banners: {},
       natives: {},
-      popUnder: false
+      popUnder: false,
+      smartlink: false
     });
   };
 

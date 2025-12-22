@@ -107,6 +107,23 @@
   border-bottom-color: var(--primary-color);
 }
 
+.edit-profile-btn {
+  margin-left: auto;
+  background: var(--neon);
+  color: var(--void);
+  border-radius: 8px;
+  padding: 10px 20px;
+  text-decoration: none;
+  border-bottom: none !important;
+}
+
+.edit-profile-btn:hover {
+  background: var(--textColor);
+  color: var(--void);
+  transform: translateY(-2px);
+  box-shadow: 0 0 20px rgba(255, 107, 53, 0.4);
+}
+
 /* Profile Card */
 .profile-card {
   background: var(--secondary-color);
