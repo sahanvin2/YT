@@ -47,6 +47,7 @@ const Watch = () => {
   const [isSaved, setIsSaved] = useState(false);
   const [showDescription, setShowDescription] = useState(false);
   const [lastAdTime, setLastAdTime] = useState(0);
+  const [waitingForAdPlay, setWaitingForAdPlay] = useState(false);
   const [videoDuration, setVideoDuration] = useState(0);
   const [playbackRate, setPlaybackRate] = useState(1);
   const [pipEnabled, setPipEnabled] = useState(false);
@@ -64,6 +65,7 @@ const Watch = () => {
     watchedDurationRef.current = 0;
     maxWatchedDurationRef.current = 0;
     setLastAdTime(0);
+    setWaitingForAdPlay(false);
     
     // Clear sessionStorage for this video ID
     if (id) {
@@ -286,6 +288,28 @@ const Watch = () => {
   };
 
   const fetchRelatedVideos = async (category) => {
+
+  // Handle play button click - show ad if waiting for ad
+  const handlePlayClick = () => {
+    if (waitingForAdPlay && adConfig.timedAdUrl) {
+      // Show ad first
+      openSmartlink(() => {
+        // After ad closes, allow video to play
+        setWaitingForAdPlay(false);
+        // Auto-resume video
+        setTimeout(() => {
+          if (playerRef.current) {
+            const player = playerRef.current.getInternalPlayer();
+            if (player && typeof player.play === 'function') {
+              player.play().catch(err => console.error('Error resuming video after ad:', err));
+            }
+          }
+        }, 500);
+      });
+    }
+  };
+
+  const fetchRelatedVideos = async (category) => {
     try {
       const { getVideos } = require('../../utils/api');
       const res = await getVideos({ category, limit: 10 });
@@ -341,16 +365,23 @@ const Watch = () => {
       }
     }
 
-    // Show recurring smartlink ad every 3 minutes of actual playback time
-    if (videoDuration > 180 && adConfig.timedAdEnabled && adConfig.timedAdUrl) {
-      const currentMinuteMark = Math.floor(playedSeconds / 180); // Every 180 seconds (3 minutes)
-      const lastAdMinuteMark = Math.floor(lastAdTime / 180);
+    // Pause video every 5 minutes for ad - user must click play to watch ad and continue
+    if (videoDuration > 300 && adConfig.timedAdEnabled && adConfig.timedAdUrl && !waitingForAdPlay) {
+      const currentMinuteMark = Math.floor(playedSeconds / 300); // Every 300 seconds (5 minutes)
+      const lastAdMinuteMark = Math.floor(lastAdTime / 300);
       
-      // Show ad when crossing a 3-minute mark (at 3:00, 6:00, 9:00, etc.)
+      // Pause video when crossing a 5-minute mark (at 5:00, 10:00, 15:00, etc.)
       if (currentMinuteMark > lastAdMinuteMark && currentMinuteMark > 0) {
-        console.log(`Opening timed ad at ${Math.floor(playedSeconds / 60)}:${Math.floor(playedSeconds % 60).toString().padStart(2, '0')}...`);
+        console.log(`Pausing for ad at ${Math.floor(playedSeconds / 60)}:${Math.floor(playedSeconds % 60).toString().padStart(2, '0')}...`);
+        setWaitingForAdPlay(true);
         setLastAdTime(playedSeconds);
-        window.open(adConfig.timedAdUrl, '_blank');
+        // Pause the video
+        if (playerRef.current) {
+          const player = playerRef.current.getInternalPlayer();
+          if (player && typeof player.pause === 'function') {
+            player.pause();
+          }
+        }
       }
     }
   };
@@ -611,6 +642,12 @@ const Watch = () => {
                 pip={pipEnabled}
                 onProgress={handleProgress}
                 onPlay={() => {
+                  // If waiting for ad, trigger ad first
+                  if (waitingForAdPlay) {
+                    handlePlayClick();
+                    return;
+                  }
+                  
                   window.dispatchEvent(new CustomEvent('collapseSidebar'));
                   const smartlinkShown = sessionStorage.getItem(`smartlinkShown_${id}`);
                   if (!smartlinkShown && adConfig.smartlinkEnabled) {
@@ -717,6 +754,20 @@ const Watch = () => {
                   }
                 }}
               />
+            )}
+            
+            {/* Ad Pause Overlay */}
+            {waitingForAdPlay && (
+              <div className="ad-overlay">
+                <div className="ad-overlay-content">
+                  <div className="ad-icon">▶️</div>
+                  <h3>Time for a short break</h3>
+                  <p>Click play to watch a quick ad and continue</p>
+                  <button className="ad-play-button" onClick={handlePlayClick}>
+                    ▶ Watch Ad & Continue
+                  </button>
+                </div>
+              </div>
             )}
           </div>
 
