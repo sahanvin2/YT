@@ -297,11 +297,19 @@ const Watch = () => {
         'https://ferntravelleddeduct.com/gtrc1veb7i?key=b0b98b004d66f73292231e7413bd2b3d'
       ];
       
-      // Open all ads at once
+      console.log('Opening 3 ads...');
+      
+      // Open all 3 ads with larger delay to avoid popup blocking
       adUrls.forEach((url, index) => {
         setTimeout(() => {
-          window.open(url, `_blank_ad_${index}`);
-        }, index * 100); // Small delay between each to avoid popup blocking
+          console.log(`Opening ad ${index + 1}:`, url);
+          const newWindow = window.open(url, `_blank_ad_${index}`);
+          if (!newWindow || newWindow.closed || typeof newWindow.closed == 'undefined') {
+            console.warn(`Ad ${index + 1} may have been blocked by popup blocker`);
+          } else {
+            console.log(`Ad ${index + 1} opened successfully`);
+          }
+        }, index * 300); // Increased delay to 300ms between each ad
       });
       
       // Allow video to play after opening ads
@@ -315,7 +323,7 @@ const Watch = () => {
             player.play().catch(err => console.error('Error resuming video after ads:', err));
           }
         }
-      }, 500);
+      }, 1000); // Increased delay to allow ads to open
     }
   };
 
