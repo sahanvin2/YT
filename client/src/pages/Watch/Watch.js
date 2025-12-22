@@ -625,15 +625,9 @@ const Watch = () => {
                 onPlay={() => {
                   // If waiting for ad after 5 minutes, open ad and resume
                   if (waitingForAdPlay) {
-                    // Pick 1 random ad from the 3 URLs
-                    const adUrls = [
-                      'https://ferntravelleddeduct.com/ngw7f9w7ar?key=1d03ce84598475a5c0ae7b0e970be386',
-                      'https://ferntravelleddeduct.com/tnku73k6e8?key=447538fcc223d88734b4f7f5f5be2b54',
-                      'https://ferntravelleddeduct.com/gtrc1veb7i?key=b0b98b004d66f73292231e7413bd2b3d'
-                    ];
-                    const randomAd = adUrls[Math.floor(Math.random() * adUrls.length)];
-                    console.log('Opening random ad on play:', randomAd);
-                    window.open(randomAd, '_blank');
+                    const adUrl = 'https://ferntravelleddeduct.com/gtrc1veb7i?key=b0b98b004d66f73292231e7413bd2b3d';
+                    console.log('Opening ad on play:', adUrl);
+                    window.open(adUrl, '_blank');
                     setWaitingForAdPlay(false);
                   }
                   
