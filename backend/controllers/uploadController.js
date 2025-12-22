@@ -9,6 +9,7 @@ const mime = require('mime-types');
 const crypto = require('crypto');
 const { uploadFile, deleteFile, presignPut, publicUrl } = require('../utils/b2');
 const { addToQueue } = require('../utils/videoQueue');
+const { notifyFollowersNewVideo } = require('./notificationController');
 
 
 ffmpeg.setFfmpegPath(ffmpegPath);
@@ -159,6 +160,15 @@ exports.uploadVideo = async (req, res) => {
     // Send to worker EC2 for transcoding (non-blocking)
     addToQueue(video._id.toString(), videoUrl, req.user.id).catch(err => {
       console.error('Failed to queue video for transcoding:', err);
+    });
+
+    // Notify followers of new video
+    notifyFollowersNewVideo(req.user.id, {
+      _id: video._id,
+      title: video.title,
+      thumbnailUrl: video.thumbnailUrl
+    }).catch(err => {
+      console.error('Failed to notify followers:', err);
     });
 
     res.status(201).json({ 

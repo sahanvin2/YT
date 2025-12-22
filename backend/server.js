@@ -34,6 +34,7 @@ const health = require('./routes/health');
 const playlists = require('./routes/playlists');
 const channels = require('./routes/channels');
 const transcode = require('./routes/transcode');
+const notifications = require('./routes/notifications');
 
 const app = express();
 
@@ -83,6 +84,7 @@ app.use('/api/uploads', uploads);
 app.use('/api/playlists', playlists);
 app.use('/api/channels', channels);
 app.use('/api/transcode', transcode);
+app.use('/api/notifications', notifications);
 
 // Error handler
 app.use(errorHandler);

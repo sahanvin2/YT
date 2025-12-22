@@ -1,5 +1,5 @@
 import React, { useState, useRef } from 'react';
-import { FiX, FiCamera, FiUser, FiMail, FiLock, FiEye, FiEyeOff, FiCheck } from 'react-icons/fi';
+import { FiX, FiCamera, FiUser, FiMail, FiLock, FiEye, FiEyeOff, FiCheck, FiSettings } from 'react-icons/fi';
 import { useAuth } from '../../context/AuthContext';
 import { updateProfile, uploadAvatar } from '../../utils/api';
 import './ProfileModal.css';
@@ -21,6 +21,12 @@ const ProfileModal = ({ isOpen, onClose }) => {
     currentPassword: '',
     newPassword: '',
     confirmPassword: ''
+  });
+
+  const [videoSettings, setVideoSettings] = useState({
+    defaultQuality: user?.settings?.defaultPlaybackQuality || 'auto',
+    autoplay: user?.settings?.autoplay !== false,
+    notifications: user?.settings?.notifications?.newVideos !== false
   });
 
   const [avatarPreview, setAvatarPreview] = useState(user?.avatar || null);
@@ -168,6 +174,13 @@ const ProfileModal = ({ isOpen, onClose }) => {
             Profile
           </button>
           <button
+            className={`modal-tab ${activeTab === 'settings' ? 'active' : ''}`}
+            onClick={() => setActiveTab('settings')}
+          >
+            <FiSettings size={18} />
+            Settings
+          </button>
+          <button
             className={`modal-tab ${activeTab === 'security' ? 'active' : ''}`}
             onClick={() => setActiveTab('security')}
           >
@@ -290,6 +303,114 @@ const ProfileModal = ({ isOpen, onClose }) => {
                 <span className="char-count">{formData.bio.length}/200</span>
               </div>
             </form>
+          )}
+
+          {activeTab === 'settings' && (
+            <div className="modal-form">
+              <div className="settings-section">
+                <h3 className="settings-section-title">Video Playback</h3>
+                
+                <div className="modal-form-group">
+                  <label>Default Video Quality</label>
+                  <select
+                    value={videoSettings.defaultQuality}
+                    onChange={(e) => setVideoSettings({ ...videoSettings, defaultQuality: e.target.value })}
+                    className="quality-select"
+                  >
+                    <option value="auto">Auto (Recommended)</option>
+                    <option value="2160p">2160p (4K) - 15-25 Mbps</option>
+                    <option value="1440p">1440p (2K) - 10-15 Mbps</option>
+                    <option value="1080p">1080p (Full HD) - 5-8 Mbps</option>
+                    <option value="720p">720p (HD) - 2.5-5 Mbps</option>
+                    <option value="480p">480p (SD) - 1-2.5 Mbps</option>
+                    <option value="360p">360p - 0.5-1 Mbps</option>
+                  </select>
+                  <small className="quality-info">
+                    Auto adjusts quality based on your internet speed
+                  </small>
+                </div>
+
+                <div className="modal-form-group">
+                  <div className="toggle-setting">
+                    <div className="toggle-info">
+                      <label>Autoplay Videos</label>
+                      <small>Automatically play videos when you visit watch page</small>
+                    </div>
+                    <label className="toggle-switch">
+                      <input
+                        type="checkbox"
+                        checked={videoSettings.autoplay}
+                        onChange={(e) => setVideoSettings({ ...videoSettings, autoplay: e.target.checked })}
+                      />
+                      <span className="toggle-slider"></span>
+                    </label>
+                  </div>
+                </div>
+
+                <div className="bitrate-info-box">
+                  <h4>📊 Quality & Bitrate Guide</h4>
+                  <ul>
+                    <li><strong>4K (2160p):</strong> Best quality, requires fast connection (25+ Mbps)</li>
+                    <li><strong>2K (1440p):</strong> Excellent quality for large screens (15+ Mbps)</li>
+                    <li><strong>Full HD (1080p):</strong> Great quality, balanced bandwidth (8+ Mbps)</li>
+                    <li><strong>HD (720p):</strong> Good quality, moderate bandwidth (5+ Mbps)</li>
+                    <li><strong>SD (480p):</strong> Standard quality, low bandwidth (2+ Mbps)</li>
+                    <li><strong>360p:</strong> Basic quality, very slow connections</li>
+                  </ul>
+                </div>
+              </div>
+
+              <div className="settings-section">
+                <h3 className="settings-section-title">Notifications</h3>
+                
+                <div className="modal-form-group">
+                  <div className="toggle-setting">
+                    <div className="toggle-info">
+                      <label>New Video Notifications</label>
+                      <small>Get notified when creators you follow upload new videos</small>
+                    </div>
+                    <label className="toggle-switch">
+                      <input
+                        type="checkbox"
+                        checked={videoSettings.notifications}
+                        onChange={(e) => setVideoSettings({ ...videoSettings, notifications: e.target.checked })}
+                      />
+                      <span className="toggle-slider"></span>
+                    </label>
+                  </div>
+                </div>
+              </div>
+
+              <button 
+                type="button"
+                className="settings-save-btn"
+                onClick={async () => {
+                  setLoading(true);
+                  try {
+                    // Structure settings to match backend User model
+                    const settings = {
+                      defaultPlaybackQuality: videoSettings.defaultQuality,
+                      autoplay: videoSettings.autoplay,
+                      notifications: {
+                        newVideos: videoSettings.notifications
+                      }
+                    };
+                    
+                    const res = await updateProfile({ settings });
+                    setUser({ ...user, settings });
+                    setMessage({ type: 'success', text: 'Settings saved successfully!' });
+                    localStorage.setItem('videoSettings', JSON.stringify(videoSettings));
+                  } catch (err) {
+                    setMessage({ type: 'error', text: 'Failed to save settings' });
+                  } finally {
+                    setLoading(false);
+                  }
+                }}
+                disabled={loading}
+              >
+                {loading ? 'Saving...' : 'Save Settings'}
+              </button>
+            </div>
           )}
 
           {activeTab === 'security' && (

@@ -5,6 +5,8 @@ import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../context/ThemeContext';
 import { getSearchSuggestions } from '../../utils/api';
 import XclubLogo from '../Logo/MoviaLogo';
+import NotificationPanel from '../NotificationPanel/NotificationPanel';
+import axios from 'axios';
 import './Navbar.css';
 
 const Navbar = ({ toggleSidebar }) => {
@@ -14,6 +16,8 @@ const Navbar = ({ toggleSidebar }) => {
   const [suggestions, setSuggestions] = useState([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [isLoadingSuggestions, setIsLoadingSuggestions] = useState(false);
+  const [showNotifications, setShowNotifications] = useState(false);
+  const [unreadCount, setUnreadCount] = useState(0);
   const searchRef = useRef(null);
   const suggestionsRef = useRef(null);
   const { user, isAuthenticated, logout } = useAuth();
@@ -50,6 +54,29 @@ const Navbar = ({ toggleSidebar }) => {
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
+
+  // Fetch unread notification count
+  useEffect(() => {
+    if (isAuthenticated) {
+      fetchUnreadCount();
+      // Poll every 30 seconds
+      const interval = setInterval(fetchUnreadCount, 30000);
+      return () => clearInterval(interval);
+    }
+  }, [isAuthenticated]);
+
+  const fetchUnreadCount = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      const response = await axios.get(
+        `${process.env.REACT_APP_API_URL}/api/notifications/unread-count`,
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      setUnreadCount(response.data.unreadCount || 0);
+    } catch (error) {
+      console.error('Error fetching unread count:', error);
+    }
+  };
 
   const fetchSuggestions = async (query) => {
     try {
@@ -172,9 +199,15 @@ const Navbar = ({ toggleSidebar }) => {
           </Link>
         )}
         {isAuthenticated && (
-          <button className="notification-btn">
+          <button 
+            className="notification-btn"
+            onClick={() => setShowNotifications(!showNotifications)}
+            title="Notifications"
+          >
             <FiBell size={20} />
-            <span className="notification-dot"></span>
+            {unreadCount > 0 && (
+              <span className="notification-badge">{unreadCount > 99 ? '99+' : unreadCount}</span>
+            )}
           </button>
         )}
         <button
@@ -237,6 +270,11 @@ const Navbar = ({ toggleSidebar }) => {
           </Link>
         )}
       </div>
+
+      <NotificationPanel 
+        isOpen={showNotifications} 
+        onClose={() => setShowNotifications(false)}
+      />
     </nav>
   );
 };

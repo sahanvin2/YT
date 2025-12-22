@@ -89,7 +89,8 @@ exports.updateProfile = async (req, res, next) => {
       country: req.body.country,
       language: req.body.language,
       socialLinks: req.body.socialLinks,
-      contactInfo: req.body.contactInfo
+      contactInfo: req.body.contactInfo,
+      settings: req.body.settings
     };
 
     // Remove undefined fields

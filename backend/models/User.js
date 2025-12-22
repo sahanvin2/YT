@@ -116,7 +116,7 @@ const UserSchema = new mongoose.Schema({
     defaultPlaybackQuality: {
       type: String,
       default: 'auto',
-      enum: ['auto', '144', '240', '360', '480', '720', '1080', '1440']
+      enum: ['auto', '144', '240', '360', '480', '720', '1080', '1440', '2160']
     },
     defaultDownloadQuality: {
       type: String,
@@ -134,6 +134,24 @@ const UserSchema = new mongoose.Schema({
     subtitles: {
       type: Boolean,
       default: false
+    },
+    notifications: {
+      newVideos: {
+        type: Boolean,
+        default: true
+      },
+      comments: {
+        type: Boolean,
+        default: true
+      },
+      likes: {
+        type: Boolean,
+        default: true
+      },
+      followers: {
+        type: Boolean,
+        default: true
+      }
     }
   },
   createdAt: {
