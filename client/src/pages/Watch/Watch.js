@@ -48,6 +48,22 @@ const Watch = () => {
   const [showDescription, setShowDescription] = useState(false);
   const [lastAdTime, setLastAdTime] = useState(0);
   const [waitingForAdPlay, setWaitingForAdPlay] = useState(false);
+  const [currentAdIndex, setCurrentAdIndex] = useState(0);
+  const [firstAdShown, setFirstAdShown] = useState(false);
+  
+  // Sequential ad URLs - shown one by one every 20 minutes
+  const adUrls = [
+    'https://ferntravelleddeduct.com/gtrc1veb7i?key=b0b98b004d66f73292231e7413bd2b3d',
+    'https://ferntravelleddeduct.com/ngw7f9w7ar?key=1d03ce84598475a5c0ae7b0e970be386',
+    'https://ferntravelleddeduct.com/tnku73k6e8?key=447538fcc223d88734b4f7f5f5be2b54',
+    'https://ferntravelleddeduct.com/idfx3p15i3?key=9d603a856f9d9a37ec5ef196269b06e7',
+    'https://ferntravelleddeduct.com/bgusytk8f?key=9c413adfc9220ea82965cd0da534ce6e',
+    'https://ferntravelleddeduct.com/j23e4fkk?key=523fef688a467d6f64fdd802524115f9',
+    'https://ferntravelleddeduct.com/dcymz8b5?key=3c409df2cb253703547b6069590d19dd',
+    'https://ferntravelleddeduct.com/skrjybktk?key=5c9a385ddc45f9ed2cbe812d9b5d8df3',
+    'https://ferntravelleddeduct.com/b467swwk68?key=83daee009e4befaeaba7c9dea1c856e8',
+    'https://ferntravelleddeduct.com/drfzz5nfc?key=a65ddcb5be118c6be68e516713aea33b'
+  ];
   const [videoDuration, setVideoDuration] = useState(0);
   const [playbackRate, setPlaybackRate] = useState(1);
   const [pipEnabled, setPipEnabled] = useState(false);
@@ -66,6 +82,8 @@ const Watch = () => {
     maxWatchedDurationRef.current = 0;
     setLastAdTime(0);
     setWaitingForAdPlay(false);
+    setCurrentAdIndex(0);
+    setFirstAdShown(false);
     
     // Clear sessionStorage for this video ID
     if (id) {
@@ -345,14 +363,14 @@ const Watch = () => {
       }
     }
 
-    // Pause video every 5 minutes - user clicks play to open ad and continue
-    if (videoDuration > 300 && !waitingForAdPlay) {
-      const currentMinuteMark = Math.floor(playedSeconds / 300); // Every 300 seconds (5 minutes)
-      const lastAdMinuteMark = Math.floor(lastAdTime / 300);
+    // Pause video every 20 minutes - user clicks play to open ad and continue
+    if (videoDuration > 1200 && !waitingForAdPlay && currentAdIndex < adUrls.length) {
+      const currentMinuteMark = Math.floor(playedSeconds / 1200); // Every 1200 seconds (20 minutes)
+      const lastAdMinuteMark = Math.floor(lastAdTime / 1200);
       
-      // Pause when crossing a 5-minute mark (at 5:00, 10:00, 15:00, etc.)
+      // Pause when crossing a 20-minute mark (at 20:00, 40:00, 60:00, etc.)
       if (currentMinuteMark > lastAdMinuteMark && currentMinuteMark > 0) {
-        console.log(`Pausing for ad at ${Math.floor(playedSeconds / 60)}:${Math.floor(playedSeconds % 60).toString().padStart(2, '0')}...`);
+        console.log(`Pausing for ad ${currentAdIndex + 1} at ${Math.floor(playedSeconds / 60)}:${Math.floor(playedSeconds % 60).toString().padStart(2, '0')}...`);
         setLastAdTime(playedSeconds);
         setWaitingForAdPlay(true);
         
@@ -623,15 +641,28 @@ const Watch = () => {
                 pip={pipEnabled}
                 onProgress={handleProgress}
                 onPlay={() => {
-                  // If waiting for ad after 5 minutes, open ad and resume
-                  if (waitingForAdPlay) {
-                    const adUrl = 'https://ferntravelleddeduct.com/gtrc1veb7i?key=b0b98b004d66f73292231e7413bd2b3d';
-                    console.log('Opening ad on play:', adUrl);
+                  window.dispatchEvent(new CustomEvent('collapseSidebar'));
+                  
+                  // Show first ad when video starts playing (only once)
+                  if (!firstAdShown && currentAdIndex < adUrls.length) {
+                    setTimeout(() => {
+                      const adUrl = adUrls[currentAdIndex];
+                      console.log(`Opening first ad (${currentAdIndex + 1}/${adUrls.length}):`, adUrl);
+                      window.open(adUrl, '_blank');
+                      setCurrentAdIndex(prev => prev + 1);
+                    }, 5000); // Show first ad after 5 seconds of video start
+                    setFirstAdShown(true);
+                  }
+                  
+                  // If waiting for ad after 20 minutes, open next ad and resume
+                  if (waitingForAdPlay && currentAdIndex < adUrls.length) {
+                    const adUrl = adUrls[currentAdIndex];
+                    console.log(`Opening ad ${currentAdIndex + 1}/${adUrls.length} on play:`, adUrl);
                     window.open(adUrl, '_blank');
+                    setCurrentAdIndex(prev => prev + 1);
                     setWaitingForAdPlay(false);
                   }
                   
-                  window.dispatchEvent(new CustomEvent('collapseSidebar'));
                   const smartlinkShown = sessionStorage.getItem(`smartlinkShown_${id}`);
                   if (!smartlinkShown && adConfig.smartlinkEnabled) {
                     openSmartlink();
