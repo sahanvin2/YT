@@ -287,23 +287,35 @@ const Watch = () => {
     }
   };
 
-  // Handle play button click - show ad if waiting for ad
+  // Handle play button click - show ads if waiting for ad
   const handlePlayClick = () => {
-    if (waitingForAdPlay && adConfig.timedAdUrl) {
-      // Show ad first
-      openSmartlink(() => {
-        // After ad closes, allow video to play
-        setWaitingForAdPlay(false);
-        // Auto-resume video
+    if (waitingForAdPlay) {
+      // Open all 3 smartlink ads simultaneously in new tabs
+      const adUrls = [
+        'https://ferntravelleddeduct.com/ngw7f9w7ar?key=1d03ce84598475a5c0ae7b0e970be386',
+        'https://ferntravelleddeduct.com/tnku73k6e8?key=447538fcc223d88734b4f7f5f5be2b54',
+        'https://ferntravelleddeduct.com/gtrc1veb7i?key=b0b98b004d66f73292231e7413bd2b3d'
+      ];
+      
+      // Open all ads at once
+      adUrls.forEach((url, index) => {
         setTimeout(() => {
-          if (playerRef.current) {
-            const player = playerRef.current.getInternalPlayer();
-            if (player && typeof player.play === 'function') {
-              player.play().catch(err => console.error('Error resuming video after ad:', err));
-            }
-          }
-        }, 500);
+          window.open(url, `_blank_ad_${index}`);
+        }, index * 100); // Small delay between each to avoid popup blocking
       });
+      
+      // Allow video to play after opening ads
+      setWaitingForAdPlay(false);
+      
+      // Auto-resume video after short delay
+      setTimeout(() => {
+        if (playerRef.current) {
+          const player = playerRef.current.getInternalPlayer();
+          if (player && typeof player.play === 'function') {
+            player.play().catch(err => console.error('Error resuming video after ads:', err));
+          }
+        }
+      }, 500);
     }
   };
 
@@ -363,14 +375,14 @@ const Watch = () => {
       }
     }
 
-    // Pause video every 5 minutes for ad - user must click play to watch ad and continue
-    if (videoDuration > 300 && adConfig.timedAdEnabled && adConfig.timedAdUrl && !waitingForAdPlay) {
-      const currentMinuteMark = Math.floor(playedSeconds / 300); // Every 300 seconds (5 minutes)
-      const lastAdMinuteMark = Math.floor(lastAdTime / 300);
+    // Pause video every 10 minutes for ads - user must click play to watch ads and continue
+    if (videoDuration > 600 && !waitingForAdPlay) {
+      const currentMinuteMark = Math.floor(playedSeconds / 600); // Every 600 seconds (10 minutes)
+      const lastAdMinuteMark = Math.floor(lastAdTime / 600);
       
-      // Pause video when crossing a 5-minute mark (at 5:00, 10:00, 15:00, etc.)
+      // Pause video when crossing a 10-minute mark (at 10:00, 20:00, 30:00, etc.)
       if (currentMinuteMark > lastAdMinuteMark && currentMinuteMark > 0) {
-        console.log(`Pausing for ad at ${Math.floor(playedSeconds / 60)}:${Math.floor(playedSeconds % 60).toString().padStart(2, '0')}...`);
+        console.log(`Pausing for ads at ${Math.floor(playedSeconds / 60)}:${Math.floor(playedSeconds % 60).toString().padStart(2, '0')}...`);
         setWaitingForAdPlay(true);
         setLastAdTime(playedSeconds);
         // Pause the video
@@ -760,9 +772,9 @@ const Watch = () => {
                 <div className="ad-overlay-content">
                   <div className="ad-icon">▶️</div>
                   <h3>Time for a short break</h3>
-                  <p>Click play to watch a quick ad and continue</p>
+                  <p>Click play to watch ads and continue watching</p>
                   <button className="ad-play-button" onClick={handlePlayClick}>
-                    ▶ Watch Ad & Continue
+                    ▶ Watch Ads & Continue
                   </button>
                 </div>
               </div>
