@@ -287,8 +287,6 @@ const Watch = () => {
     }
   };
 
-  const fetchRelatedVideos = async (category) => {
-
   // Handle play button click - show ad if waiting for ad
   const handlePlayClick = () => {
     if (waitingForAdPlay && adConfig.timedAdUrl) {
