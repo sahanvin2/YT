@@ -8,7 +8,7 @@ const ffprobePath = require('ffprobe-static').path;
 const mime = require('mime-types');
 const crypto = require('crypto');
 const { uploadFile, deleteFile, presignPut, publicUrl } = require('../utils/b2');
-const { addToQueue } = require('../utils/videoQueueBullMQ');
+const { addToQueue } = require('../utils/videoQueue');
 const { notifyFollowersNewVideo } = require('./notificationController');
 
 
