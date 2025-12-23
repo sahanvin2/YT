@@ -85,7 +85,7 @@ app.post('/transcode', async (req, res) => {
 
     // Upload to B2
     console.log(`[${jobId}] Uploading to B2`);
-    const { uploadFilePath } = require('./utils/b2');
+    const { uploadFilePath } = require('./utils/b2worker');
     const variantKey = `videos/${videoId}/variant_${quality}p.mp4`;
     const uploadedUrl = await uploadFilePath(outputFile, variantKey);
 
