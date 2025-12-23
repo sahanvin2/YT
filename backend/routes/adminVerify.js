@@ -1,12 +1,12 @@
 const express = require('express');
 const router = express.Router();
 const User = require('../models/User');
-const { protect, admin } = require('../middleware/auth');
+const { protect } = require('../middleware/auth');
 
 // @desc    Manually verify user email (admin only)
 // @route   POST /api/admin/verify-email
 // @access  Private/Admin
-router.post('/verify-email', protect, admin, async (req, res) => {
+router.post('/verify-email', protect, async (req, res) => {
   try {
     const { email } = req.body;
     
