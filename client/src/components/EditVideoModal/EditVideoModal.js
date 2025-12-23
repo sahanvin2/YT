@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { updateVideo } from '../../utils/api';
 import { FiUpload, FiX, FiImage, FiScissors } from 'react-icons/fi';
+import { MAIN_CATEGORIES, GENRES, SUB_CATEGORIES } from '../../utils/categories';
 import './EditVideoModal.css';
 
 const EditVideoModal = ({ video, onClose, onUpdate }) => {
@@ -8,8 +9,11 @@ const EditVideoModal = ({ video, onClose, onUpdate }) => {
     const [formData, setFormData] = useState({
         title: video?.title || '',
         description: video?.description || '',
+        mainCategory: video?.mainCategory || 'movies',
+        primaryGenre: video?.primaryGenre || 'action',
+        secondaryGenres: video?.secondaryGenres || [],
+        subCategory: video?.subCategory || '',
         tags: video?.tags?.join(', ') || '',
-        category: video?.category || 'Other',
         visibility: video?.visibility || 'public'
     });
     const [thumbnailFile, setThumbnailFile] = useState(null);
@@ -26,8 +30,11 @@ const EditVideoModal = ({ video, onClose, onUpdate }) => {
             setFormData({
                 title: video.title || '',
                 description: video.description || '',
+                mainCategory: video.mainCategory || 'movies',
+                primaryGenre: video.primaryGenre || 'action',
+                secondaryGenres: video.secondaryGenres || [],
+                subCategory: video.subCategory || '',
                 tags: video.tags?.join(', ') || '',
-                category: video.category || 'Other',
                 visibility: video.visibility || 'public'
             });
             setThumbnailPreview(video.thumbnailUrl || '');
@@ -36,11 +43,34 @@ const EditVideoModal = ({ video, onClose, onUpdate }) => {
             setCutEnd(video.cutEnd || video.duration || 0);
         }
     }, [video]);
+// Reset sub-category when primary genre changes
+        if (name === 'primaryGenre') {
+            setFormData(prev => ({ ...prev, [name]: value, subCategory: '' }));
+        } else {
+            setFormData(prev => ({ ...prev, [name]: value }));
+        }
+    };
 
-    const handleInputChange = (e) => {
-        const { name, value } = e.target;
-        setFormData(prev => ({
-            ...prev,
+    const handleSecondaryGenreToggle = (genreId) => {
+        const currentSecondary = [...formData.secondaryGenres];
+        const index = currentSecondary.indexOf(genreId);
+        
+        if (index > -1) {
+            currentSecondary.splice(index, 1);
+        } else {
+            if (currentSecondary.length < 2) {
+                currentSecondary.push(genreId);
+            } else {
+                setError('Maximum 2 secondary genres allowed');
+                setTimeout(() => setError(''), 3000);
+                return;
+            }
+        }
+        
+        setFormData(prev => ({ ...prev, secondaryGenres: currentSecondary }));
+    };
+
+    const availableSubCategories = SUB_CATEGORIES[formData.primaryGenre] || []       ...prev,
             [name]: value
         }));
     };
@@ -90,15 +120,20 @@ const EditVideoModal = ({ video, onClose, onUpdate }) => {
             // Add description
             formDataToSend.append('description', formData.description);
             
+            // Add new category structure
+            formDataToSend.append('mainCategory', formData.mainCategory);
+            formDataToSend.append('primaryGenre', formData.primaryGenre);
+            formDataToSend.append('secondaryGenres', JSON.stringify(formData.secondaryGenres));
+            if (formData.subCategory) {
+                formDataToSend.append('subCategory', formData.subCategory);
+            }
+            
             // Add tags (convert comma-separated string to array)
             const tagsArray = formData.tags
                 .split(',')
                 .map(tag => tag.trim())
                 .filter(tag => tag.length > 0);
             formDataToSend.append('tags', JSON.stringify(tagsArray));
-            
-            // Add category
-            formDataToSend.append('category', formData.category);
             
             // Add visibility
             formDataToSend.append('visibility', formData.visibility);
@@ -234,32 +269,91 @@ const EditVideoModal = ({ video, onClose, onUpdate }) => {
                     {activeTab === 'additional' && (
                         <>
                             <div className="form-section">
-                                <h3 className="section-title">Video Details</h3>
+                                <h3 className="section-title">Video Classification</h3>
                                 
+                                {/* Main Category */}
                                 <div className="form-group">
-                                    <label htmlFor="category">Category</label>
+                                    <label htmlFor="mainCategory">Main Category</label>
                                     <select
-                                        id="category"
-                                        name="category"
-                                        value={formData.category}
+                                        id="mainCategory"
+                                        name="mainCategory"
+                                        value={formData.mainCategory}
                                         onChange={handleInputChange}
                                         className="form-select"
+                                        required
                                     >
-                                        <option value="Other">Other</option>
-                                        <option value="Music">Music</option>
-                                        <option value="Gaming">Gaming</option>
-                                        <option value="Education">Education</option>
-                                        <option value="Entertainment">Entertainment</option>
-                                        <option value="News">News</option>
-                                        <option value="Sports">Sports</option>
-                                        <option value="Art and Design">Art & Design</option>
-                                        <option value="Comedy">Comedy</option>
-                                        <option value="Documentary">Documentary</option>
-                                        <option value="Fashion">Fashion</option>
-                                        <option value="Food">Food</option>
+                                        {MAIN_CATEGORIES.map(cat => (
+                                            <option key={cat.id} value={cat.id}>
+                                                {cat.icon} {cat.name}
+                                            </option>
+                                        ))}
                                     </select>
+                                    <small className="form-hint">Choose the main type of content</small>
                                 </div>
 
+                                {/* Primary Genre */}
+                                <div className="form-group">
+                                    <label htmlFor="primaryGenre">Primary Genre</label>
+                                    <select
+                                        id="primaryGenre"
+                                        name="primaryGenre"
+                                        value={formData.primaryGenre}
+                                        onChange={handleInputChange}
+                                        className="form-select"
+                                        required
+                                    >
+                                        {GENRES.map(genre => (
+                                            <option key={genre.id} value={genre.id}>
+                                                {genre.name}
+                                            </option>
+                                        ))}
+                                    </select>
+                                    <small className="form-hint">{GENRES.find(g => g.id === formData.primaryGenre)?.description}</small>
+                                </div>
+
+                                {/* Secondary Genres */}
+                                <div className="form-group">
+                                    <label>Secondary Genres (Optional - Max 2)</label>
+                                    <div className="genres-grid">
+                                        {GENRES.filter(g => g.id !== formData.primaryGenre).map(genre => (
+                                            <div 
+                                                key={genre.id}
+                                                className={`genre-chip ${formData.secondaryGenres.includes(genre.id) ? 'selected' : ''}`}
+                                                onClick={() => handleSecondaryGenreToggle(genre.id)}
+                                            >
+                                                {genre.name}
+                                            </div>
+                                        ))}
+                                    </div>
+                                    <small className="form-hint">
+                                        Selected: {formData.secondaryGenres.length > 0 
+                                            ? formData.secondaryGenres.map(id => GENRES.find(g => g.id === id)?.name).join(', ')
+                                            : 'None'}
+                                    </small>
+                                </div>
+
+                                {/* Sub-category (if available) */}
+                                {availableSubCategories.length > 0 && (
+                                    <div className="form-group">
+                                        <label htmlFor="subCategory">Sub-category (Optional)</label>
+                                        <select
+                                            id="subCategory"
+                                            name="subCategory"
+                                            value={formData.subCategory}
+                                            onChange={handleInputChange}
+                                            className="form-select"
+                                        >
+                                            <option value="">None</option>
+                                            {availableSubCategories.map(sub => (
+                                                <option key={sub.id} value={sub.id}>
+                                                    {sub.name}
+                                                </option>
+                                            ))}
+                                        </select>
+                                    </div>
+                                )}
+
+                                {/* Tags */}
                                 <div className="form-group">
                                     <label htmlFor="tags">Tags</label>
                                     <input
