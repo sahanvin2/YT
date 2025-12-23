@@ -30,6 +30,26 @@ const UserSchema = new mongoose.Schema({
     minlength: [6, 'Password must be at least 6 characters'],
     select: false
   },
+  isEmailVerified: {
+    type: Boolean,
+    default: false
+  },
+  emailVerificationToken: {
+    type: String,
+    select: false
+  },
+  emailVerificationExpire: {
+    type: Date,
+    select: false
+  },
+  passwordResetToken: {
+    type: String,
+    select: false
+  },
+  passwordResetExpire: {
+    type: Date,
+    select: false
+  },
   role: {
     type: String,
     enum: ['user', 'admin'],
@@ -178,6 +198,44 @@ UserSchema.pre('save', async function (next) {
 // Match password method
 UserSchema.methods.matchPassword = async function (enteredPassword) {
   return await bcrypt.compare(enteredPassword, this.password);
+};
+
+// Generate email verification token
+UserSchema.methods.getEmailVerificationToken = function () {
+  const crypto = require('crypto');
+  
+  // Generate token
+  const verificationToken = crypto.randomBytes(32).toString('hex');
+  
+  // Hash token and set to field
+  this.emailVerificationToken = crypto
+    .createHash('sha256')
+    .update(verificationToken)
+    .digest('hex');
+  
+  // Set expire (24 hours)
+  this.emailVerificationExpire = Date.now() + 24 * 60 * 60 * 1000;
+  
+  return verificationToken;
+};
+
+// Generate password reset token
+UserSchema.methods.getPasswordResetToken = function () {
+  const crypto = require('crypto');
+  
+  // Generate token
+  const resetToken = crypto.randomBytes(32).toString('hex');
+  
+  // Hash token and set to field
+  this.passwordResetToken = crypto
+    .createHash('sha256')
+    .update(resetToken)
+    .digest('hex');
+  
+  // Set expire (1 hour)
+  this.passwordResetExpire = Date.now() + 60 * 60 * 1000;
+  
+  return resetToken;
 };
 
 module.exports = mongoose.model('User', UserSchema);
