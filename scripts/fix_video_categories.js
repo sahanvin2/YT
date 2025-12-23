@@ -59,7 +59,7 @@ async function fixVideoCategories() {
     });
     console.log('✅ Connected to MongoDB');
 
-    const videos = await Video.find({});
+    const videos = await Video.find({}).maxTimeMS(30000).lean();
     console.log(`\n📹 Found ${videos.length} videos to analyze\n`);
 
     let updatedCount = 0;
