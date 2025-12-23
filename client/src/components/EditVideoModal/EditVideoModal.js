@@ -43,13 +43,6 @@ const EditVideoModal = ({ video, onClose, onUpdate }) => {
             setCutEnd(video.cutEnd || video.duration || 0);
         }
     }, [video]);
-// Reset sub-category when primary genre changes
-        if (name === 'primaryGenre') {
-            setFormData(prev => ({ ...prev, [name]: value, subCategory: '' }));
-        } else {
-            setFormData(prev => ({ ...prev, [name]: value }));
-        }
-    };
 
     const handleSecondaryGenreToggle = (genreId) => {
         const currentSecondary = [...formData.secondaryGenres];
@@ -70,9 +63,24 @@ const EditVideoModal = ({ video, onClose, onUpdate }) => {
         setFormData(prev => ({ ...prev, secondaryGenres: currentSecondary }));
     };
 
-    const availableSubCategories = SUB_CATEGORIES[formData.primaryGenre] || []       ...prev,
-            [name]: value
-        }));
+    const availableSubCategories = SUB_CATEGORIES[formData.primaryGenre] || [];
+
+    const handleInputChange = (e) => {
+        const { name, value } = e.target;
+        
+        // Reset subCategory if primaryGenre changes
+        if (name === 'primaryGenre') {
+            setFormData(prev => ({
+                ...prev,
+                [name]: value,
+                subCategory: '' // Reset sub-category when genre changes
+            }));
+        } else {
+            setFormData(prev => ({
+                ...prev,
+                [name]: value
+            }));
+        }
     };
 
     const handleFileChange = (e) => {
