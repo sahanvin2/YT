@@ -1,5 +1,4 @@
 const mongoose = require('mongoose');
-const Video = require('../backend/models/Video');
 
 // MongoDB connection
 const MONGO_URI = process.env.MONGO_URI || 'mongodb+srv://MoviaAdmin:bbfX196Wv8dm7LlJ@movia.ytwtfrc.mongodb.net/movia?retryWrites=true&w=majority&appName=movia';
@@ -68,6 +67,9 @@ async function fixVideoCategories() {
     }
     
     console.log('✅ Connected to MongoDB');
+
+    // Load model after connection is ready
+    const Video = require('../backend/models/Video');
 
     const videos = await Video.find({}).maxTimeMS(30000).lean();
     console.log(`\n📹 Found ${videos.length} videos to analyze\n`);
