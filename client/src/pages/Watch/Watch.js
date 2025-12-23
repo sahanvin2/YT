@@ -102,8 +102,10 @@ const Watch = () => {
 
   // Fetch related videos when video data is loaded
   useEffect(() => {
-    if (video?.category) {
-      fetchRelatedVideos(video.category);
+    if (video) {
+      // Fetch related videos using category, primaryGenre, or just recent videos
+      const searchParam = video.category || video.primaryGenre || 'all';
+      fetchRelatedVideos(searchParam);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [video]);
@@ -310,12 +312,27 @@ const Watch = () => {
   const fetchRelatedVideos = async (category) => {
     try {
       const { getVideos } = require('../../utils/api');
-      const res = await getVideos({ category, limit: 10 });
+      // Fetch videos with category if provided, otherwise get recent videos
+      const params = category && category !== 'all' 
+        ? { category, limit: 12 } 
+        : { limit: 12, sort: '-createdAt' };
+      const res = await getVideos(params);
       const videos = res.data.data || [];
       // Filter out current video
-      setRelatedVideos(videos.filter(v => v._id !== id));
+      const filtered = videos.filter(v => v._id !== id);
+      setRelatedVideos(filtered);
+      console.log(`Loaded ${filtered.length} related videos`);
     } catch (err) {
       console.error('Error fetching related videos:', err);
+      // Try to fetch any videos as fallback
+      try {
+        const { getVideos } = require('../../utils/api');
+        const res = await getVideos({ limit: 12 });
+        const videos = res.data.data || [];
+        setRelatedVideos(videos.filter(v => v._id !== id));
+      } catch (fallbackErr) {
+        console.error('Fallback fetch failed:', fallbackErr);
+      }
     }
   };
 

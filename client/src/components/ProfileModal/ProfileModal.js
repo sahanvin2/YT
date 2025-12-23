@@ -99,7 +99,7 @@ const ProfileModal = ({ isOpen, onClose }) => {
         banner: bannerUrl
       };
 
-      const res = await updateProfile(updateData);
+      const res = await updateProfile(user._id, updateData);
       setUser(res.data.user);
       setMessage({ type: 'success', text: 'Profile updated successfully!' });
       
@@ -396,7 +396,7 @@ const ProfileModal = ({ isOpen, onClose }) => {
                       }
                     };
                     
-                    const res = await updateProfile({ settings });
+                    const res = await updateProfile(user._id, { settings });
                     setUser({ ...user, settings });
                     setMessage({ type: 'success', text: 'Settings saved successfully!' });
                     localStorage.setItem('videoSettings', JSON.stringify(videoSettings));
