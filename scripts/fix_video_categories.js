@@ -53,7 +53,10 @@ const categoryMappings = [
 async function fixVideoCategories() {
   try {
     console.log('🔌 Connecting to MongoDB...');
-    await mongoose.connect(MONGO_URI);
+    await mongoose.connect(MONGO_URI, {
+      serverSelectionTimeoutMS: 30000,
+      socketTimeoutMS: 45000,
+    });
     console.log('✅ Connected to MongoDB');
 
     const videos = await Video.find({});
