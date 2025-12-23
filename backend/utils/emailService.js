@@ -1,27 +1,43 @@
 const nodemailer = require('nodemailer');
 
+// Check if email credentials are configured
+const isEmailConfigured = () => {
+  return !!(process.env.MAIL_USERNAME && process.env.MAIL_PASSWORD);
+};
+
 // Create transporter with Brevo SMTP
-const transporter = nodemailer.createTransport({
-  host: process.env.MAIL_HOST || 'smtp-relay.brevo.com',
-  port: parseInt(process.env.MAIL_PORT) || 587,
-  secure: false, // true for 465, false for other ports
-  auth: {
-    user: process.env.MAIL_USERNAME,
-    pass: process.env.MAIL_PASSWORD
-  },
-  tls: {
-    rejectUnauthorized: false
+const createTransporter = () => {
+  if (!isEmailConfigured()) {
+    console.warn('⚠️  Email service not configured - missing MAIL_USERNAME or MAIL_PASSWORD');
+    return null;
   }
-});
+
+  return nodemailer.createTransport({
+    host: process.env.MAIL_HOST || 'smtp-relay.brevo.com',
+    port: parseInt(process.env.MAIL_PORT) || 587,
+    secure: false, // true for 465, false for other ports
+    auth: {
+      user: process.env.MAIL_USERNAME,
+      pass: process.env.MAIL_PASSWORD
+    },
+    tls: {
+      rejectUnauthorized: false
+    }
+  });
+};
+
+const transporter = createTransporter();
 
 // Verify connection configuration
-transporter.verify(function (error, success) {
-  if (error) {
-    console.error('❌ Email service configuration error:', error);
-  } else {
-    console.log('✅ Email service is ready to send messages');
-  }
-});
+if (transporter) {
+  transporter.verify(function (error, success) {
+    if (error) {
+      console.error('❌ Email service configuration error:', error);
+    } else {
+      console.log('✅ Email service is ready to send messages');
+    }
+  });
+}
 
 /**
  * Send verification email
@@ -30,6 +46,11 @@ transporter.verify(function (error, success) {
  * @param {string} verificationToken - Verification token
  */
 const sendVerificationEmail = async (email, name, verificationToken) => {
+  if (!transporter) {
+    console.warn('⚠️  Email not sent - transporter not configured');
+    return { success: false, message: 'Email service not configured' };
+  }
+
   const verificationUrl = `${process.env.CLIENT_URL || 'https://xclub.asia'}/verify-email/${verificationToken}`;
   
   const mailOptions = {
@@ -148,6 +169,11 @@ const sendVerificationEmail = async (email, name, verificationToken) => {
  * @param {string} resetToken - Password reset token
  */
 const sendPasswordResetEmail = async (email, name, resetToken) => {
+  if (!transporter) {
+    console.warn('⚠️  Email not sent - transporter not configured');
+    return { success: false, message: 'Email service not configured' };
+  }
+
   const resetUrl = `${process.env.CLIENT_URL || 'https://xclub.asia'}/reset-password/${resetToken}`;
   
   const mailOptions = {
@@ -275,6 +301,11 @@ const sendPasswordResetEmail = async (email, name, resetToken) => {
  * @param {string} name - Recipient name
  */
 const sendWelcomeEmail = async (email, name) => {
+  if (!transporter) {
+    console.warn('⚠️  Email not sent - transporter not configured');
+    return { success: false, message: 'Email service not configured' };
+  }
+
   const mailOptions = {
     from: `"${process.env.MAIL_FROM_NAME || 'Xclub'}" <${process.env.MAIL_FROM_ADDRESS || 'noreply@xclub.asia'}>`,
     to: email,
