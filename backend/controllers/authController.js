@@ -127,6 +127,17 @@ exports.login = async (req, res) => {
       });
     }
 
+    // Check if email is verified
+    if (!user.isEmailVerified) {
+      console.log('Login failed: Email not verified');
+      return res.status(403).json({ 
+        success: false, 
+        message: 'Please verify your email before logging in. Check your inbox for the verification link.',
+        needsVerification: true,
+        userId: user._id
+      });
+    }
+
     const token = generateToken(user._id);
 
     console.log('Login successful:', user._id);
@@ -227,22 +238,31 @@ exports.verifyEmail = async (req, res) => {
 
 // @desc    Resend verification email
 // @route   POST /api/auth/resend-verification
-// @access  Private
+// @access  Public (changed from Private to allow unverified users)
 exports.resendVerification = async (req, res) => {
   try {
-    const user = await User.findById(req.user.id);
+    const { email } = req.body;
+
+    if (!email) {
+      return res.status(400).json({
+        success: false,
+        message: 'Please provide your email address'
+      });
+    }
+
+    const user = await User.findOne({ email: email.toLowerCase() });
 
     if (!user) {
       return res.status(404).json({
         success: false,
-        message: 'User not found'
+        message: 'No account found with that email'
       });
     }
 
     if (user.isEmailVerified) {
       return res.status(400).json({
         success: false,
-        message: 'Email is already verified'
+        message: 'Email is already verified. You can login now!'
       });
     }
 
