@@ -45,11 +45,16 @@ exports.register = async (req, res) => {
       });
     }
 
+    // Assign random profile avatar
+    const avatars = ['mr.J.jpg', 'mr.p.jpg', 'mr.s.jpg', 'mr.X.jpg', 'ms.C.jpg', 'ms.K.jpg', 'ms.O.jpg', 'ms.Y.jpg'];
+    const randomAvatar = `/avatars/${avatars[Math.floor(Math.random() * avatars.length)]}`;
+
     // Create user
     const user = await User.create({ 
       name, 
       email: email.toLowerCase(), 
-      password 
+      password,
+      avatar: randomAvatar
     });
 
     console.log('User created successfully:', user._id);

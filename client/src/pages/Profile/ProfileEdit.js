@@ -20,6 +20,18 @@ const ProfileEdit = () => {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [hasChanges, setHasChanges] = useState(false);
+  const [showAvatarSelector, setShowAvatarSelector] = useState(false);
+  
+  const availableAvatars = [
+    '/avatars/mr.J.jpg',
+    '/avatars/mr.p.jpg',
+    '/avatars/mr.s.jpg',
+    '/avatars/mr.X.jpg',
+    '/avatars/ms.C.jpg',
+    '/avatars/ms.K.jpg',
+    '/avatars/ms.O.jpg',
+    '/avatars/ms.Y.jpg'
+  ];
   
   const [formData, setFormData] = useState({
     username: user?.username || '',
@@ -105,6 +117,23 @@ const ProfileEdit = () => {
     } catch (err) {
       console.error('Error updating profile:', err);
       setError(err.response?.data?.message || 'Failed to update profile. Please try again.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleAvatarChange = async (avatarPath) => {
+    setLoading(true);
+    try {
+      const response = await axios.put('/api/users/profile', { avatar: avatarPath });
+      if (response.data) {
+        setUser(response.data.user);
+        setSuccess('Avatar updated successfully!');
+        setShowAvatarSelector(false);
+        setTimeout(() => setSuccess(''), 3000);
+      }
+    } catch (err) {
+      setError('Failed to update avatar');
     } finally {
       setLoading(false);
     }
@@ -231,10 +260,48 @@ const ProfileEdit = () => {
                         </div>
                       )}
                     </div>
-                    <button className="edit-avatar-btn">
+                    <button 
+                      className="edit-avatar-btn"
+                      onClick={() => setShowAvatarSelector(!showAvatarSelector)}
+                      type="button"
+                    >
                       <FiCamera size={14} />
                     </button>
                   </div>
+                  
+                  {showAvatarSelector && (
+                    <div className="avatar-selector">
+                      <h4 style={{ margin: '0 0 15px 0', fontSize: '14px' }}>Choose Your Avatar</h4>
+                      <div className="avatar-grid">
+                        {availableAvatars.map((avatar) => (
+                          <div
+                            key={avatar}
+                            className={`avatar-option ${user?.avatar === avatar ? 'selected' : ''}`}
+                            onClick={() => handleAvatarChange(avatar)}
+                            style={{
+                              width: '60px',
+                              height: '60px',
+                              borderRadius: '50%',
+                              overflow: 'hidden',
+                              cursor: 'pointer',
+                              border: user?.avatar === avatar ? '3px solid #667eea' : '2px solid #ddd',
+                              transition: 'all 0.2s'
+                            }}
+                          >
+                            <img 
+                              src={avatar} 
+                              alt="Avatar option"
+                              style={{
+                                width: '100%',
+                                height: '100%',
+                                objectFit: 'cover'
+                              }}
+                            />
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                   
                   <div className="profile-meta">
                     <h3 className="profile-name">{formData.username || 'Your Name'}</h3>
