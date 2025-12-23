@@ -53,25 +53,17 @@ async function fixVideoCategories() {
   try {
     console.log('🔌 Connecting to MongoDB...');
     
-    mongoose.set('bufferCommands', false);
-    mongoose.set('bufferTimeoutMS', 30000);
-    
     await mongoose.connect(MONGO_URI, {
       serverSelectionTimeoutMS: 30000,
       socketTimeoutMS: 45000,
+      bufferCommands: false,
     });
-    
-    // Wait for connection to be ready
-    if (mongoose.connection.readyState !== 1) {
-      await new Promise((resolve) => mongoose.connection.once('open', resolve));
-    }
     
     console.log('✅ Connected to MongoDB');
 
-    // Load model after connection is ready
-    const Video = require('../backend/models/Video');
-
-    const videos = await Video.find({}).maxTimeMS(30000).lean();
+    // Access videos collection directly
+    const videosCollection = mongoose.connection.db.collection('videos');
+    const videos = await videosCollection.find({}).toArray();
     console.log(`\n📹 Found ${videos.length} videos to analyze\n`);
 
     let updatedCount = 0;
@@ -129,12 +121,17 @@ async function fixVideoCategories() {
           new: newCategory
         });
 
-        await Video.findByIdAndUpdate(video._id, {
-          mainCategory: newCategory.mainCategory,
-          primaryGenre: newCategory.primaryGenre,
-          secondaryGenres: newCategory.secondaryGenres,
-          category: newCategory.primaryGenre // Update legacy field too
-        });
+        await videosCollection.updateOne(
+          { _id: video._id },
+          {
+            $set: {
+              mainCategory: newCategory.mainCategory,
+              primaryGenre: newCategory.primaryGenre,
+              secondaryGenres: newCategory.secondaryGenres,
+              category: newCategory.primaryGenre // Update legacy field too
+            }
+          }
+        );
         updatedCount++;
       }
     }
