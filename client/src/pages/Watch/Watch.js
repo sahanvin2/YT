@@ -385,24 +385,35 @@ const Watch = () => {
       }
     }
 
-    // Pause video every 20 minutes - user clicks play to open ad and continue
-    if (videoDuration > 1200 && !waitingForAdPlay && currentAdIndex < adUrls.length) {
-      const currentMinuteMark = Math.floor(playedSeconds / 1200); // Every 1200 seconds (20 minutes)
-      const lastAdMinuteMark = Math.floor(lastAdTime / 1200);
+    // Show ad every 5 minutes (300 seconds)
+    if (playedSeconds > 300 && !waitingForAdPlay && currentAdIndex < adUrls.length) {
+      const currentMinuteMark = Math.floor(playedSeconds / 300); // Every 300 seconds (5 minutes)
+      const lastAdMinuteMark = Math.floor(lastAdTime / 300);
       
-      // Pause when crossing a 20-minute mark (at 20:00, 40:00, 60:00, etc.)
+      // Open ad when crossing a 5-minute mark (at 5:00, 10:00, 15:00, etc.)
       if (currentMinuteMark > lastAdMinuteMark && currentMinuteMark > 0) {
-        console.log(`Pausing for ad ${currentAdIndex + 1} at ${Math.floor(playedSeconds / 60)}:${Math.floor(playedSeconds % 60).toString().padStart(2, '0')}...`);
-        setLastAdTime(playedSeconds);
-        setWaitingForAdPlay(true);
+        console.log(`Opening ad ${currentAdIndex + 1} at ${Math.floor(playedSeconds / 60)}:${Math.floor(playedSeconds % 60).toString().padStart(2, '0')}...`);
         
-        // Pause the video
-        if (playerRef.current) {
-          const player = playerRef.current.getInternalPlayer();
-          if (player && typeof player.pause === 'function') {
-            player.pause();
+        // Open the ad in a new window
+        const adUrl = adUrls[currentAdIndex];
+        if (adUrl) {
+          try {
+            const win = window.open(adUrl, '_blank', 'noopener,noreferrer');
+            if (win) {
+              console.log('✅ Ad opened successfully');
+              // Move to next ad for next interval
+              setCurrentAdIndex(prev => prev + 1);
+              setLastAdTime(playedSeconds);
+            } else {
+              console.warn('⚠️ Ad popup blocked');
+            }
+          } catch (error) {
+            console.error('❌ Error opening ad:', error);
           }
         }
+        
+        // Don't pause the video - let it continue playing
+        setWaitingForAdPlay(false);
       }
     }
   };
@@ -605,12 +616,20 @@ const Watch = () => {
                 style={{ width: '100%', height: '100%', objectFit: 'contain' }}
                 onPlay={() => {
                   window.dispatchEvent(new CustomEvent('collapseSidebar'));
-                  const smartlinkShown = sessionStorage.getItem(`smartlinkShown_${id}`);
-                  if (!smartlinkShown && adConfig.smartlinkEnabled) {
-                    openSmartlink();
-                    sessionStorage.setItem(`smartlinkShown_${id}`, 'true');
+                  if (!firstAdShown && currentAdIndex < adUrls.length) {
+                    setTimeout(() => {
+                      const adUrl = adUrls[currentAdIndex];
+                      try {
+                        window.open(adUrl, '_blank', 'noopener,noreferrer');
+                        setCurrentAdIndex(prev => prev + 1);
+                      } catch (e) {
+                        console.error('Error opening first ad:', e);
+                      }
+                    }, 3000);
+                    setFirstAdShown(true);
                   }
                   setVideoPlayed(true);
+                  setError(''); // Clear any previous errors
                 }}
                 onTimeUpdate={(e) => {
                   handleProgress({ playedSeconds: e.target.currentTime });
@@ -670,27 +689,19 @@ const Watch = () => {
                     setTimeout(() => {
                       const adUrl = adUrls[currentAdIndex];
                       console.log(`Opening first ad (${currentAdIndex + 1}/${adUrls.length}):`, adUrl);
-                      window.open(adUrl, '_blank');
-                      setCurrentAdIndex(prev => prev + 1);
-                    }, 5000); // Show first ad after 5 seconds of video start
+                      try {
+                        window.open(adUrl, '_blank', 'noopener,noreferrer');
+                        setCurrentAdIndex(prev => prev + 1);
+                      } catch (e) {
+                        console.error('Error opening first ad:', e);
+                      }
+                    }, 3000); // Show first ad after 3 seconds of video start
                     setFirstAdShown(true);
                   }
                   
-                  // If waiting for ad after 20 minutes, open next ad and resume
-                  if (waitingForAdPlay && currentAdIndex < adUrls.length) {
-                    const adUrl = adUrls[currentAdIndex];
-                    console.log(`Opening ad ${currentAdIndex + 1}/${adUrls.length} on play:`, adUrl);
-                    window.open(adUrl, '_blank');
-                    setCurrentAdIndex(prev => prev + 1);
-                    setWaitingForAdPlay(false);
-                  }
-                  
-                  const smartlinkShown = sessionStorage.getItem(`smartlinkShown_${id}`);
-                  if (!smartlinkShown && adConfig.smartlinkEnabled) {
-                    openSmartlink();
-                    sessionStorage.setItem(`smartlinkShown_${id}`, 'true');
-                  }
                   setVideoPlayed(true);
+                  setError(''); // Clear any error on play
+                  setWaitingForAdPlay(false);
                 }}
                 onError={(e) => {
                   console.error('ReactPlayer error:', e);
