@@ -8,7 +8,8 @@ const ffprobePath = require('ffprobe-static').path;
 const mime = require('mime-types');
 const crypto = require('crypto');
 const { uploadFile, deleteFile, presignPut, publicUrl } = require('../utils/b2');
-const { addToQueue } = require('../utils/videoQueue');
+// TEMPORARILY DISABLED FOR HIGH TRAFFIC - No video processing
+// const { addToQueue } = require('../utils/videoQueue');
 const { notifyFollowersNewVideo } = require('./notificationController');
 
 
@@ -152,15 +153,17 @@ exports.uploadVideo = async (req, res) => {
       user: req.user.id,
       originalName: videoFile.name,
       checksum,
-      processingStatus: 'queued' // Mark as queued for transcoding
+      // TEMPORARILY DISABLED PROCESSING - Videos go directly to storage
+      processingStatus: 'completed' // Skip transcoding, use original video
     });
 
     await User.findByIdAndUpdate(req.user.id, { $push: { videos: video._id } });
 
+    // TEMPORARILY DISABLED FOR HIGH TRAFFIC - No video processing
     // Send to worker EC2 for transcoding (non-blocking)
-    addToQueue(video._id.toString(), videoUrl, req.user.id).catch(err => {
+    /* addToQueue(video._id.toString(), videoUrl, req.user.id).catch(err => {
       console.error('Failed to queue video for transcoding:', err);
-    });
+    }); */
 
     // Notify followers of new video
     notifyFollowersNewVideo(req.user.id, {
@@ -174,7 +177,7 @@ exports.uploadVideo = async (req, res) => {
     res.status(201).json({ 
       success: true, 
       data: video,
-      message: 'Video uploaded successfully. Processing will begin shortly.' 
+      message: 'Video uploaded successfully and available immediately.' 
     });
   } catch (error) {
     console.error('Upload error:', error);
