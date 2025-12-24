@@ -74,8 +74,20 @@ exports.getUserProfile = async (req, res, next) => {
 // @access  Private
 exports.updateProfile = async (req, res, next) => {
   try {
+    // Debug logging
+    console.log('Profile Update Debug:', {
+      paramsId: req.params.id,
+      paramsIdType: typeof req.params.id,
+      userId: req.user?.id,
+      userIdType: typeof req.user?.id,
+      paramsIdStr: req.params.id.toString(),
+      userIdStr: req.user?.id?.toString(),
+      areEqual: req.params.id.toString() === req.user?.id?.toString()
+    });
+
     // Make sure user is updating their own profile
     if (req.params.id.toString() !== req.user.id.toString()) {
+      console.log('Authorization failed - IDs do not match');
       return res.status(401).json({ 
         success: false, 
         message: 'Not authorized to update this profile' 
