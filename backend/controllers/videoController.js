@@ -572,7 +572,7 @@ exports.likeVideo = async (req, res, next) => {
       });
     }
 
-    const alreadyLiked = video.likes.includes(req.user.id);
+    const alreadyLiked = video.likes.some(id => id.toString() === req.user.id.toString());
 
     if (alreadyLiked) {
       // Unlike
@@ -619,7 +619,7 @@ exports.dislikeVideo = async (req, res, next) => {
       });
     }
 
-    const alreadyDisliked = video.dislikes.includes(req.user.id);
+    const alreadyDisliked = video.dislikes.some(id => id.toString() === req.user.id.toString());
 
     if (alreadyDisliked) {
       // Remove dislike

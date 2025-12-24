@@ -111,7 +111,7 @@ exports.likeComment = async (req, res, next) => {
       });
     }
 
-    const alreadyLiked = comment.likes.includes(req.user.id);
+    const alreadyLiked = comment.likes.some(id => id.toString() === req.user.id.toString());
 
     if (alreadyLiked) {
       comment.likes = comment.likes.filter(id => id.toString() !== req.user.id);

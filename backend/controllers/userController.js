@@ -219,7 +219,7 @@ exports.uploadAvatar = async (req, res, next) => {
 // @access  Private
 exports.toggleSubscribe = async (req, res, next) => {
   try {
-    if (req.params.id === req.user.id) {
+    if (req.params.id.toString() === req.user.id.toString()) {
       return res.status(400).json({ 
         success: false, 
         message: 'You cannot subscribe to yourself' 
@@ -236,7 +236,7 @@ exports.toggleSubscribe = async (req, res, next) => {
       });
     }
 
-    const isSubscribed = currentUser.subscribedTo.includes(req.params.id);
+    const isSubscribed = currentUser.subscribedTo.some(id => id.toString() === req.params.id.toString());
 
     if (isSubscribed) {
       // Unsubscribe

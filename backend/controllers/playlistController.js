@@ -205,7 +205,7 @@ exports.addVideoToPlaylist = async (req, res, next) => {
     }
 
     // Check if video is already in playlist
-    if (playlist.videos.includes(req.params.videoId)) {
+    if (playlist.videos.some(id => id.toString() === req.params.videoId.toString())) {
       return res.status(400).json({
         success: false,
         message: 'Video already in playlist'
