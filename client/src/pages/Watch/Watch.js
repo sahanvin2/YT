@@ -7,8 +7,9 @@ import { formatViews, formatDate, formatDuration } from '../../utils/helpers';
 import { useAuth } from '../../context/AuthContext';
 import CommentSection from '../../components/CommentSection/CommentSection';
 import SubscribeButton from '../../components/SubscribeButton/SubscribeButton';
-import { useSmartlinkAd } from '../../components/Ads/SmartlinkAd';
-import { useAds } from '../../context/AdContext';
+// TEMPORARILY DISABLED FOR HIGH TRAFFIC
+// import { useSmartlinkAd } from '../../components/Ads/SmartlinkAd';
+// import { useAds } from '../../context/AdContext';
 import ShareModal from '../../components/ShareModal/ShareModal';
 import VideoCard from '../../components/VideoCard/VideoCard';
 import './Watch.css';
@@ -37,8 +38,9 @@ const Watch = () => {
   const [selectedSource, setSelectedSource] = useState(null);
   const [dislikesCount, setDislikesCount] = useState(0);
   const playerRef = useRef(null);
-  const { adConfig } = useAds();
-  const { openSmartlink } = useSmartlinkAd();
+  // TEMPORARILY DISABLED FOR HIGH TRAFFIC
+  // const { adConfig } = useAds();
+  // const { openSmartlink } = useSmartlinkAd();
   const [videoPlayed, setVideoPlayed] = useState(false);
   const [showShareModal, setShowShareModal] = useState(false);
   const [relatedVideos, setRelatedVideos] = useState([]);
@@ -51,8 +53,9 @@ const Watch = () => {
   const [currentAdIndex, setCurrentAdIndex] = useState(0);
   const [firstAdShown, setFirstAdShown] = useState(false);
   
+  // TEMPORARILY DISABLED FOR HIGH TRAFFIC - Ads commented out to prevent crashes
   // Sequential ad URLs - shown one by one every 20 minutes
-  const adUrls = [
+  /* const adUrls = [
     'https://ferntravelleddeduct.com/gtrc1veb7i?key=b0b98b004d66f73292231e7413bd2b3d',
     'https://ferntravelleddeduct.com/ngw7f9w7ar?key=1d03ce84598475a5c0ae7b0e970be386',
     'https://ferntravelleddeduct.com/tnku73k6e8?key=447538fcc223d88734b4f7f5f5be2b54',
@@ -63,7 +66,7 @@ const Watch = () => {
     'https://ferntravelleddeduct.com/skrjybktk?key=5c9a385ddc45f9ed2cbe812d9b5d8df3',
     'https://ferntravelleddeduct.com/b467swwk68?key=83daee009e4befaeaba7c9dea1c856e8',
     'https://ferntravelleddeduct.com/drfzz5nfc?key=a65ddcb5be118c6be68e516713aea33b'
-  ];
+  ]; */
   const [videoDuration, setVideoDuration] = useState(0);
   const [playbackRate, setPlaybackRate] = useState(1);
   const [pipEnabled, setPipEnabled] = useState(false);
@@ -385,23 +388,21 @@ const Watch = () => {
       }
     }
 
-    // Show ad every 5 minutes (300 seconds)
+    // TEMPORARILY DISABLED ADS FOR HIGH TRAFFIC
+    /* Show ad every 5 minutes (300 seconds)
     if (playedSeconds > 300 && !waitingForAdPlay && currentAdIndex < adUrls.length) {
-      const currentMinuteMark = Math.floor(playedSeconds / 300); // Every 300 seconds (5 minutes)
+      const currentMinuteMark = Math.floor(playedSeconds / 300);
       const lastAdMinuteMark = Math.floor(lastAdTime / 300);
       
-      // Open ad when crossing a 5-minute mark (at 5:00, 10:00, 15:00, etc.)
       if (currentMinuteMark > lastAdMinuteMark && currentMinuteMark > 0) {
         console.log(`Opening ad ${currentAdIndex + 1} at ${Math.floor(playedSeconds / 60)}:${Math.floor(playedSeconds % 60).toString().padStart(2, '0')}...`);
         
-        // Open the ad in a new window
         const adUrl = adUrls[currentAdIndex];
         if (adUrl) {
           try {
             const win = window.open(adUrl, '_blank', 'noopener,noreferrer');
             if (win) {
               console.log('✅ Ad opened successfully');
-              // Move to next ad for next interval
               setCurrentAdIndex(prev => prev + 1);
               setLastAdTime(playedSeconds);
             } else {
@@ -412,10 +413,9 @@ const Watch = () => {
           }
         }
         
-        // Don't pause the video - let it continue playing
         setWaitingForAdPlay(false);
       }
-    }
+    } */
   };
 
   const addVideoToHistory = async () => {
@@ -616,7 +616,8 @@ const Watch = () => {
                 style={{ width: '100%', height: '100%', objectFit: 'contain' }}
                 onPlay={() => {
                   window.dispatchEvent(new CustomEvent('collapseSidebar'));
-                  if (!firstAdShown && currentAdIndex < adUrls.length) {
+                  // TEMPORARILY DISABLED FOR HIGH TRAFFIC
+                  /* if (!firstAdShown && currentAdIndex < adUrls.length) {
                     setTimeout(() => {
                       const adUrl = adUrls[currentAdIndex];
                       try {
@@ -627,7 +628,7 @@ const Watch = () => {
                       }
                     }, 3000);
                     setFirstAdShown(true);
-                  }
+                  } */
                   setVideoPlayed(true);
                   setError(''); // Clear any previous errors
                 }}
@@ -684,7 +685,8 @@ const Watch = () => {
                 onPlay={() => {
                   window.dispatchEvent(new CustomEvent('collapseSidebar'));
                   
-                  // Show first ad when video starts playing (only once)
+                  // TEMPORARILY DISABLED FOR HIGH TRAFFIC
+                  /* Show first ad when video starts playing (only once)
                   if (!firstAdShown && currentAdIndex < adUrls.length) {
                     setTimeout(() => {
                       const adUrl = adUrls[currentAdIndex];
@@ -697,7 +699,7 @@ const Watch = () => {
                       }
                     }, 3000); // Show first ad after 3 seconds of video start
                     setFirstAdShown(true);
-                  }
+                  } */
                   
                   setVideoPlayed(true);
                   setError(''); // Clear any error on play
