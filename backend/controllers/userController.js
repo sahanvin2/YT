@@ -75,7 +75,7 @@ exports.getUserProfile = async (req, res, next) => {
 exports.updateProfile = async (req, res, next) => {
   try {
     // Make sure user is updating their own profile
-    if (req.params.id !== req.user.id) {
+    if (req.params.id.toString() !== req.user.id.toString()) {
       return res.status(401).json({ 
         success: false, 
         message: 'Not authorized to update this profile' 
@@ -126,7 +126,7 @@ exports.updateProfile = async (req, res, next) => {
 exports.uploadAvatar = async (req, res, next) => {
   try {
     // Make sure user is updating their own profile
-    if (req.params.id !== req.user.id) {
+    if (req.params.id.toString() !== req.user.id.toString()) {
       return res.status(401).json({ 
         success: false, 
         message: 'Not authorized to update this profile' 
@@ -531,7 +531,7 @@ exports.getSavedVideos = async (req, res, next) => {
 exports.uploadBanner = async (req, res, next) => {
   try {
     // Make sure user is updating their own profile
-    if (req.params.id !== req.user.id) {
+    if (req.params.id.toString() !== req.user.id.toString()) {
       return res.status(401).json({ 
         success: false, 
         message: 'Not authorized to update this profile' 
@@ -622,7 +622,7 @@ exports.uploadBanner = async (req, res, next) => {
 exports.updateSettings = async (req, res, next) => {
   try {
     // Make sure user is updating their own settings
-    if (req.params.id !== req.user.id) {
+    if (req.params.id.toString() !== req.user.id.toString()) {
       return res.status(401).json({ 
         success: false, 
         message: 'Not authorized to update this profile' 

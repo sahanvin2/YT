@@ -1,7 +1,7 @@
 import React, { useState, useRef } from 'react';
 import { FiX, FiCamera, FiUser, FiMail, FiLock, FiEye, FiEyeOff, FiCheck, FiSettings } from 'react-icons/fi';
 import { useAuth } from '../../context/AuthContext';
-import { updateProfile, uploadAvatar } from '../../utils/api';
+import { updateProfile, uploadAvatar, uploadBanner } from '../../utils/api';
 import './ProfileModal.css';
 
 const ProfileModal = ({ isOpen, onClose }) => {
@@ -30,7 +30,7 @@ const ProfileModal = ({ isOpen, onClose }) => {
   });
 
   const [avatarPreview, setAvatarPreview] = useState(user?.avatar || null);
-  const [bannerPreview, setBannerPreview] = useState(user?.banner || null);
+  const [bannerPreview, setBannerPreview] = useState(user?.channelBanner || user?.banner || null);
   const [avatarFile, setAvatarFile] = useState(null);
   const [bannerFile, setBannerFile] = useState(null);
 
@@ -75,38 +75,43 @@ const ProfileModal = ({ isOpen, onClose }) => {
       if (avatarFile) {
         const avatarData = new FormData();
         avatarData.append('avatar', avatarFile);
-        const avatarRes = await uploadAvatar(avatarData);
-        avatarUrl = avatarRes.data.avatarUrl;
+        const avatarRes = await uploadAvatar(user._id, avatarData);
+        avatarUrl = avatarRes.data.data.avatar;
       }
 
       // Upload banner if changed
-      let bannerUrl = user?.banner;
+      let bannerUrl = user?.channelBanner || user?.banner;
       if (bannerFile) {
         const bannerData = new FormData();
         bannerData.append('banner', bannerFile);
-        // You'll need to create this endpoint
-        // const bannerRes = await uploadBanner(bannerData);
-        // bannerUrl = bannerRes.data.bannerUrl;
+        const bannerRes = await uploadBanner(user._id, bannerData);
+        bannerUrl = bannerRes.data.data.channelBanner;
       }
 
-      // Update profile
+      // Update profile with other fields
       const updateData = {
         username: formData.username,
         email: formData.email,
         channelName: formData.channelName,
-        bio: formData.bio,
-        avatar: avatarUrl,
-        banner: bannerUrl
+        bio: formData.bio
       };
 
       const res = await updateProfile(user._id, updateData);
-      setUser(res.data.user);
+      
+      // Update user context with all new data
+      setUser({
+        ...res.data.data,
+        avatar: avatarUrl,
+        channelBanner: bannerUrl
+      });
+      
       setMessage({ type: 'success', text: 'Profile updated successfully!' });
       
       setTimeout(() => {
         onClose();
       }, 1500);
     } catch (err) {
+      console.error('Profile update error:', err);
       setMessage({ 
         type: 'error', 
         text: err.response?.data?.message || 'Failed to update profile' 
