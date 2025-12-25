@@ -506,11 +506,12 @@ const Watch = () => {
           <div className="video-player">
             {/* Player Settings Bar - Top */}
             <div className="player-settings-bar">
-              {((video.sources && video.sources.length > 0) || (video.variants && video.variants.length > 0)) && (
-                <div className="player-setting-item">
+              {/* Quality Selector - More Prominent */}
+              {((video.sources && video.sources.length > 0) || (video.variants && video.variants.length > 0)) ? (
+                <div className="player-setting-item quality-selector">
                   <label className="player-setting-label">Quality:</label>
                   <select
-                    className="player-setting-select"
+                    className="player-setting-select quality-select"
                     value={selectedSource ? selectedSource.quality : 'orig'}
                     onChange={(e) => {
                       const val = e.target.value;
@@ -523,15 +524,22 @@ const Watch = () => {
                       }
                     }}
                   >
-                    <option value="orig">Auto</option>
+                    <option value="orig">Auto (Best)</option>
                     {[...(video.sources || video.variants || [])]
                       .sort((a, b) => parseInt(b.quality) - parseInt(a.quality))
                       .map(s => (
                         <option key={s.quality} value={s.quality}>
-                          {s.quality}p
+                          {s.quality}p {s.quality >= 1080 ? 'HD' : s.quality >= 720 ? 'HD' : 'SD'}
                         </option>
                       ))}
                   </select>
+                  <span className="quality-badge">
+                    {selectedSource ? `${selectedSource.quality}p` : 'Auto'}
+                  </span>
+                </div>
+              ) : (
+                <div className="player-setting-item">
+                  <span className="quality-badge">Original</span>
                 </div>
               )}
               

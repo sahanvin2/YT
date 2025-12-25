@@ -9,6 +9,7 @@ const mime = require('mime-types');
 const crypto = require('crypto');
 const { uploadFile, deleteFile, presignPut, publicUrl } = require('../utils/b2');
 const { addToQueue } = require('../utils/videoQueue');
+const { addToHLSQueue } = require('../utils/hlsQueue');
 const { notifyFollowersNewVideo } = require('./notificationController');
 
 
@@ -39,7 +40,7 @@ exports.uploadVideo = async (req, res) => {
     }
 
     // Check file size (5GB = 5368709120 bytes)
-    if (req.files.video.size > 3221225472) {
+    if (req.files.video.size > 5368709120) {
       return res.status(413).json({ 
         success: false, 
         message: 'File too large. Maximum size is 5GB' 
@@ -48,21 +49,25 @@ exports.uploadVideo = async (req, res) => {
 
     const videoFile = req.files.video;
     const thumbnailFile = req.files.thumbnail;
-    const tmpDir = '/tmp/movia';
+    
+    // Use local tmp directory for processing
+    const tmpDir = path.join(__dirname, '../../tmp/uploads');
     fs.mkdirSync(tmpDir, { recursive: true });
 
     const ts = Date.now();
+    // Accept any video format (.mp4, .mkv, .mov, .avi, .webm, etc.)
     const videoExt = path.extname(videoFile.name) || '.mp4';
-    const tmpVideoPath = path.join(tmpDir, `video_${ts}${videoExt}`);
+    const tmpVideoPath = path.join(tmpDir, `upload_${req.user.id}_${ts}${videoExt}`);
+    
+    console.log(`📥 Receiving upload: ${videoFile.name} (${Math.round(videoFile.size / 1024 / 1024)}MB)`);
     await videoFile.mv(tmpVideoPath);
 
     // Compute checksum
     const checksum = computeChecksum(tmpVideoPath);
 
-    // Upload video to B2
-    const videoKey = `videos/${req.user.id}/${ts}_${videoFile.name}`;
-    const videoCT = mime.lookup(tmpVideoPath) || 'application/octet-stream';
-    const videoUrl = await uploadFile(tmpVideoPath, videoKey, videoCT);
+    // No need to upload original to B2 - we'll process to HLS locally
+    // The HLS processor will upload the HLS files directly
+    const videoUrl = null; // Will be set after HLS processing
 
     // Upload thumbnail
     let thumbnailUrl;
@@ -112,7 +117,7 @@ exports.uploadVideo = async (req, res) => {
       }
     }
 
-    // Get duration
+    // Get duration from source file
     const duration = await new Promise((resolve, reject) => {
       ffmpeg.ffprobe(tmpVideoPath, (err, data) => {
         if (err) return resolve(0);
@@ -120,7 +125,8 @@ exports.uploadVideo = async (req, res) => {
       });
     });
 
-    fs.unlinkSync(tmpVideoPath);
+    // Don't delete the tmpVideoPath yet - HLS processor needs it
+    // It will be deleted after HLS processing completes
 
     // Parse secondary genres if it's a JSON string
     let parsedSecondaryGenres = [];
@@ -135,10 +141,12 @@ exports.uploadVideo = async (req, res) => {
     }
 
     // Create DB record with new category structure
+    // Note: videoUrl will be updated by HLS worker once processing completes
     const video = await Video.create({
       title,
       description,
-      videoUrl,
+      videoUrl: videoUrl || 'processing', // Temporary placeholder
+      hlsUrl: null, // Will be set by HLS worker
       thumbnailUrl,
       subtitles: subtitleTracks,
       duration,
@@ -152,16 +160,21 @@ exports.uploadVideo = async (req, res) => {
       user: req.user.id,
       originalName: videoFile.name,
       checksum,
-      processingStatus: process.env.NODE_ENV === 'production' ? 'completed' : 'queued'
+      processingStatus: 'queued' // Always queue for HLS processing
     });
 
     await User.findByIdAndUpdate(req.user.id, { $push: { videos: video._id } });
 
-    // TEMPORARILY DISABLED FOR HIGH TRAFFIC - No video processing
-    // Only process videos in development mode (localhost)
-    if (process.env.NODE_ENV !== 'production') {
-      addToQueue(video._id.toString(), videoUrl, req.user.id).catch(err => {
-        console.error('Failed to queue video for transcoding:', err);
+    // Add to HLS processing queue (local GPU processing)
+    try {
+      await addToHLSQueue(video._id.toString(), tmpVideoPath, req.user.id);
+      console.log(`✅ Video ${video._id} queued for HLS processing`);
+    } catch (queueError) {
+      console.error('Failed to queue video for HLS processing:', queueError);
+      // Update video status to failed
+      await Video.findByIdAndUpdate(video._id, {
+        processingStatus: 'failed',
+        processingError: 'Failed to queue for processing'
       });
     }
     // Notify followers of new video
@@ -175,10 +188,8 @@ exports.uploadVideo = async (req, res) => {
 
     res.status(201).json({ 
       success: true, 
-      data: vidprocess.env.NODE_ENV === 'production' 
-        ? 'Video uploaded successfully and available immediately.'
-        : 'Video uploaded successfully. Processing will begin short
-      message: 'Video uploaded successfully and available immediately.' 
+      data: video,
+      message: 'Video uploaded successfully! Processing to HLS format with GPU acceleration. This will take a few minutes depending on video length.'
     });
   } catch (error) {
     console.error('Upload error:', error);

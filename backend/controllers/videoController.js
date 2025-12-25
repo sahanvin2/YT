@@ -82,19 +82,29 @@ exports.getVideos = async (req, res, next) => {
 
     videos = videos.map(video => {
       let videoObj = video.toObject(); // convert Mongoose doc to plain object
-      const original = videoObj.filePath || videoObj.url || videoObj.path || videoObj.videoUrl;
+      
+      // Prioritize HLS URL if available
+      const hlsUrl = videoObj.hlsUrl;
+      const original = hlsUrl || videoObj.filePath || videoObj.url || videoObj.path || videoObj.videoUrl;
       
       // Convert main video URL to CDN URL
       videoObj.cdnUrl = cdnUrlFrom(original);
-      // Also update videoUrl to use CDN URL for streaming
-      videoObj.videoUrl = videoObj.cdnUrl;
+      
+      // Set videoUrl based on format
+      if (hlsUrl) {
+        videoObj.videoUrl = cdnUrlFrom(hlsUrl);
+        videoObj.isHLS = true;
+      } else {
+        videoObj.videoUrl = videoObj.cdnUrl;
+        videoObj.isHLS = false;
+      }
       
       // Convert thumbnail URL to CDN URL
       if (videoObj.thumbnailUrl) {
         videoObj.thumbnailUrl = cdnUrlFrom(videoObj.thumbnailUrl);
       }
       
-      // Convert variant URLs to CDN URLs
+      // Convert variant URLs to CDN URLs (for backwards compatibility)
       if (videoObj.variants && Array.isArray(videoObj.variants)) {
         videoObj.variants = videoObj.variants.map(variant => ({
           ...variant,
@@ -161,12 +171,25 @@ exports.getVideo = async (req, res, next) => {
       });
     }
     const videoObj = video.toObject(); // convert Mongoose doc to plain object
-    const original = videoObj.filePath || videoObj.url || videoObj.path || videoObj.videoUrl;
     
-    // Convert main video URL to CDN URL
+    // Prioritize HLS URL if available
+    const hlsUrl = videoObj.hlsUrl;
+    const original = hlsUrl || videoObj.filePath || videoObj.url || videoObj.path || videoObj.videoUrl;
+    
+    // Convert to CDN URL
     videoObj.cdnUrl = cdnUrlFrom(original);
-    // Also update videoUrl to use CDN URL for streaming
-    videoObj.videoUrl = videoObj.cdnUrl;
+    
+    // Set videoUrl based on format
+    if (hlsUrl) {
+      // HLS streaming - use master playlist
+      videoObj.videoUrl = cdnUrlFrom(hlsUrl);
+      videoObj.isHLS = true;
+      console.log(`📺 HLS video ${video._id}: ${videoObj.videoUrl}`);
+    } else {
+      // Fallback to regular video URL
+      videoObj.videoUrl = videoObj.cdnUrl;
+      videoObj.isHLS = false;
+    }
     
     // Debug: Log URL conversion
     if (original !== videoObj.cdnUrl) {

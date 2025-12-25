@@ -40,15 +40,15 @@
   align-items: center;
   gap: 8px;
   z-index: 100;
-  background: rgba(255, 255, 255, 0.95);
+  background: rgba(31, 41, 55, 0.92);
   backdrop-filter: blur(12px);
   padding: 6px 10px;
   border-radius: 8px;
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  opacity: 0;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  opacity: 0.85;
   transition: opacity 0.3s;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
-  pointer-events: none;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+  pointer-events: auto;
 }
 
 .video-player:hover .player-settings-bar {
@@ -70,16 +70,16 @@
 
 .player-setting-label {
   font-size: 11px;
-  color: #1f2937;
+  color: #ffffff;
   font-weight: 500;
   white-space: nowrap;
 }
 
 .player-setting-select {
-  background: rgba(255, 255, 255, 0.9);
-  border: 1px solid rgba(0, 0, 0, 0.1);
+  background: rgba(0, 0, 0, 0.7);
+  border: 1px solid rgba(255, 255, 255, 0.2);
   border-radius: 4px;
-  color: #1f2937;
+  color: #ffffff;
   font-size: 11px;
   padding: 4px 8px;
   cursor: pointer;
@@ -88,7 +88,7 @@
 }
 
 .player-setting-select:hover {
-  background: rgba(255, 255, 255, 1);
+  background: rgba(0, 0, 0, 0.9);
   border-color: var(--acid);
 }
 
@@ -98,38 +98,59 @@
 }
 
 .player-setting-btn {
+  background: rgba(0, 0, 0, 0.7);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 4px;
+  color: #ffffff;
+  padding: 4px 8px;
+  cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
-  background: rgba(255, 255, 255, 0.9);
-  border: 1px solid rgba(0, 0, 0, 0.1);
-  border-radius: 4px;
-  color: #1f2937;
-  font-size: 11px;
-  padding: 4px 8px;
-  cursor: pointer;
   transition: all 0.2s;
-  min-width: 40px;
-  height: 24px;
+  position: relative;
+}
+
+.player-setting-btn:hover {
+  background: rgba(0, 0, 0, 0.9);
+  border-color: var(--acid);
+}
+
+.player-setting-btn.active {
+  background: var(--acid);
+  border-color: var(--acid);
+  color: #000;
+}
+
+/* Quality Badge */
+.quality-badge {
+  background: var(--acid);
+  color: #000;
+  font-size: 10px;
+  font-weight: 700;
+  padding: 3px 6px;
+  border-radius: 3px;
+  margin-left: 4px;
+  letter-spacing: 0.5px;
+}
+
+.quality-selector {
+  background: rgba(0, 0, 0, 0.5);
+  padding: 4px 8px;
+  border-radius: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.quality-select {
+  min-width: 90px;
+  font-weight: 500;
 }
 
 .player-setting-btn svg {
   width: 16px;
   height: 16px;
-  color: #1f2937;
+  color: #ffffff;
   flex-shrink: 0;
-}
-
-.player-setting-btn:hover {
-  background: rgba(255, 255, 255, 1);
-  border-color: var(--acid);
-  color: var(--acid);
-}
-
-.player-setting-btn.active {
-  background: rgba(255, 107, 53, 0.3);
-  border-color: var(--acid);
-  color: var(--acid);
 }
 
 .player-setting-menu {

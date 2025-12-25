@@ -1,8 +1,27 @@
+# Dependencies
 node_modules/
+client/node_modules/
+
+# Environment variables
 .env
-uploads/
+
+# Logs
 *.log
-.DS_Store
-client/build
-client/node_modules
+logs/
+
+# Uploads and temporary files
+uploads/
 tmp/
+
+# Build outputs
+client/build/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo

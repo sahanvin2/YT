@@ -36,6 +36,7 @@ const playlists = require('./routes/playlists');
 const channels = require('./routes/channels');
 const transcode = require('./routes/transcode');
 const notifications = require('./routes/notifications');
+const processing = require('./routes/processing');
 
 const app = express();
 
@@ -87,6 +88,7 @@ app.use('/api/playlists', playlists);
 app.use('/api/channels', channels);
 app.use('/api/transcode', transcode);
 app.use('/api/notifications', notifications);
+app.use('/api/processing', processing);
 
 // Error handler
 app.use(errorHandler);

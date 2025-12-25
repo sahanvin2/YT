@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
 import { useNavigate, Link } from 'react-router-dom';
 import { FiUpload, FiX, FiImage, FiFile, FiCheck, FiAlertCircle } from 'react-icons/fi';
-import { uploadVideo, presignPut, createVideoFromUrl } from '../../utils/api';
+import { uploadVideo, presignPut, createVideoFromUrl, getPlaylists } from '../../utils/api';
 import { useAuth } from '../../context/AuthContext';
 import { formatFileSize } from '../../utils/helpers';
 import { MAIN_CATEGORIES, GENRES, SUB_CATEGORIES, validateGenreSelection } from '../../utils/categories';
@@ -42,6 +42,27 @@ const Upload = () => {
   // Multi-upload state
   const [uploadQueue, setUploadQueue] = useState([]); // Array of upload jobs
   const [isMultiUpload, setIsMultiUpload] = useState(false);
+  const [playlists, setPlaylists] = useState([]);
+  const [playlistError, setPlaylistError] = useState(false);
+
+  // Fetch user playlists on mount
+  useEffect(() => {
+    const fetchPlaylists = async () => {
+      try {
+        const res = await getPlaylists();
+        setPlaylists(res.data.data || []);
+        setPlaylistError(false);
+      } catch (err) {
+        console.error('Failed to fetch playlists:', err);
+        setPlaylistError(true);
+        // Don't show error to user - playlists are optional
+      }
+    };
+
+    if (isAuthenticated) {
+      fetchPlaylists();
+    }
+  }, [isAuthenticated]);
 
   // Collapse sidebar when component mounts or when upload starts
   useEffect(() => {
@@ -749,7 +770,7 @@ const Upload = () => {
                   </div>
 
                   <div className="form-section">
-                    <h3 className="section-title">Playlist</h3>
+                    <h3 className="section-title">Playlist (Optional)</h3>
                     <div className="form-group">
                       <select
                         id="playlist"
@@ -757,10 +778,22 @@ const Upload = () => {
                         value={playlist}
                         onChange={onChange}
                         className="form-select"
+                        disabled={playlistError}
                       >
-                        <option value="">Select a playlist</option>
-                        {/* Playlists would be loaded here */}
+                        <option value="">
+                          {playlistError ? 'Playlists unavailable' : 'Select a playlist'}
+                        </option>
+                        {playlists.map(pl => (
+                          <option key={pl._id} value={pl._id}>
+                            {pl.name} ({pl.videos?.length || 0} videos)
+                          </option>
+                        ))}
                       </select>
+                      {playlists.length === 0 && !playlistError && (
+                        <small style={{ color: '#888', marginTop: '5px', display: 'block' }}>
+                          No playlists yet. Create one from your channel page.
+                        </small>
+                      )}
                     </div>
                   </div>
 
