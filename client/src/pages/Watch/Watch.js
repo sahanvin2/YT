@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import ReactPlayer from 'react-player';
-import { FiThumbsUp, FiThumbsDown, FiShare2, FiBookmark, FiChevronDown, FiChevronUp, FiZap, FiMaximize2, FiMinimize2, FiPlay, FiPause, FiVolume2, FiVolumeX, FiSkipBack, FiSkipForward } from 'react-icons/fi';
+import { FiThumbsUp, FiThumbsDown, FiShare2, FiBookmark, FiChevronDown, FiChevronUp, FiZap, FiMaximize2, FiMinimize2, FiPlay, FiPause, FiVolume2, FiVolumeX, FiSkipBack, FiSkipForward, FiSettings } from 'react-icons/fi';
 import { getVideo, getProcessingStatus, likeVideo, dislikeVideo, addView, addToHistory, saveVideo, getSavedVideos } from '../../utils/api';
 import { formatViews, formatDate, formatDuration } from '../../utils/helpers';
 import { useAuth } from '../../context/AuthContext';
@@ -1069,13 +1069,14 @@ const Watch = () => {
                       <div className="controls-right-group">
                         <div className="quality-control" ref={qualityMenuRef}>
                           <button 
-                            className="video-control-btn" 
+                            className="video-control-btn quality-btn" 
                             onClick={(e) => {
                               e.stopPropagation();
                               setShowQualityMenu(!showQualityMenu);
                             }}
                             title="Quality Settings"
                           >
+                            <FiSettings size={18} />
                             <span className="quality-text">{currentQuality}</span>
                           </button>
                           {showQualityMenu && (
