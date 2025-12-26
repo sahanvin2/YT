@@ -307,6 +307,17 @@ exports.getVideo = async (req, res, next) => {
       });
     }
 
+    // Check if video is published (hide unpublished videos from non-admins)
+    const isAdmin = req.user?.isAdmin || req.user?.isUploadAdmin;
+    const isOwner = req.user?.id?.toString() === (video.user._id?.toString() || video.user.toString());
+    
+    if (!video.isPublished && !isAdmin && !isOwner) {
+      return res.status(404).json({
+        success: false,
+        message: 'Video not found or still processing'
+      });
+    }
+
     // In HLS-only mode, auto-queue HLS processing for non-HLS videos.
     // This lets old MP4/MKV videos become playable without manual deletion.
     if (HLS_ONLY) {
@@ -922,6 +933,11 @@ exports.searchVideos = async (req, res, next) => {
         { tags: { $in: [regexQuery] } }
       ]
     };
+    
+    // Hide unpublished videos from non-admins
+    if (!req.user || (!req.user.isAdmin && !req.user.isUploadAdmin)) {
+      query.isPublished = true;
+    }
 
     let videos = await Video.find(query)
       .populate('user', 'username avatar channelName')
@@ -1012,7 +1028,14 @@ exports.getTrendingVideos = async (req, res, next) => {
   try {
     const { limit = 12 } = req.query;
 
-    let videos = await Video.find({ visibility: 'public' })
+    const query = { visibility: 'public' };
+    
+    // Hide unpublished videos from non-admins
+    if (!req.user || (!req.user.isAdmin && !req.user.isUploadAdmin)) {
+      query.isPublished = true;
+    }
+
+    let videos = await Video.find(query)
       .populate('user', 'username avatar channelName')
       .sort({ views: -1, likes: -1 })
       .limit(parseInt(limit))
