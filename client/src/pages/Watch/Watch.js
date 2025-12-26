@@ -720,39 +720,53 @@ const Watch = () => {
                   playbackRate={playbackRate}
                   onReady={() => {
                     console.log('🎬 ReactPlayer ready');
-                    // Get HLS levels if available (wait a bit for HLS.js to initialize)
+                    // Get HLS levels if available (wait for HLS.js to initialize)
                     setTimeout(() => {
                       if (playerRef.current) {
-                        const internalPlayer = playerRef.current.getInternalPlayer();
-                        console.log('🔍 Internal Player:', internalPlayer);
-                        
-                        // For HLS.js player
-                        if (internalPlayer && internalPlayer.levels) {
-                          const levels = internalPlayer.levels;
-                          console.log('📊 HLS Levels detected:', levels.length, levels);
-                          setHlsLevels(levels);
+                        try {
+                          const internalPlayer = playerRef.current.getInternalPlayer();
+                          console.log('🔍 Internal Player:', internalPlayer);
+                          console.log('🔍 Player type:', internalPlayer?.constructor?.name);
                           
-                          // Get current level
-                          const currentLevel = internalPlayer.currentLevel;
-                          if (currentLevel === -1) {
-                            setCurrentQuality('Auto');
-                          } else if (levels[currentLevel]) {
-                            setCurrentQuality(`${levels[currentLevel].height}p`);
-                          }
-                          
-                          // Listen for level changes
-                          internalPlayer.on && internalPlayer.on('levelSwitched', (event, data) => {
-                            if (data.level === -1) {
-                              setCurrentQuality('Auto');
-                            } else if (levels[data.level]) {
-                              setCurrentQuality(`${levels[data.level].height}p`);
+                          // For HLS.js player
+                          if (internalPlayer && typeof internalPlayer.levels !== 'undefined') {
+                            const levels = internalPlayer.levels || [];
+                            console.log('📊 HLS Levels detected:', levels.length, levels);
+                            
+                            if (levels.length > 0) {
+                              setHlsLevels(levels);
+                              
+                              // Get current level
+                              const currentLevel = internalPlayer.currentLevel ?? -1;
+                              if (currentLevel === -1) {
+                                setCurrentQuality('Auto');
+                              } else if (levels[currentLevel]) {
+                                setCurrentQuality(`${levels[currentLevel].height}p`);
+                              }
+                              
+                              // Listen for level changes
+                              if (internalPlayer.on) {
+                                internalPlayer.on('levelSwitched', (event, data) => {
+                                  console.log('📊 Level switched:', data);
+                                  if (data.level === -1) {
+                                    setCurrentQuality('Auto');
+                                  } else if (levels[data.level]) {
+                                    setCurrentQuality(`${levels[data.level].height}p`);
+                                  }
+                                });
+                              }
+                            } else {
+                              console.warn('⚠️ HLS levels array is empty');
                             }
-                          });
-                        } else {
-                          console.warn('⚠️ HLS levels not available');
+                          } else {
+                            console.warn('⚠️ HLS levels not available - player type:', internalPlayer?.constructor?.name);
+                            console.log('Available properties:', Object.keys(internalPlayer || {}));
+                          }
+                        } catch (error) {
+                          console.error('❌ Error detecting HLS levels:', error);
                         }
                       }
-                    }, 1000);
+                    }, 1500);
                   }}
                   onProgress={(state) => {
                     if (!seeking) {

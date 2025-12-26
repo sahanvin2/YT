@@ -45,6 +45,25 @@ exports.authorize = (...roles) => {
   };
 };
 
+// Check if user is upload admin (can upload videos)
+exports.requireUploadAdmin = async (req, res, next) => {
+  if (!req.user) {
+    return res.status(401).json({
+      success: false,
+      message: 'Not authorized to access this route'
+    });
+  }
+
+  if (!req.user.isUploadAdmin) {
+    return res.status(403).json({
+      success: false,
+      message: 'Only upload admins can upload videos. Contact site administrator.'
+    });
+  }
+
+  next();
+};
+
 // Optional authentication - sets req.user if token is provided, but doesn't fail if not
 exports.optionalAuth = async (req, res, next) => {
   let token;

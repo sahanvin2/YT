@@ -55,6 +55,10 @@ const UserSchema = new mongoose.Schema({
     enum: ['user', 'admin'],
     default: 'user'
   },
+  isUploadAdmin: {
+    type: Boolean,
+    default: false // Only admins who can upload videos locally
+  },
   channelName: {
     type: String,
     trim: true,

@@ -17,7 +17,7 @@ const {
   getDownloadUrl,
   downloadVideoProxy
 } = require('../controllers/videoController');
-const { protect, optionalAuth } = require('../middleware/auth');
+const { protect, optionalAuth, requireUploadAdmin } = require('../middleware/auth');
 
 const router = express.Router();
 
@@ -27,10 +27,10 @@ router.use('/:videoId/comments', commentRouter);
 
 router.route('/')
   .get(getVideos)
-  .post(protect, uploadVideo);
+  .post(protect, requireUploadAdmin, uploadVideo);
 
 // Create a video from an already uploaded R2 URL (via presigned PUT)
-router.post('/create', protect, createVideoFromUrl);
+router.post('/create', protect, requireUploadAdmin, createVideoFromUrl);
 
 
 router.get('/search', searchVideos);
@@ -44,8 +44,8 @@ router.get('/:id/download-file', downloadVideoProxy);
 
 router.route('/:id')
   .get(optionalAuth, getVideo)
-  .put(protect, updateVideo)
-  .delete(protect, deleteVideo);
+  .put(protect, requireUploadAdmin, updateVideo)
+  .delete(protect, requireUploadAdmin, deleteVideo);
 
 router.put('/:id/like', protect, likeVideo);
 router.put('/:id/dislike', protect, dislikeVideo);
