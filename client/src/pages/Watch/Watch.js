@@ -581,6 +581,20 @@ const Watch = () => {
   };
 
   const playbackUrl = pickPlaybackUrl();
+  
+  // Debug logging
+  useEffect(() => {
+    if (video) {
+      console.log('🎬 Video Data:', {
+        hlsUrl: video.hlsUrl,
+        videoUrl: video.videoUrl,
+        cdnUrl: video.cdnUrl,
+        playbackUrl: playbackUrl,
+        processingStatus: video.processingStatus
+      });
+    }
+  }, [video, playbackUrl]);
+  
   const isHlsPlayback = typeof playbackUrl === 'string' && (
     playbackUrl.includes('.m3u8') || playbackUrl.includes('/api/hls/')
   );
@@ -705,22 +719,39 @@ const Watch = () => {
                   playbackRate={playbackRate}
                   onReady={() => {
                     console.log('🎬 ReactPlayer ready');
-                    // Get HLS levels if available
-                    if (playerRef.current) {
-                      const internalPlayer = playerRef.current.getInternalPlayer();
-                      if (internalPlayer && internalPlayer.levels) {
-                        const levels = internalPlayer.levels;
-                        console.log('📊 HLS Levels detected:', levels.length);
-                        setHlsLevels(levels);
-                        // Get current level
-                        const currentLevel = internalPlayer.currentLevel;
-                        if (currentLevel === -1) {
-                          setCurrentQuality('Auto');
-                        } else if (levels[currentLevel]) {
-                          setCurrentQuality(`${levels[currentLevel].height}p`);
+                    // Get HLS levels if available (wait a bit for HLS.js to initialize)
+                    setTimeout(() => {
+                      if (playerRef.current) {
+                        const internalPlayer = playerRef.current.getInternalPlayer();
+                        console.log('🔍 Internal Player:', internalPlayer);
+                        
+                        // For HLS.js player
+                        if (internalPlayer && internalPlayer.levels) {
+                          const levels = internalPlayer.levels;
+                          console.log('📊 HLS Levels detected:', levels.length, levels);
+                          setHlsLevels(levels);
+                          
+                          // Get current level
+                          const currentLevel = internalPlayer.currentLevel;
+                          if (currentLevel === -1) {
+                            setCurrentQuality('Auto');
+                          } else if (levels[currentLevel]) {
+                            setCurrentQuality(`${levels[currentLevel].height}p`);
+                          }
+                          
+                          // Listen for level changes
+                          internalPlayer.on && internalPlayer.on('levelSwitched', (event, data) => {
+                            if (data.level === -1) {
+                              setCurrentQuality('Auto');
+                            } else if (levels[data.level]) {
+                              setCurrentQuality(`${levels[data.level].height}p`);
+                            }
+                          });
+                        } else {
+                          console.warn('⚠️ HLS levels not available');
                         }
                       }
-                    }
+                    }, 1000);
                   }}
                   onProgress={(state) => {
                     if (!seeking) {
@@ -744,9 +775,11 @@ const Watch = () => {
                         lowLatencyMode: false,
                         backBufferLength: 90,
                         maxBufferLength: 30,
-                        maxMaxBufferLength: 600
+                        maxMaxBufferLength: 600,
+                        startLevel: -1, // Auto quality
+                        debug: process.env.NODE_ENV === 'development'
                       },
-                      forceHLS: true
+                      forceHLS: isHlsPlayback
                     }
                   }}
                   onPlay={() => {
@@ -759,8 +792,20 @@ const Watch = () => {
                   onPause={() => setPlaying(false)}
                   onEnded={() => setPlaying(false)}
                   onError={(e) => {
-                    console.error('ReactPlayer error:', e);
-                    setError('Failed to play video. Please try refreshing the page.');
+                    console.error('❌ ReactPlayer error:', e);
+                    console.error('Video URL:', playbackUrl);
+                    console.error('Is HLS:', isHlsPlayback);
+                    
+                    let errorMsg = 'Failed to play video. ';
+                    if (!playbackUrl) {
+                      errorMsg += 'Video URL is missing. ';
+                    } else if (video?.processingStatus !== 'completed') {
+                      errorMsg += 'Video is still processing. ';
+                    } else {
+                      errorMsg += 'Please try refreshing the page.';
+                    }
+                    
+                    setError(errorMsg);
                   }}
                 />
 
