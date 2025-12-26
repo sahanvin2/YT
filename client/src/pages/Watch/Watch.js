@@ -536,12 +536,13 @@ const Watch = () => {
   const normalizePlaybackUrl = (inputUrl) => {
     if (!inputUrl || typeof inputUrl !== 'string') return inputUrl;
 
-    // If the URL contains our backend HLS proxy route, always use a same-origin path.
-    // This prevents accidental conversion to Bunny CDN (which causes CORS errors)
-    // and works in dev via CRA proxy + in prod behind a reverse proxy.
-    const idx = inputUrl.indexOf('/api/hls/');
-    if (idx !== -1) {
-      return inputUrl.slice(idx);
+    // If the URL contains our backend HLS proxy route, convert to direct CDN access
+    // Pattern: /api/hls/userId/videoId/master.m3u8 → https://Xclub.b-cdn.net/videos/userId/videoId/master.m3u8
+    const proxyMatch = inputUrl.match(/\/api\/hls\/([^\/]+)\/([^\/]+)\/(.+)/);
+    if (proxyMatch) {
+      const [, userId, videoId, file] = proxyMatch;
+      const cdnBase = process.env.REACT_APP_CDN_BASE || 'https://Xclub.b-cdn.net';
+      return `${cdnBase}/videos/${userId}/${videoId}/${file}`;
     }
 
     return inputUrl;
