@@ -94,11 +94,18 @@ const Watch = () => {
   const [pipEnabled, setPipEnabled] = useState(false);
   const [showSpeedMenu, setShowSpeedMenu] = useState(false);
   const speedMenuRef = useRef(null);
+  const [showQualityMenu, setShowQualityMenu] = useState(false);
+  const qualityMenuRef = useRef(null);
   const [hlsLevels, setHlsLevels] = useState([]);
   const [selectedHlsLevel, setSelectedHlsLevel] = useState(-1); // -1 = Auto
+  const [currentQuality, setCurrentQuality] = useState('Auto');
   const viewCountedRef = useRef(false);
   const watchedDurationRef = useRef(0);
   const maxWatchedDurationRef = useRef(0);
+  
+  // Video player overlay controls state
+  const [showControls, setShowControls] = useState(true);
+  const controlsTimeoutRef = useRef(null);
 
   useEffect(() => {
     // Reset video states when video ID changes
@@ -218,22 +225,25 @@ const Watch = () => {
 
   // Timed ads are now handled in handleProgress based on actual video playback time
 
-  // Close download menu and speed menu when clicking outside
+  // Close download menu, speed menu, and quality menu when clicking outside
   useEffect(() => {
     const handleClickOutside = (event) => {
       if (speedMenuRef.current && !speedMenuRef.current.contains(event.target)) {
         setShowSpeedMenu(false);
       }
+      if (qualityMenuRef.current && !qualityMenuRef.current.contains(event.target)) {
+        setShowQualityMenu(false);
+      }
     };
 
-    if (showSpeedMenu) {
+    if (showSpeedMenu || showQualityMenu) {
       document.addEventListener('mousedown', handleClickOutside);
     }
 
     return () => {
       document.removeEventListener('mousedown', handleClickOutside);
     };
-  }, [showSpeedMenu]);
+  }, [showSpeedMenu, showQualityMenu]);
 
   // Update player when quality changes
   useEffect(() => {
@@ -649,7 +659,31 @@ const Watch = () => {
     <div className="watch-page">
       <div className="watch-content">
         <div className="video-player-section">
-          <div className="video-player" ref={videoContainerRef}>
+          <div 
+            className="video-player" 
+            ref={videoContainerRef}
+            onMouseMove={() => {
+              if (hasPlayableUrl && !isProcessing && !needsHls) {
+                setShowControls(true);
+                if (controlsTimeoutRef.current) {
+                  clearTimeout(controlsTimeoutRef.current);
+                }
+                controlsTimeoutRef.current = setTimeout(() => {
+                  if (playing) setShowControls(false);
+                }, 3000);
+              }
+            }}
+            onMouseLeave={() => {
+              if (playing && hasPlayableUrl && !isProcessing && !needsHls) {
+                setShowControls(false);
+              }
+            }}
+            onClick={() => {
+              if (hasPlayableUrl && !isProcessing && !needsHls) {
+                setPlaying(!playing);
+              }
+            }}
+          >
             {(!hasPlayableUrl || isProcessing || needsHls) ? (
               <div className="error-container">
                 <p className="error-message">
@@ -661,212 +695,323 @@ const Watch = () => {
                 </p>
               </div>
             ) : (
-              <ReactPlayer
-                ref={playerRef}
-                url={playbackUrl}
-                playing={playing}
-                volume={volume}
-                muted={muted}
-                playbackRate={playbackRate}
-                onProgress={(state) => {
-                  if (!seeking) {
-                    setPlayed(state.played);
-                  }
-                  handleProgress(state);
-                }}
-                onDuration={setDuration}
-                controls={false}
-                width="100%"
-                height="100%"
-                config={{
-                  file: {
-                    attributes: {
-                      poster: video.thumbnailUrl || video.thumbnail,
-                      controlsList: 'nodownload',
-                      crossOrigin: 'anonymous'
-                    },
-                    hlsOptions: {
-                      enableWorker: true,
-                      lowLatencyMode: false,
-                      backBufferLength: 90,
-                      maxBufferLength: 30,
-                      maxMaxBufferLength: 600
-                    },
-                    forceHLS: true
-                  }
-                }}
-                onPlay={() => {
-                  window.dispatchEvent(new CustomEvent('collapseSidebar'));
-                  setPlaying(true);
-                  setVideoPlayed(true);
-                  setError('');
-                  setWaitingForAdPlay(false);
-                }}
-                onPause={() => setPlaying(false)}
-                onEnded={() => setPlaying(false)}
-                onError={(e) => {
-                  console.error('ReactPlayer error:', e);
-                  setError('Failed to play video. Please try refreshing the page.');
-                }}
-              />
+              <>
+                <ReactPlayer
+                  ref={playerRef}
+                  url={playbackUrl}
+                  playing={playing}
+                  volume={volume}
+                  muted={muted}
+                  playbackRate={playbackRate}
+                  onReady={() => {
+                    console.log('🎬 ReactPlayer ready');
+                    // Get HLS levels if available
+                    if (playerRef.current) {
+                      const internalPlayer = playerRef.current.getInternalPlayer();
+                      if (internalPlayer && internalPlayer.levels) {
+                        const levels = internalPlayer.levels;
+                        console.log('📊 HLS Levels detected:', levels.length);
+                        setHlsLevels(levels);
+                        // Get current level
+                        const currentLevel = internalPlayer.currentLevel;
+                        if (currentLevel === -1) {
+                          setCurrentQuality('Auto');
+                        } else if (levels[currentLevel]) {
+                          setCurrentQuality(`${levels[currentLevel].height}p`);
+                        }
+                      }
+                    }
+                  }}
+                  onProgress={(state) => {
+                    if (!seeking) {
+                      setPlayed(state.played);
+                    }
+                    handleProgress(state);
+                  }}
+                  onDuration={setDuration}
+                  controls={false}
+                  width="100%"
+                  height="100%"
+                  config={{
+                    file: {
+                      attributes: {
+                        poster: video.thumbnailUrl || video.thumbnail,
+                        controlsList: 'nodownload',
+                        crossOrigin: 'anonymous'
+                      },
+                      hlsOptions: {
+                        enableWorker: true,
+                        lowLatencyMode: false,
+                        backBufferLength: 90,
+                        maxBufferLength: 30,
+                        maxMaxBufferLength: 600
+                      },
+                      forceHLS: true
+                    }
+                  }}
+                  onPlay={() => {
+                    window.dispatchEvent(new CustomEvent('collapseSidebar'));
+                    setPlaying(true);
+                    setVideoPlayed(true);
+                    setError('');
+                    setWaitingForAdPlay(false);
+                  }}
+                  onPause={() => setPlaying(false)}
+                  onEnded={() => setPlaying(false)}
+                  onError={(e) => {
+                    console.error('ReactPlayer error:', e);
+                    setError('Failed to play video. Please try refreshing the page.');
+                  }}
+                />
+
+                {/* YouTube-Style Overlay Controls */}
+                <div className={`video-controls-overlay ${showControls ? 'visible' : ''}`}>
+                  {/* Big Center Play Button */}
+                  {!playing && (
+                    <div className="center-play-button" onClick={(e) => {
+                      e.stopPropagation();
+                      setPlaying(true);
+                    }}>
+                      <FiPlay size={60} />
+                    </div>
+                  )}
+
+                  {/* Progress Bar at Bottom */}
+                  <div className="controls-bottom-section">
+                    <div className="progress-bar-section">
+                      <input
+                        type="range"
+                        min={0}
+                        max={0.999999}
+                        step="any"
+                        value={played}
+                        onMouseDown={(e) => {
+                          e.stopPropagation();
+                          setSeeking(true);
+                        }}
+                        onChange={(e) => {
+                          e.stopPropagation();
+                          setPlayed(parseFloat(e.target.value));
+                        }}
+                        onMouseUp={(e) => {
+                          e.stopPropagation();
+                          setSeeking(false);
+                          playerRef.current?.seekTo(parseFloat(e.target.value));
+                        }}
+                        onClick={(e) => e.stopPropagation()}
+                        className="video-progress-bar"
+                      />
+                    </div>
+
+                    {/* Bottom Controls Row */}
+                    <div className="controls-bottom-row" onClick={(e) => e.stopPropagation()}>
+                      <div className="controls-left-group">
+                        <button
+                          className="video-control-btn"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setPlaying(!playing);
+                          }}
+                          title={playing ? 'Pause (k)' : 'Play (k)'}
+                        >
+                          {playing ? <FiPause size={24} /> : <FiPlay size={24} />}
+                        </button>
+
+                        <button
+                          className="video-control-btn"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            if (playerRef.current) {
+                              playerRef.current.seekTo(playerRef.current.getCurrentTime() - 10);
+                            }
+                          }}
+                          title="Rewind 10s (j)"
+                        >
+                          <FiSkipBack size={20} />
+                        </button>
+
+                        <button
+                          className="video-control-btn"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            if (playerRef.current) {
+                              playerRef.current.seekTo(playerRef.current.getCurrentTime() + 10);
+                            }
+                          }}
+                          title="Forward 10s (l)"
+                        >
+                          <FiSkipForward size={20} />
+                        </button>
+
+                        <div className="volume-control-group">
+                          <button
+                            className="video-control-btn"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setMuted(!muted);
+                            }}
+                            title={muted ? 'Unmute (m)' : 'Mute (m)'}
+                          >
+                            {muted ? <FiVolumeX size={20} /> : <FiVolume2 size={20} />}
+                          </button>
+                          <input
+                            type="range"
+                            min={0}
+                            max={1}
+                            step={0.05}
+                            value={muted ? 0 : volume}
+                            onChange={(e) => {
+                              e.stopPropagation();
+                              const v = parseFloat(e.target.value);
+                              setVolume(v);
+                              if (v > 0) setMuted(false);
+                            }}
+                            onClick={(e) => e.stopPropagation()}
+                            className="volume-slider-overlay"
+                          />
+                        </div>
+
+                        <span className="time-display-overlay">
+                          {formatTime(played * duration)} / {formatTime(duration)}
+                        </span>
+                      </div>
+
+                      <div className="controls-right-group">
+                        <div className="quality-control" ref={qualityMenuRef}>
+                          <button 
+                            className="video-control-btn" 
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setShowQualityMenu(!showQualityMenu);
+                            }}
+                            title="Quality Settings"
+                          >
+                            <span className="quality-text">{currentQuality}</span>
+                          </button>
+                          {showQualityMenu && (
+                            <div className="quality-menu-dropdown">
+                              <button
+                                className={`quality-option ${selectedHlsLevel === -1 ? 'active' : ''}`}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  if (playerRef.current) {
+                                    const internalPlayer = playerRef.current.getInternalPlayer();
+                                    if (internalPlayer && internalPlayer.levels) {
+                                      internalPlayer.currentLevel = -1; // Auto
+                                      setSelectedHlsLevel(-1);
+                                      setCurrentQuality('Auto');
+                                      console.log('✅ Set quality to Auto');
+                                    }
+                                  }
+                                  setShowQualityMenu(false);
+                                }}
+                              >
+                                Auto
+                              </button>
+                              {hlsLevels.map((level, index) => (
+                                <button
+                                  key={index}
+                                  className={`quality-option ${selectedHlsLevel === index ? 'active' : ''}`}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    if (playerRef.current) {
+                                      const internalPlayer = playerRef.current.getInternalPlayer();
+                                      if (internalPlayer && internalPlayer.levels) {
+                                        internalPlayer.currentLevel = index;
+                                        setSelectedHlsLevel(index);
+                                        setCurrentQuality(`${level.height}p`);
+                                        console.log(`✅ Set quality to ${level.height}p`);
+                                      }
+                                    }
+                                    setShowQualityMenu(false);
+                                  }}
+                                >
+                                  {level.height}p
+                                </button>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+
+                        <div className="speed-control" ref={speedMenuRef}>
+                          <button 
+                            className="video-control-btn" 
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setShowSpeedMenu(!showSpeedMenu);
+                            }}
+                            title="Playback Speed"
+                          >
+                            <span className="speed-text">{playbackRate}x</span>
+                          </button>
+                          {showSpeedMenu && (
+                            <div className="speed-menu-dropdown">
+                              {[0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2].map((rate) => (
+                                <button
+                                  key={rate}
+                                  className={`speed-option ${playbackRate === rate ? 'active' : ''}`}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setPlaybackRate(rate);
+                                    setShowSpeedMenu(false);
+                                  }}
+                                >
+                                  {rate === 1 ? 'Normal' : `${rate}x`}
+                                </button>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+
+                        <button
+                          className={`video-control-btn ${pipEnabled ? 'active' : ''}`}
+                          onClick={async (e) => {
+                            e.stopPropagation();
+                            if (!playerRef.current) return;
+                            try {
+                              const internalPlayer = playerRef.current.getInternalPlayer();
+                              if (pipEnabled) {
+                                if (document.pictureInPictureElement) {
+                                  await document.exitPictureInPicture();
+                                }
+                                setPipEnabled(false);
+                              } else {
+                                if (internalPlayer && internalPlayer.requestPictureInPicture) {
+                                  await internalPlayer.requestPictureInPicture();
+                                  setPipEnabled(true);
+                                }
+                              }
+                            } catch (err) {
+                              console.error('PiP error:', err);
+                            }
+                          }}
+                          title="Miniplayer (i)"
+                        >
+                          <FiMinimize2 size={20} />
+                        </button>
+
+                        <button
+                          className="video-control-btn"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            if (!videoContainerRef.current) return;
+                            if (document.fullscreenElement) {
+                              document.exitFullscreen();
+                            } else {
+                              videoContainerRef.current.requestFullscreen();
+                            }
+                          }}
+                          title="Fullscreen (f)"
+                        >
+                          <FiMaximize2 size={20} />
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </>
             )}
           </div>
-
-          {/* Custom Video Controls Below Player */}
-          {hasPlayableUrl && !isProcessing && !needsHls && (
-            <div className="custom-video-controls">
-              <div className="progress-bar-container">
-                <input
-                  type="range"
-                  min={0}
-                  max={0.999999}
-                  step="any"
-                  value={played}
-                  onMouseDown={() => setSeeking(true)}
-                  onChange={(e) => {
-                    setPlayed(parseFloat(e.target.value));
-                  }}
-                  onMouseUp={(e) => {
-                    setSeeking(false);
-                    playerRef.current.seekTo(parseFloat(e.target.value));
-                  }}
-                  className="progress-slider"
-                />
-                <div className="time-display">
-                  <span>{formatTime(played * duration)}</span>
-                  <span> / </span>
-                  <span>{formatTime(duration)}</span>
-                </div>
-              </div>
-
-              <div className="controls-row">
-                <div className="controls-left">
-                  <button
-                    className="control-btn"
-                    onClick={() => setPlaying(!playing)}
-                    title={playing ? 'Pause' : 'Play'}
-                  >
-                    {playing ? <FiPause size={20} /> : <FiPlay size={20} />}
-                  </button>
-
-                  <button
-                    className="control-btn"
-                    onClick={() => {
-                      if (playerRef.current) {
-                        playerRef.current.seekTo(playerRef.current.getCurrentTime() - 10);
-                      }
-                    }}
-                    title="Rewind 10s"
-                  >
-                    <FiSkipBack size={18} />
-                  </button>
-
-                  <button
-                    className="control-btn"
-                    onClick={() => {
-                      if (playerRef.current) {
-                        playerRef.current.seekTo(playerRef.current.getCurrentTime() + 10);
-                      }
-                    }}
-                    title="Forward 10s"
-                  >
-                    <FiSkipForward size={18} />
-                  </button>
-
-                  <button
-                    className="control-btn"
-                    onClick={() => setMuted(!muted)}
-                    title={muted ? 'Unmute' : 'Mute'}
-                  >
-                    {muted ? <FiVolumeX size={18} /> : <FiVolume2 size={18} />}
-                  </button>
-
-                  <input
-                    type="range"
-                    min={0}
-                    max={1}
-                    step={0.05}
-                    value={muted ? 0 : volume}
-                    onChange={(e) => {
-                      const v = parseFloat(e.target.value);
-                      setVolume(v);
-                      if (v > 0) setMuted(false);
-                    }}
-                    className="volume-slider"
-                  />
-                </div>
-
-                <div className="controls-right">
-                  <div className="player-setting-item" ref={speedMenuRef}>
-                    <button 
-                      className="control-btn" 
-                      onClick={() => setShowSpeedMenu(!showSpeedMenu)}
-                      title="Playback Speed"
-                    >
-                      {playbackRate}x
-                    </button>
-                    {showSpeedMenu && (
-                      <div className="player-setting-menu">
-                        {[0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2].map((rate) => (
-                          <button
-                            key={rate}
-                            className={`player-setting-option ${playbackRate === rate ? 'active' : ''}`}
-                            onClick={() => {
-                              setPlaybackRate(rate);
-                              setShowSpeedMenu(false);
-                            }}
-                          >
-                            {rate}x
-                          </button>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-
-                  <button
-                    className={`control-btn ${pipEnabled ? 'active' : ''}`}
-                    onClick={async () => {
-                      if (!playerRef.current) return;
-                      try {
-                        const internalPlayer = playerRef.current.getInternalPlayer();
-                        if (pipEnabled) {
-                          if (document.pictureInPictureElement) {
-                            await document.exitPictureInPicture();
-                          }
-                          setPipEnabled(false);
-                        } else {
-                          if (internalPlayer && internalPlayer.requestPictureInPicture) {
-                            await internalPlayer.requestPictureInPicture();
-                            setPipEnabled(true);
-                          }
-                        }
-                      } catch (err) {
-                        console.error('PiP error:', err);
-                      }
-                    }}
-                    title="Picture in Picture"
-                  >
-                    <FiMinimize2 size={18} />
-                  </button>
-
-                  <button
-                    className="control-btn"
-                    onClick={() => {
-                      if (!videoContainerRef.current) return;
-                      if (document.fullscreenElement) {
-                        document.exitFullscreen();
-                      } else {
-                        videoContainerRef.current.requestFullscreen();
-                      }
-                    }}
-                    title="Fullscreen"
-                  >
-                    <FiMaximize2 size={18} />
-                  </button>
-                </div>
-              </div>
-            </div>
-          )}
 
           <div className="video-info-section">
             <h1 className="video-title">{video.title}</h1>
