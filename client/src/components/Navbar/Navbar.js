@@ -20,7 +20,7 @@ const Navbar = ({ toggleSidebar }) => {
   const [unreadCount, setUnreadCount] = useState(0);
   const searchRef = useRef(null);
   const suggestionsRef = useRef(null);
-  const { user, isAuthenticated, logout } = useAuth();
+  const { user, isAuthenticated, logout, isUploadAdmin } = useAuth();
   const { theme, toggleTheme } = useTheme();
   const navigate = useNavigate();
 
@@ -193,7 +193,7 @@ const Navbar = ({ toggleSidebar }) => {
       </div>
 
       <div className="navbar-right">
-        {isAuthenticated && (
+        {isAuthenticated && isUploadAdmin && (
           <Link to="/upload" className="create-btn">
             <FiPlus size={16} />
             <span>Create</span>

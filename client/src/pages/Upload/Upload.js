@@ -9,7 +9,7 @@ import { MAIN_CATEGORIES, GENRES, SUB_CATEGORIES, validateGenreSelection } from 
 import './Upload.css';
 
 const Upload = () => {
-  const { isAuthenticated, user } = useAuth();
+  const { isAuthenticated, user, isUploadAdmin } = useAuth();
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState('information');
   const [formData, setFormData] = useState({
@@ -78,6 +78,28 @@ const Upload = () => {
   if (!isAuthenticated) {
     navigate('/login');
     return null;
+  }
+
+  if (!isUploadAdmin) {
+    return (
+      <div className="upload-page">
+        <div className="upload-container">
+          <div style={{ padding: '40px', textAlign: 'center' }}>
+            <FiAlertCircle size={64} style={{ color: '#ff4444', marginBottom: '20px' }} />
+            <h2>Access Restricted</h2>
+            <p style={{ color: '#aaa', marginTop: '10px' }}>
+              Only administrators can upload videos. If you believe this is an error, please contact the site administrator.
+            </p>
+            <button 
+              onClick={() => navigate('/')} 
+              style={{ marginTop: '20px', padding: '10px 20px', background: '#3ea6ff', border: 'none', borderRadius: '4px', color: 'white', cursor: 'pointer' }}
+            >
+              Go to Home
+            </button>
+          </div>
+        </div>
+      </div>
+    );
   }
 
   const { title, description, mainCategory, primaryGenre, secondaryGenres, subCategory, tags, visibility, playlist } = formData;

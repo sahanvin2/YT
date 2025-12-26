@@ -27,7 +27,7 @@ import './Sidebar.css';
 const Sidebar = ({ isOpen }) => {
   const location = useLocation();
   const navigate = useNavigate();
-  const { isAuthenticated, user } = useAuth();
+  const { isAuthenticated, user, isUploadAdmin } = useAuth();
   const [searchQuery, setSearchQuery] = useState('');
   const [suggestions, setSuggestions] = useState([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
@@ -282,7 +282,7 @@ const Sidebar = ({ isOpen }) => {
         )}
 
         {/* Section 4: Channel */}
-        {isAuthenticated && user && (
+        {isAuthenticated && user && isUploadAdmin && (
           <>
             <div className="sidebar-section">
               <div className="sidebar-title">Channel</div>

@@ -90,6 +90,8 @@ export const AuthProvider = ({ children }) => {
     login,
     logout,
     isAuthenticated: !!user,
+    isUploadAdmin: user?.isUploadAdmin || false,
+    isAdmin: user?.role === 'admin',
     refreshUser: loadUser
   };
 
