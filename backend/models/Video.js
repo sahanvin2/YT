@@ -76,6 +76,12 @@ const VideoSchema = new mongoose.Schema({
   },
   processingError: { type: String, default: null },
   processingCompleted: { type: Date, default: null },
+  
+  // Video visibility - only show when processing is complete
+  isPublished: {
+    type: Boolean,
+    default: false
+  },
 
   createdAt: { type: Date, default: Date.now },
   comments: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Comment' }],
