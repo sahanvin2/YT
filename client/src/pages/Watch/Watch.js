@@ -645,6 +645,11 @@ const Watch = () => {
   const normalizePlaybackUrl = (inputUrl) => {
     if (!inputUrl || typeof inputUrl !== 'string') return inputUrl;
 
+    // Keep localhost URLs as-is for local development/testing
+    if (inputUrl.includes('localhost') || inputUrl.includes('127.0.0.1')) {
+      return inputUrl;
+    }
+
     // If the URL contains our backend HLS proxy route, convert to direct CDN access
     // Pattern: /api/hls/userId/videoId/master.m3u8 → https://Xclub.b-cdn.net/videos/userId/videoId/master.m3u8
     const proxyMatch = inputUrl.match(/\/api\/hls\/([^\/]+)\/([^\/]+)\/(.+)/);
@@ -678,6 +683,16 @@ const Watch = () => {
       : baseCandidates;
 
     const isHlsUrl = (u) => typeof u === 'string' && (u.includes('/api/hls/') || u.includes('.m3u8'));
+    const isLocalhostUrl = (u) => typeof u === 'string' && (u.includes('localhost') || u.includes('127.0.0.1'));
+
+    // Support localhost URLs for local development/testing
+    const localhostCandidate = candidates.find(
+      (u) => isLocalhostUrl(u) && u.trim().length > 0 && !isPlaceholderUrl(u)
+    );
+    if (localhostCandidate) {
+      console.log('🏠 Using localhost URL:', localhostCandidate);
+      return localhostCandidate; // Don't normalize localhost URLs
+    }
 
     // Prefer proxy URLs for HLS.
     const proxyCandidate = candidates.find(
@@ -829,6 +844,8 @@ const Watch = () => {
                   playbackRate={playbackRate}
                   onReady={() => {
                     console.log('🎬 ReactPlayer ready');
+                    console.log('🔊 Audio settings - Volume:', volume, 'Muted:', muted);
+                    console.log('📹 Video URL:', playbackUrl);
                     // Get HLS levels if available (wait for HLS.js to initialize)
                     setTimeout(() => {
                       if (playerRef.current) {
@@ -892,7 +909,8 @@ const Watch = () => {
                       attributes: {
                         poster: video.thumbnailUrl || video.thumbnail,
                         controlsList: 'nodownload',
-                        crossOrigin: 'anonymous'
+                        crossOrigin: 'anonymous',
+                        playsInline: true
                       },
                       hlsOptions: {
                         enableWorker: true,
@@ -901,9 +919,12 @@ const Watch = () => {
                         maxBufferLength: 30,
                         maxMaxBufferLength: 600,
                         startLevel: -1, // Auto quality
-                        debug: process.env.NODE_ENV === 'development'
+                        debug: process.env.NODE_ENV === 'development',
+                        // Ensure audio track is enabled
+                        audioTrackSwitchingMode: 'immediate'
                       },
-                      forceHLS: isHlsPlayback
+                      forceHLS: isHlsPlayback,
+                      forceSafariHLS: true
                     }
                   }}
                   onPlay={() => {
