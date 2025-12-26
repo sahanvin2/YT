@@ -335,14 +335,14 @@ const Watch = () => {
         case ',':
           // Decrease playback speed
           e.preventDefault();
-          setPlaybackSpeed(prev => Math.max(0.25, prev - 0.25));
+          setPlaybackRate(prev => Math.max(0.25, prev - 0.25));
           break;
         
         case '>':
         case '.':
           // Increase playback speed
           e.preventDefault();
-          setPlaybackSpeed(prev => Math.min(2, prev + 0.25));
+          setPlaybackRate(prev => Math.min(2, prev + 0.25));
           break;
         
         default:
@@ -352,7 +352,7 @@ const Watch = () => {
 
     document.addEventListener('keydown', handleKeyPress);
     return () => document.removeEventListener('keydown', handleKeyPress);
-  }, [playing, volume, muted, setPlaying, setVolume, setMuted, setPlaybackSpeed]);
+  }, [playing, volume, muted]);
 
   // Update player when quality changes
   useEffect(() => {

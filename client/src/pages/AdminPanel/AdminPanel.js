@@ -58,7 +58,7 @@ const AdminPanel = () => {
   const isMasterAdmin = user?.email === 'snawarathne60@gmail.com';
 
   const promoteToAdmin = async (userId) => {
-    if (!confirm('Promote this user to admin?')) return;
+    if (!window.confirm('Promote this user to admin?')) return;
     try {
       const token = localStorage.getItem('token');
       await axios.put(`/api/admin/users/${userId}/promote`, {}, {
@@ -79,7 +79,7 @@ const AdminPanel = () => {
       setTimeout(() => setError(''), 3000);
       return;
     }
-    if (!confirm('Demote this admin to regular user?')) return;
+    if (!window.confirm('Demote this admin to regular user?')) return;
     try {
       const token = localStorage.getItem('token');
       await axios.put(`/api/admin/users/${userId}/demote`, {}, {
@@ -100,7 +100,7 @@ const AdminPanel = () => {
       setTimeout(() => setError(''), 3000);
       return;
     }
-    if (!confirm('Permanently delete this user? This action cannot be undone.')) return;
+    if (!window.confirm('Permanently delete this user? This action cannot be undone.')) return;
     try {
       const token = localStorage.getItem('token');
       await axios.delete(`/api/admin/users/${userId}`, {
@@ -116,7 +116,7 @@ const AdminPanel = () => {
   };
 
   const deleteVideo = async (videoId) => {
-    if (!confirm('Delete this video? This action cannot be undone.')) return;
+    if (!window.confirm('Delete this video? This action cannot be undone.')) return;
     try {
       const token = localStorage.getItem('token');
       await axios.delete(`/api/videos/${videoId}`, {
