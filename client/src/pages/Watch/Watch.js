@@ -245,6 +245,115 @@ const Watch = () => {
     };
   }, [showSpeedMenu, showQualityMenu]);
 
+  // Keyboard shortcuts for video player
+  useEffect(() => {
+    const handleKeyPress = (e) => {
+      // Don't trigger if user is typing in an input/textarea
+      if (['INPUT', 'TEXTAREA'].includes(e.target.tagName)) return;
+      
+      const player = playerRef.current;
+      if (!player) return;
+
+      switch(e.key.toLowerCase()) {
+        case ' ':
+        case 'k':
+          // Play/Pause
+          e.preventDefault();
+          setPlaying(!playing);
+          break;
+        
+        case 'arrowleft':
+          // Rewind 5 seconds
+          e.preventDefault();
+          player.seekTo(Math.max(0, player.getCurrentTime() - 5));
+          break;
+        
+        case 'arrowright':
+          // Forward 5 seconds
+          e.preventDefault();
+          player.seekTo(player.getCurrentTime() + 5);
+          break;
+        
+        case 'j':
+          // Rewind 10 seconds
+          e.preventDefault();
+          player.seekTo(Math.max(0, player.getCurrentTime() - 10));
+          break;
+        
+        case 'l':
+          // Forward 10 seconds
+          e.preventDefault();
+          player.seekTo(player.getCurrentTime() + 10);
+          break;
+        
+        case 'arrowup':
+          // Volume up
+          e.preventDefault();
+          setVolume(Math.min(1, volume + 0.1));
+          setMuted(false);
+          break;
+        
+        case 'arrowdown':
+          // Volume down
+          e.preventDefault();
+          setVolume(Math.max(0, volume - 0.1));
+          break;
+        
+        case 'm':
+          // Toggle mute
+          e.preventDefault();
+          setMuted(!muted);
+          break;
+        
+        case 'f':
+          // Toggle fullscreen
+          e.preventDefault();
+          if (!document.fullscreenElement) {
+            videoContainerRef.current?.requestFullscreen();
+          } else {
+            document.exitFullscreen();
+          }
+          break;
+        
+        case '0':
+        case '1':
+        case '2':
+        case '3':
+        case '4':
+        case '5':
+        case '6':
+        case '7':
+        case '8':
+        case '9':
+          // Seek to percentage (0-90%)
+          e.preventDefault();
+          const percentage = parseInt(e.key) / 10;
+          player.seekTo(percentage, 'fraction');
+          break;
+        
+        case '<':
+        case ',':
+          // Decrease playback speed
+          e.preventDefault();
+          setPlaybackSpeed(prev => Math.max(0.25, prev - 0.25));
+          break;
+        
+        case '>':
+        case '.':
+          // Increase playback speed
+          e.preventDefault();
+          setPlaybackSpeed(prev => Math.min(2, prev + 0.25));
+          break;
+        
+        default:
+          break;
+      }
+    };
+
+    document.addEventListener('keydown', handleKeyPress);
+    return () => document.removeEventListener('keydown', handleKeyPress);
+  }, [playing, volume, muted, setPlaying, setVolume, setMuted, setPlaybackSpeed]);
+
   // Update player when quality changes
   useEffect(() => {
     if (playerRef.current && video) {

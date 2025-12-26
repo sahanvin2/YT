@@ -17,7 +17,8 @@ import {
   FiStar,
   FiFilm,
   FiSmile,
-  FiSearch
+  FiSearch,
+  FiShield
 } from 'react-icons/fi';
 import { useAuth } from '../../context/AuthContext';
 import { MAIN_CATEGORIES, GENRES } from '../../utils/categories';
@@ -27,7 +28,7 @@ import './Sidebar.css';
 const Sidebar = ({ isOpen }) => {
   const location = useLocation();
   const navigate = useNavigate();
-  const { isAuthenticated, user, isUploadAdmin } = useAuth();
+  const { isAuthenticated, user, isUploadAdmin, isAdmin } = useAuth();
   const [searchQuery, setSearchQuery] = useState('');
   const [suggestions, setSuggestions] = useState([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
@@ -137,6 +138,10 @@ const Sidebar = ({ isOpen }) => {
   const channelLinks = [
     { path: `/channel/${user?._id || ''}`, icon: FiUser, label: 'Your Channel' },
     { path: '/video-manager', icon: FiVideo, label: 'Video Manager' }
+  ];
+
+  const adminLinks = [
+    { path: '/admin', icon: FiShield, label: 'Admin Panel' }
   ];
 
   const categories = [
@@ -287,6 +292,27 @@ const Sidebar = ({ isOpen }) => {
             <div className="sidebar-section">
               <div className="sidebar-title">Channel</div>
               {channelLinks.map((link) => (
+                <Link
+                  key={link.path}
+                  to={link.path}
+                  className={`sidebar-link ${isActive(link.path)}`}
+                  onClick={handleLinkClick}
+                >
+                  <link.icon size={20} />
+                  <span>{link.label}</span>
+                </Link>
+              ))}
+            </div>
+            <div className="sidebar-divider"></div>
+          </>
+        )}
+
+        {/* Admin Panel Section */}
+        {isAuthenticated && user && isAdmin && (
+          <>
+            <div className="sidebar-section">
+              <div className="sidebar-title">Administration</div>
+              {adminLinks.map((link) => (
                 <Link
                   key={link.path}
                   to={link.path}

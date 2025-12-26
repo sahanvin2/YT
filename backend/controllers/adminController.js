@@ -94,7 +94,7 @@ exports.getStats = async (req, res) => {
 exports.getAllUsers = async (req, res) => {
   try {
     const page = parseInt(req.query.page) || 1;
-    const limit = parseInt(req.query.limit) || 20;
+    const limit = parseInt(req.query.limit) || 1000; // Increased for admin panel
 
     const users = await User.find()
       .select('-password')
@@ -102,15 +102,26 @@ exports.getAllUsers = async (req, res) => {
       .skip((page - 1) * limit)
       .limit(limit);
 
+    // Get video count for each user
+    const usersWithCount = await Promise.all(
+      users.map(async (user) => {
+        const videoCount = await Video.countDocuments({ user: user._id });
+        return {
+          ...user.toObject(),
+          videoCount
+        };
+      })
+    );
+
     const totalUsers = await User.countDocuments();
 
     res.json({
       success: true,
-      count: users.length,
+      count: usersWithCount.length,
       total: totalUsers,
       currentPage: page,
       totalPages: Math.ceil(totalUsers / limit),
-      data: users
+      data: usersWithCount
     });
   } catch (err) {
     console.error('Get users error:', err);
