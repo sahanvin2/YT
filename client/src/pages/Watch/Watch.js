@@ -1,12 +1,12 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
-import ReactPlayer from 'react-player';
 import { FiThumbsUp, FiThumbsDown, FiShare2, FiBookmark, FiChevronDown, FiChevronUp, FiZap, FiMaximize2, FiMinimize2, FiPlay, FiClosedCaptioning } from 'react-icons/fi';
-import { getVideo, likeVideo, dislikeVideo, addView, addToHistory, saveVideo, getSavedVideos } from '../../utils/api';
+import { getVideo, getProcessingStatus, likeVideo, dislikeVideo, addView, addToHistory, saveVideo, getSavedVideos } from '../../utils/api';
 import { formatViews, formatDate, formatDuration } from '../../utils/helpers';
 import { useAuth } from '../../context/AuthContext';
 import CommentSection from '../../components/CommentSection/CommentSection';
 import SubscribeButton from '../../components/SubscribeButton/SubscribeButton';
+import HlsVideoPlayer from '../../components/HlsVideoPlayer/HlsVideoPlayer';
 // TEMPORARILY DISABLED FOR HIGH TRAFFIC
 // import { useSmartlinkAd } from '../../components/Ads/SmartlinkAd';
 // import { useAds } from '../../context/AdContext';
@@ -37,7 +37,8 @@ const Watch = () => {
   const [likesCount, setLikesCount] = useState(0);
   const [selectedSource, setSelectedSource] = useState(null);
   const [dislikesCount, setDislikesCount] = useState(0);
-  const playerRef = useRef(null);
+  const playerRef = useRef(null); // HTMLVideoElement
+  const hlsRef = useRef(null);
   // TEMPORARILY DISABLED FOR HIGH TRAFFIC
   // const { adConfig } = useAds();
   // const { openSmartlink } = useSmartlinkAd();
@@ -72,6 +73,8 @@ const Watch = () => {
   const [pipEnabled, setPipEnabled] = useState(false);
   const [showSpeedMenu, setShowSpeedMenu] = useState(false);
   const speedMenuRef = useRef(null);
+  const [hlsLevels, setHlsLevels] = useState([]);
+  const [selectedHlsLevel, setSelectedHlsLevel] = useState(-1); // -1 = Auto
   const viewCountedRef = useRef(false);
   const watchedDurationRef = useRef(0);
   const maxWatchedDurationRef = useRef(0);
@@ -168,21 +171,12 @@ const Watch = () => {
         const tryPlayVideo = () => {
           if (playerRef.current && video) {
             try {
-              const player = playerRef.current.getInternalPlayer();
-              if (player) {
-                if (typeof player.play === 'function') {
-                  player.play().catch(err => {
-                    console.error('Error playing video after smartlink return:', err);
-                    // Retry after a longer delay
-                    setTimeout(tryPlayVideo, 1000);
-                  });
-                } else {
-                  // Player not ready yet, retry
-                  setTimeout(tryPlayVideo, 500);
-                }
-              } else {
-                // Player not initialized yet, retry
-                setTimeout(tryPlayVideo, 500);
+              const el = playerRef.current;
+              if (typeof el.play === 'function') {
+                el.play().catch(err => {
+                  console.error('Error playing video after smartlink return:', err);
+                  setTimeout(tryPlayVideo, 1000);
+                });
               }
             } catch (error) {
               console.error('Error accessing player:', error);
@@ -234,6 +228,14 @@ const Watch = () => {
         ? (selectedSource.cdnUrl || selectedSource.url || selectedSource.videoUrl || video.cdnUrl || video.videoUrl)
         : (video.cdnUrl || video.videoUrl);
 
+      console.log('🎬 ReactPlayer URL:', {
+        url: newUrl,
+        isHLS: newUrl?.includes('.m3u8'),
+        isProxy: newUrl?.includes('localhost:5000/api/hls'),
+        isCDN: newUrl?.includes('b-cdn.net'),
+        isB2: newUrl?.includes('backblazeb2.com')
+      });
+
       // ReactPlayer will automatically update when url prop changes
     }
   }, [selectedSource, video]);
@@ -254,18 +256,30 @@ const Watch = () => {
           isBunnyCDN: videoData.videoUrl?.includes('b-cdn.net') || videoData.cdnUrl?.includes('b-cdn.net'),
           isB2Direct: videoData.videoUrl?.includes('backblazeb2.com') || videoData.cdnUrl?.includes('backblazeb2.com'),
         });
-        
-        const finalUrl = videoData.cdnUrl || videoData.videoUrl;
-        if (finalUrl && finalUrl.includes('b-cdn.net')) {
-          console.log('✅ Using Bunny CDN:', finalUrl);
-        } else if (finalUrl && finalUrl.includes('backblazeb2.com')) {
-          console.warn('⚠️ Still using B2 directly:', finalUrl);
-        }
       }
 
-      // Validate video URL exists (prefer CDN URL)
-      const finalVideoUrl = videoData.cdnUrl || videoData.videoUrl;
-      if (!finalVideoUrl) {
+      // ✅ Prioritize localhost proxy URLs (no CORS issues) over CDN URLs
+      let finalVideoUrl;
+      if (videoData.videoUrl?.includes('localhost:5000/api/hls')) {
+        finalVideoUrl = videoData.videoUrl; // Use proxy URL
+        console.log('✅ Using proxy URL (no CORS):', finalVideoUrl);
+        // Update videoData to use proxy URL
+        videoData.videoUrl = finalVideoUrl;
+        videoData.cdnUrl = finalVideoUrl; // Override cdnUrl with proxy
+      } else {
+        finalVideoUrl = videoData.cdnUrl || videoData.videoUrl; // Fallback to CDN
+        if (finalVideoUrl?.includes('b-cdn.net')) {
+          console.log('✅ Using Bunny CDN:', finalVideoUrl);
+        } else if (finalVideoUrl?.includes('backblazeb2.com')) {
+          console.warn('⚠️ Still using B2 directly:', finalVideoUrl);
+        }
+      }
+      const isStillProcessing =
+        typeof videoData.processingStatus === 'string' && videoData.processingStatus !== 'completed';
+      const isPlaceholder =
+        typeof finalVideoUrl === 'string' && finalVideoUrl.trim().toLowerCase() === 'processing';
+
+      if ((!finalVideoUrl || isPlaceholder) && !isStillProcessing) {
         setError('Video URL is missing');
         setLoading(false);
         return;
@@ -278,8 +292,19 @@ const Watch = () => {
       // Prefer a selected quality if exists, else choose highest available, else original
       // Check both sources and variants arrays
       const sources = videoData.sources || videoData.variants || [];
-      if (sources.length > 0) {
-        const sorted = [...sources].sort((a, b) => a.quality - b.quality);
+      const isHlsVideo =
+        (typeof videoData.hlsUrl === 'string' && (videoData.hlsUrl.includes('.m3u8') || videoData.hlsUrl.includes('/api/hls/'))) ||
+        (typeof videoData.videoUrl === 'string' && (videoData.videoUrl.includes('.m3u8') || videoData.videoUrl.includes('/api/hls/')));
+
+      if (isHlsVideo) {
+        // HLS should default to Auto (master playlist). User can still manually pick a quality.
+        setSelectedSource(null);
+      } else if (sources.length > 0) {
+        const sorted = [...sources].sort((a, b) => {
+          const aq = parseInt(String(a.quality).replace(/[^0-9]/g, ''), 10);
+          const bq = parseInt(String(b.quality).replace(/[^0-9]/g, ''), 10);
+          return (aq || 0) - (bq || 0);
+        });
         const highestQuality = sorted[sorted.length - 1];
         // Ensure we use CDN URL for selected source
         if (highestQuality && !highestQuality.cdnUrl && highestQuality.url) {
@@ -483,6 +508,112 @@ const Watch = () => {
     }
   }, [videoPlayed]);
 
+  const normalizePlaybackUrl = (inputUrl) => {
+    if (!inputUrl || typeof inputUrl !== 'string') return inputUrl;
+
+    // If the URL contains our backend HLS proxy route, always use a same-origin path.
+    // This prevents accidental conversion to Bunny CDN (which causes CORS errors)
+    // and works in dev via CRA proxy + in prod behind a reverse proxy.
+    const idx = inputUrl.indexOf('/api/hls/');
+    if (idx !== -1) {
+      return inputUrl.slice(idx);
+    }
+
+    return inputUrl;
+  };
+
+  const isPlaceholderUrl = (value) => {
+    if (typeof value !== 'string') return false;
+    return value.trim().toLowerCase() === 'processing';
+  };
+
+  const pickPlaybackUrl = () => {
+    if (!video) return undefined;
+
+    // HLS-only mode: only consider HLS playlist URLs.
+    const baseCandidates = [video.hlsUrl, video.videoUrl, video.cdnUrl];
+
+    const candidates = selectedSource
+      ? [
+          selectedSource.videoUrl,
+          selectedSource.url,
+          selectedSource.cdnUrl,
+          ...baseCandidates,
+        ]
+      : baseCandidates;
+
+    const isHlsUrl = (u) => typeof u === 'string' && (u.includes('/api/hls/') || u.includes('.m3u8'));
+
+    // Prefer proxy URLs for HLS.
+    const proxyCandidate = candidates.find(
+      (u) => isHlsUrl(u) && u.includes('/api/hls/') && u.trim().length > 0 && !isPlaceholderUrl(u)
+    );
+    const firstHlsCandidate = candidates.find(
+      (u) => isHlsUrl(u) && u.trim().length > 0 && !isPlaceholderUrl(u)
+    );
+
+    return normalizePlaybackUrl(proxyCandidate || firstHlsCandidate);
+  };
+
+  const playbackUrl = pickPlaybackUrl();
+  const isHlsPlayback = typeof playbackUrl === 'string' && (
+    playbackUrl.includes('.m3u8') || playbackUrl.includes('/api/hls/')
+  );
+
+  const isProcessing = Boolean(
+    video && (
+      (typeof video.processingStatus === 'string' && video.processingStatus !== 'completed') ||
+      isPlaceholderUrl(video.videoUrl) ||
+      isPlaceholderUrl(video.cdnUrl)
+    )
+  );
+
+  // HLS-only UX: if video isn't ready as HLS, treat it as needing processing.
+  const needsHls = Boolean(video && !isHlsPlayback);
+
+  const hasPlayableUrl = typeof playbackUrl === 'string' && playbackUrl.trim().length > 0 && !isPlaceholderUrl(playbackUrl);
+
+  // Poll processing status for queued/processing videos and refresh once ready.
+  useEffect(() => {
+    if (!id || !video) return;
+    if (!isProcessing) return;
+
+    let isCancelled = false;
+
+    const pollOnce = async () => {
+      try {
+        const res = await getProcessingStatus(id);
+        const data = res?.data?.data;
+        if (!data) return;
+
+        setVideo((prev) => {
+          if (!prev) return prev;
+          return {
+            ...prev,
+            processingStatus: data.status ?? prev.processingStatus,
+            processingError: data.error ?? prev.processingError,
+            hlsUrl: data.hlsUrl ?? prev.hlsUrl,
+          };
+        });
+
+        if (data.isReady && !isCancelled) {
+          await fetchVideo();
+        }
+      } catch (e) {
+        // Ignore transient polling errors.
+      }
+    };
+
+    pollOnce();
+    const intervalId = setInterval(pollOnce, 5000);
+
+    return () => {
+      isCancelled = true;
+      clearInterval(intervalId);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [id, video?.processingStatus, video?.videoUrl, video?.cdnUrl]);
+
   if (loading) {
     return (
       <div className="loading-container">
@@ -504,314 +635,134 @@ const Watch = () => {
       <div className="watch-content">
         <div className="video-player-section">
           <div className="video-player">
-            {/* Player Settings Bar - Top */}
-            <div className="player-settings-bar">
-              {/* Quality Selector - More Prominent */}
-              {((video.sources && video.sources.length > 0) || (video.variants && video.variants.length > 0)) ? (
-                <div className="player-setting-item quality-selector">
-                  <label className="player-setting-label">Quality:</label>
-                  <select
-                    className="player-setting-select quality-select"
-                    value={selectedSource ? selectedSource.quality : 'orig'}
-                    onChange={(e) => {
-                      const val = e.target.value;
-                      if (val === 'orig') {
-                        setSelectedSource(null);
-                      } else {
-                        const sources = video.sources || video.variants || [];
-                        const match = sources.find(s => String(s.quality) === String(val));
-                        setSelectedSource(match || null);
-                      }
-                    }}
-                  >
-                    <option value="orig">Auto (Best)</option>
-                    {[...(video.sources || video.variants || [])]
-                      .sort((a, b) => parseInt(b.quality) - parseInt(a.quality))
-                      .map(s => (
-                        <option key={s.quality} value={s.quality}>
-                          {s.quality}p {s.quality >= 1080 ? 'HD' : s.quality >= 720 ? 'HD' : 'SD'}
-                        </option>
-                      ))}
-                  </select>
-                  <span className="quality-badge">
-                    {selectedSource ? `${selectedSource.quality}p` : 'Auto'}
-                  </span>
-                </div>
-              ) : (
-                <div className="player-setting-item">
-                  <span className="quality-badge">Original</span>
-                </div>
-              )}
-              
-              <div className="player-setting-item" ref={speedMenuRef}>
-                <label className="player-setting-label">Speed:</label>
-                <button
-                  className="player-setting-btn"
-                  onClick={() => setShowSpeedMenu(!showSpeedMenu)}
-                >
-                  {playbackRate}x
-                  {showSpeedMenu && (
-                    <div className="player-setting-menu">
-                      {[0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2].map((rate) => (
-                        <button
-                          key={rate}
-                          className={`player-setting-option ${playbackRate === rate ? 'active' : ''}`}
-                          onClick={() => {
-                            setPlaybackRate(rate);
-                            setShowSpeedMenu(false);
-                          }}
-                        >
-                          {rate}x
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                </button>
+            {(!hasPlayableUrl || isProcessing || needsHls) ? (
+              <div className="error-container">
+                <p className="error-message">
+                  {video?.processingStatus === 'failed'
+                    ? (video?.processingError || 'Video processing failed')
+                    : needsHls
+                      ? 'Converting video to HLS… Please wait…'
+                      : 'Video is still processing. Please wait…'}
+                </p>
               </div>
-
-              <button
-                className={`player-setting-btn ${pipEnabled ? 'active' : ''}`}
-                onClick={() => {
-                  if (playerRef.current) {
-                    const player = playerRef.current.getInternalPlayer();
-                    if (player && player.requestPictureInPicture) {
-                      if (pipEnabled) {
-                        document.exitPictureInPicture().catch(() => {});
-                        setPipEnabled(false);
-                      } else {
-                        player.requestPictureInPicture().then(() => {
-                          setPipEnabled(true);
-                        }).catch(() => {});
-                      }
-                    }
-                  }
-                }}
-                title="Picture in Picture"
-              >
-                <FiMinimize2 size={14} />
-              </button>
-
-              <button
-                className="player-setting-btn"
-                onClick={() => {
-                  if (playerRef.current) {
-                    const player = playerRef.current.getInternalPlayer();
-                    if (player && player.requestFullscreen) {
-                      player.requestFullscreen();
-                    } else if (playerRef.current.wrapper && playerRef.current.wrapper.requestFullscreen) {
-                      playerRef.current.wrapper.requestFullscreen();
-                    }
-                  }
-                }}
-                title="Fullscreen"
-              >
-                <FiMaximize2 size={14} />
-              </button>
-            </div>
-
-            {/* Use native HTML5 video if subtitles are available, otherwise use ReactPlayer */}
-            {video.subtitles && video.subtitles.length > 0 ? (
-              <video
-                ref={playerRef}
-                src={selectedSource
-                  ? (selectedSource.cdnUrl || selectedSource.url || selectedSource.videoUrl || video.cdnUrl || video.videoUrl)
-                  : (video.cdnUrl || video.videoUrl)
-                }
-                controls
-                controlsList="nodownload"
-                playsInline
-                crossOrigin="anonymous"
-                style={{ width: '100%', height: '100%', objectFit: 'contain' }}
-                onPlay={() => {
-                  window.dispatchEvent(new CustomEvent('collapseSidebar'));
-                  // TEMPORARILY DISABLED FOR HIGH TRAFFIC
-                  /* if (!firstAdShown && currentAdIndex < adUrls.length) {
-                    setTimeout(() => {
-                      const adUrl = adUrls[currentAdIndex];
-                      try {
-                        window.open(adUrl, '_blank', 'noopener,noreferrer');
-                        setCurrentAdIndex(prev => prev + 1);
-                      } catch (e) {
-                        console.error('Error opening first ad:', e);
-                      }
-                    }, 3000);
-                    setFirstAdShown(true);
-                  } */
-                  setVideoPlayed(true);
-                  setError(''); // Clear any previous errors
-                }}
-                onTimeUpdate={(e) => {
-                  handleProgress({ playedSeconds: e.target.currentTime });
-                }}
-                onError={(e) => {
-                  console.error('Video error:', e);
-                  setError('Failed to play video. Please check if the video URL is accessible.');
-                }}
-              >
-                {video.subtitles.map((subtitle, index) => (
-                  <track
-                    key={index}
-                    kind="subtitles"
-                    src={subtitle.url}
-                    srcLang={subtitle.language}
-                    label={subtitle.label}
-                    default={subtitle.isDefault || index === 0}
-                  />
-                ))}
-                Your browser does not support the video tag.
-              </video>
             ) : (
-              <ReactPlayer
-                ref={playerRef}
-                url={
-                  selectedSource
-                  ? (selectedSource.cdnUrl || selectedSource.url || selectedSource.videoUrl || video.cdnUrl || video.videoUrl)
-                  : (video.cdnUrl || video.videoUrl)
-                }
-                controls
-                width="100%"
-                height="100%"
-                playing={videoPlayed && !error}
-                key={`${video?._id || 'video'}-${selectedSource ? selectedSource.quality : 'original'}`}
-                config={{
-                  file: {
-                    attributes: {
-                      controlsList: 'nodownload noremoteplayback'
-                    }
-                  },
-                  youtube: {
-                    playerVars: {
-                      controls: 1,
-                      modestbranding: 1,
-                      rel: 0
-                    }
-                  }
-                }}
+              <HlsVideoPlayer
+                src={playbackUrl}
+                poster={video.thumbnailUrl || video.thumbnail}
                 playbackRate={playbackRate}
-                pip={pipEnabled}
                 onProgress={handleProgress}
                 onPlay={() => {
                   window.dispatchEvent(new CustomEvent('collapseSidebar'));
-                  
-                  // TEMPORARILY DISABLED FOR HIGH TRAFFIC
-                  /* Show first ad when video starts playing (only once)
-                  if (!firstAdShown && currentAdIndex < adUrls.length) {
-                    setTimeout(() => {
-                      const adUrl = adUrls[currentAdIndex];
-                      console.log(`Opening first ad (${currentAdIndex + 1}/${adUrls.length}):`, adUrl);
-                      try {
-                        window.open(adUrl, '_blank', 'noopener,noreferrer');
-                        setCurrentAdIndex(prev => prev + 1);
-                      } catch (e) {
-                        console.error('Error opening first ad:', e);
-                      }
-                    }, 3000); // Show first ad after 3 seconds of video start
-                    setFirstAdShown(true);
-                  } */
-                  
                   setVideoPlayed(true);
-                  setError(''); // Clear any error on play
+                  setError('');
                   setWaitingForAdPlay(false);
                 }}
                 onError={(e) => {
-                  console.error('ReactPlayer error:', e);
-                  const errorDetails = e?.target?.error || e;
-                  console.log('Error details:', errorDetails);
-                  
-                  // Try to recover from error
-                  console.log('Video error - attempting recovery');
-                  setTimeout(() => {
-                    if (playerRef.current && video) {
-                      try {
-                        const player = playerRef.current.getInternalPlayer();
-                        if (player && typeof player.load === 'function') {
-                          // Try to reload the video
-                          player.load();
-                        }
-                      } catch (error) {
-                        console.error('Error recovering video player:', error);
-                      }
-                    }
-                  }, 1000);
-                  
-                  // Show error if video exists but can't play
-                  if (video) {
-                    // Check if video URL exists (prefer CDN URL)
-                    const videoUrl = selectedSource
-                      ? (selectedSource.cdnUrl || selectedSource.url || selectedSource.videoUrl || video.cdnUrl || video.videoUrl)
-                      : (video.cdnUrl || video.videoUrl);
-                    
-                    if (!videoUrl) {
-                      setError('Video URL is missing. Please try refreshing the page.');
-                    } else {
-                      setError('Failed to play video. Please check if the video URL is accessible.');
-                      // Try to recover after 3 seconds
-                      setTimeout(() => {
-                        if (playerRef.current && video) {
-                          try {
-                            const player = playerRef.current.getInternalPlayer();
-                            if (player && typeof player.load === 'function') {
-                              player.load();
-                            }
-                          } catch (error) {
-                            console.error('Error recovering video player:', error);
-                          }
-                        }
-                      }, 3000);
-                    }
-                  }
+                  console.error('Native player error:', e);
+                  setError('Failed to play video. Please try again.');
                 }}
-                onReady={() => {
-                  if (error && error.includes('Failed to play')) {
-                    setError('');
-                  }
-                  
-                  if (videoPlayed && playerRef.current) {
-                    setTimeout(() => {
-                      try {
-                        const player = playerRef.current.getInternalPlayer();
-                        if (player && typeof player.play === 'function') {
-                          player.play().catch(err => {
-                            console.error('Error playing video on ready:', err);
-                            setTimeout(() => {
-                              if (playerRef.current) {
-                                try {
-                                  const retryPlayer = playerRef.current.getInternalPlayer();
-                                  if (retryPlayer && typeof retryPlayer.play === 'function') {
-                                    retryPlayer.play();
-                                  }
-                                } catch (retryError) {
-                                  console.error('Error retrying video play:', retryError);
-                                }
-                              }
-                            }, 1000);
-                          });
-                        }
-                      } catch (error) {
-                        console.error('Error accessing player on ready:', error);
-                      }
-                    }, 500);
-                  }
-                  
-                  if (sessionStorage.getItem('smartlinkCallback') === 'true') {
-                    setTimeout(() => {
-                      if (playerRef.current && video) {
-                        try {
-                          const player = playerRef.current.getInternalPlayer();
-                          if (player && typeof player.play === 'function') {
-                            player.play().catch(err => {
-                              console.error('Error playing video after smartlink return on ready:', err);
-                            });
-                          }
-                        } catch (error) {
-                          console.error('Error accessing player after smartlink return on ready:', error);
-                        }
-                      }
-                    }, 500);
-                  }
+                onManifest={({ levels, hls }) => {
+                  setHlsLevels(levels || []);
+                  hlsRef.current = hls;
+                  setSelectedHlsLevel(-1);
                 }}
+                videoRefExternal={playerRef}
+                hlsRefExternal={hlsRef}
               />
             )}
+
+              {/* Player controls (below the video, YouTube/VK style: no overlay blocking) */}
+              {hasPlayableUrl && !isProcessing && !needsHls && (
+                <div className="player-settings-row">
+                  <div className="player-setting-item">
+                    <label className="player-setting-label">Quality:</label>
+                    <select
+                      className="player-setting-select"
+                      value={selectedHlsLevel}
+                      onChange={(e) => {
+                        const next = parseInt(e.target.value, 10);
+                        setSelectedHlsLevel(next);
+                        const hls = hlsRef.current;
+                        if (hls && typeof hls.currentLevel === 'number') {
+                          hls.currentLevel = next;
+                        }
+                      }}
+                    >
+                      <option value={-1}>Auto</option>
+                      {hlsLevels
+                        .slice()
+                        .sort((a, b) => (b.height || 0) - (a.height || 0))
+                        .map((l) => (
+                          <option key={l.index} value={l.index}>
+                            {l.name}
+                          </option>
+                        ))}
+                    </select>
+                  </div>
+
+                  <div className="player-setting-item" ref={speedMenuRef}>
+                    <label className="player-setting-label">Speed:</label>
+                    <button className="player-setting-btn" onClick={() => setShowSpeedMenu(!showSpeedMenu)}>
+                      {playbackRate}x
+                      {showSpeedMenu && (
+                        <div className="player-setting-menu">
+                          {[0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2].map((rate) => (
+                            <button
+                              key={rate}
+                              className={`player-setting-option ${playbackRate === rate ? 'active' : ''}`}
+                              onClick={() => {
+                                setPlaybackRate(rate);
+                                setShowSpeedMenu(false);
+                              }}
+                            >
+                              {rate}x
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </button>
+                  </div>
+
+                  <button
+                    className={`player-setting-btn ${pipEnabled ? 'active' : ''}`}
+                    onClick={async () => {
+                      const el = playerRef.current;
+                      if (!el) return;
+                      if (pipEnabled) {
+                        try {
+                          await document.exitPictureInPicture();
+                        } catch {
+                          // ignore
+                        }
+                        setPipEnabled(false);
+                        return;
+                      }
+                      if (el.requestPictureInPicture) {
+                        try {
+                          await el.requestPictureInPicture();
+                          setPipEnabled(true);
+                        } catch {
+                          // ignore
+                        }
+                      }
+                    }}
+                    title="Picture in Picture"
+                  >
+                    <FiMinimize2 size={14} />
+                  </button>
+
+                  <button
+                    className="player-setting-btn"
+                    onClick={() => {
+                      const el = playerRef.current;
+                      if (el?.requestFullscreen) el.requestFullscreen();
+                    }}
+                    title="Fullscreen"
+                  >
+                    <FiMaximize2 size={14} />
+                  </button>
+                </div>
+              )}
           </div>
 
           <div className="video-info-section">

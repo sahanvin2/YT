@@ -11,6 +11,22 @@
 function cdnUrlFrom(originalUrl) {
   if (!originalUrl) return originalUrl;
 
+  // Never convert backend proxy routes (they are not storage objects).
+  // Converting these to CDN produces URLs like https://<pullzone>.b-cdn.net/api/hls/... which will CORS-fail.
+  if (typeof originalUrl === 'string') {
+    const trimmed = originalUrl.trim();
+    if (trimmed === 'processing') return originalUrl;
+
+    // Only attempt conversion for absolute URLs; keep relative/special values as-is.
+    if (!/^https?:\/\//i.test(trimmed)) {
+      return originalUrl;
+    }
+
+    if (originalUrl.startsWith('/api/hls/') || originalUrl.includes('/api/hls/')) {
+      return originalUrl;
+    }
+  }
+
   const CDN_BASE = process.env.CDN_BASE || process.env.CDN_URL;
   
   // If no CDN is configured, return original URL
@@ -33,6 +49,11 @@ function cdnUrlFrom(originalUrl) {
   try {
     // Try to extract the key/path from the original URL
     const url = new URL(originalUrl);
+
+    // If this is a backend route (proxy), keep it as-is.
+    if (url.pathname && url.pathname.startsWith('/api/hls/')) {
+      return originalUrl;
+    }
     let key = null;
 
     // Extract key from different URL formats

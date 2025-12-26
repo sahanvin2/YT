@@ -11,6 +11,7 @@ const {
   searchVideos,
   getSearchSuggestions,
   getTrendingVideos,
+  getTopCreators,
   createVideoFromUrl,
   streamVideo,
   getDownloadUrl,
@@ -35,6 +36,7 @@ router.post('/create', protect, createVideoFromUrl);
 router.get('/search', searchVideos);
 router.get('/search/suggestions', getSearchSuggestions);
 router.get('/trending', getTrendingVideos);
+router.get('/creators', getTopCreators);
 router.get('/:id/stream', streamVideo);
 router.get('/:id/download', getDownloadUrl);
 router.get('/:id/download-file', downloadVideoProxy);

@@ -32,16 +32,44 @@ const s3 = new S3Client({
  */
 async function uploadFilePath(filePath, key, contentType = 'application/octet-stream') {
   if (!fs.existsSync(filePath)) throw new Error(`File does not exist: ${filePath}`);
-  const fileStream = fs.createReadStream(filePath);
 
-  await s3.send(new PutObjectCommand({
-    Bucket: B2_BUCKET,
-    Key: key,
-    Body: fileStream,
-    ContentType: contentType,
-    //ACL: 'public-read',
-  }));
+  const maxAttempts = 3;
+  const baseDelayMs = 500;
 
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    const fileStream = fs.createReadStream(filePath);
+
+    try {
+      await s3.send(new PutObjectCommand({
+        Bucket: B2_BUCKET,
+        Key: key,
+        Body: fileStream,
+        ContentType: contentType,
+        //ACL: 'public-read',
+      }));
+
+      return publicUrl(key);
+    } catch (err) {
+      const message = err?.message || String(err);
+      const code = err?.code;
+
+      const isTransient =
+        message.toLowerCase().includes('socket hang up') ||
+        code === 'ECONNRESET' ||
+        code === 'ETIMEDOUT' ||
+        code === 'EPIPE' ||
+        code === 'ENOTFOUND';
+
+      if (!isTransient || attempt === maxAttempts) {
+        throw err;
+      }
+
+      const delay = baseDelayMs * Math.pow(2, attempt - 1);
+      await new Promise((resolve) => setTimeout(resolve, delay));
+    }
+  }
+
+  // Should never get here, but keep a safe fallback.
   return publicUrl(key);
 }
 

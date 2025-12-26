@@ -68,8 +68,9 @@ const Navbar = ({ toggleSidebar }) => {
   const fetchUnreadCount = async () => {
     try {
       const token = localStorage.getItem('token');
+      const apiBase = process.env.REACT_APP_API_URL || '';
       const response = await axios.get(
-        `${process.env.REACT_APP_API_URL}/api/notifications/unread-count`,
+        `${apiBase}/api/notifications/unread-count`,
         { headers: { Authorization: `Bearer ${token}` } }
       );
       setUnreadCount(response.data.unreadCount || 0);

@@ -313,9 +313,21 @@ exports.getUserVideos = async (req, res, next) => {
     const { cdnUrlFrom } = require('../utils/cdn');
     const videosWithCDN = videos.map(video => {
       const videoObj = video.toObject();
-      const original = videoObj.filePath || videoObj.url || videoObj.path || videoObj.videoUrl;
+      const hlsUrl = videoObj.hlsUrl;
+      const original = hlsUrl || videoObj.filePath || videoObj.url || videoObj.path || videoObj.videoUrl;
       videoObj.cdnUrl = cdnUrlFrom(original);
-      videoObj.videoUrl = videoObj.cdnUrl;
+      
+      // ✅ Keep proxy URLs as-is for HLS videos
+      if (hlsUrl && hlsUrl.includes('/api/hls/')) {
+        videoObj.videoUrl = hlsUrl; // Keep proxy URL
+        videoObj.isHLS = true;
+      } else if (hlsUrl) {
+        videoObj.videoUrl = cdnUrlFrom(hlsUrl); // Convert B2/CDN URLs
+        videoObj.isHLS = true;
+      } else {
+        videoObj.videoUrl = videoObj.cdnUrl;
+        videoObj.isHLS = false;
+      }
       if (videoObj.thumbnailUrl) {
         videoObj.thumbnailUrl = cdnUrlFrom(videoObj.thumbnailUrl);
       }

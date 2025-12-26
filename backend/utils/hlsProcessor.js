@@ -3,7 +3,7 @@ const ffmpegPath = require('ffmpeg-static');
 const ffprobePath = require('ffprobe-static').path;
 const path = require('path');
 const fs = require('fs');
-const { uploadFile } = require('./b2');
+const { uploadFilePath } = require('./b2');
 
 // Configure FFmpeg paths
 ffmpeg.setFfmpegPath(ffmpegPath);
@@ -134,11 +134,6 @@ function processQualityVariant(inputPath, outputDir, quality, onProgress) {
 
     // GPU-accelerated encoding using NVENC (NVIDIA)
     const command = ffmpeg(inputPath)
-      // Hardware acceleration (decode with GPU if possible)
-      .inputOptions([
-        '-hwaccel cuda',
-        '-hwaccel_output_format cuda'
-      ])
       // Video encoding with NVENC (H.264)
       .videoCodec('h264_nvenc')
       .outputOptions([
@@ -156,7 +151,7 @@ function processQualityVariant(inputPath, outputDir, quality, onProgress) {
         '-g 48', // GOP size (keyframe interval)
         '-keyint_min 48',
         '-sc_threshold 0',
-        // Scale video
+        // Scale video with GPU-compatible filter
         `-vf scale=${preset.width}:${preset.height}:force_original_aspect_ratio=decrease,pad=${preset.width}:${preset.height}:(ow-iw)/2:(oh-ih)/2`
       ])
       // Audio encoding
@@ -236,6 +231,7 @@ function createMasterPlaylist(outputDir, variants) {
  */
 async function uploadHLSToB2(localDir, videoId, userId) {
   const uploadedFiles = [];
+  const failedUploads = [];
   
   console.log(`☁️  Uploading HLS files to B2...`);
   
@@ -243,12 +239,18 @@ async function uploadHLSToB2(localDir, videoId, userId) {
   const masterPath = path.join(localDir, 'master.m3u8');
   if (fs.existsSync(masterPath)) {
     const masterKey = `videos/${userId}/${videoId}/master.m3u8`;
-    const masterUrl = await uploadFile(masterPath, masterKey, 'application/vnd.apple.mpegurl');
-    uploadedFiles.push({ type: 'master', url: masterUrl });
-    console.log(`   ✓ Master playlist uploaded`);
+    try {
+      const masterUrl = await uploadFilePath(masterPath, masterKey, 'application/vnd.apple.mpegurl');
+      uploadedFiles.push({ type: 'master', url: masterUrl });
+      console.log(`   ✓ Master playlist uploaded`);
+    } catch (error) {
+      console.error(`   ❌ Failed to upload master playlist:`, error.message);
+      throw new Error(`Master playlist upload failed: ${error.message}`);
+    }
   }
 
-  // Upload all quality variants
+  // Collect all files to upload
+  const filesToUpload = [];
   const entries = fs.readdirSync(localDir, { withFileTypes: true });
   
   for (const entry of entries) {
@@ -259,20 +261,112 @@ async function uploadHLSToB2(localDir, videoId, userId) {
       for (const file of files) {
         const localFile = path.join(qualityDir, file);
         const b2Key = `videos/${userId}/${videoId}/${entry.name}/${file}`;
-        
         const contentType = file.endsWith('.m3u8') 
           ? 'application/vnd.apple.mpegurl' 
           : 'video/MP2T';
         
-        const url = await uploadFile(localFile, b2Key, contentType);
-        uploadedFiles.push({ type: file.endsWith('.m3u8') ? 'playlist' : 'segment', url });
+        filesToUpload.push({ localFile, b2Key, contentType, quality: entry.name });
       }
+    }
+  }
+
+  console.log(`   📦 Found ${filesToUpload.length} files to upload`);
+
+  // Upload in parallel batches for speed
+  const BATCH_SIZE = 50; // Upload 50 files at once
+  let uploadedCount = 0;
+  
+  for (let i = 0; i < filesToUpload.length; i += BATCH_SIZE) {
+    const batch = filesToUpload.slice(i, i + BATCH_SIZE);
+    
+    try {
+      const uploadPromises = batch.map(async ({ localFile, b2Key, contentType }) => {
+        try {
+          const url = await uploadFilePath(localFile, b2Key, contentType);
+          return { success: true, url };
+        } catch (error) {
+          console.error(`   ⚠️ Failed to upload ${path.basename(localFile)}:`, error.message);
+          return { success: false, error: error.message, localFile, b2Key, contentType };
+        }
+      });
       
-      console.log(`   ✓ ${entry.name} uploaded (${files.length} files)`);
+      const results = await Promise.all(uploadPromises);
+      const successCount = results.filter(r => r.success).length;
+      uploadedCount += successCount;
+
+      // Track failed uploads so we can retry after the first pass.
+      failedUploads.push(...results.filter(r => !r.success));
+      
+      uploadedFiles.push(...results.filter(r => r.success).map(r => ({ 
+        type: 'segment', 
+        url: r.url 
+      })));
+      
+      const percentComplete = Math.round((uploadedCount / filesToUpload.length) * 100);
+      console.log(`   ⬆️  Uploaded ${uploadedCount}/${filesToUpload.length} files (${percentComplete}%)`);
+      
+      if (successCount < batch.length) {
+        const failedCount = batch.length - successCount;
+        console.warn(`   ⚠️ ${failedCount} files failed in this batch`);
+      }
+    } catch (error) {
+      console.error(`   ❌ Batch upload error:`, error.message);
+      throw error;
     }
   }
 
   console.log(`✅ All HLS files uploaded (${uploadedFiles.length} total)`);
+
+  // Second pass: retry anything that failed in the first pass.
+  if (failedUploads.length > 0) {
+    console.warn(`⚠️ Retrying ${failedUploads.length} failed uploads...`);
+
+    const stillFailed = [];
+    const RETRY_BATCH_SIZE = 10;
+
+    for (let i = 0; i < failedUploads.length; i += RETRY_BATCH_SIZE) {
+      const batch = failedUploads.slice(i, i + RETRY_BATCH_SIZE);
+
+      const retryResults = await Promise.all(batch.map(async (item) => {
+        try {
+          const url = await uploadFilePath(item.localFile, item.b2Key, item.contentType);
+          return { success: true, url };
+        } catch (error) {
+          return { success: false, error: error.message, ...item };
+        }
+      }));
+
+      const retrySuccess = retryResults.filter(r => r.success);
+      const retryFailed = retryResults.filter(r => !r.success);
+
+      uploadedFiles.push(...retrySuccess.map(r => ({ type: 'segment', url: r.url })));
+      stillFailed.push(...retryFailed);
+
+      console.log(`   🔁 Retry progress: recovered ${retrySuccess.length}/${batch.length}`);
+    }
+
+    if (stillFailed.length > 0) {
+      const playlistFails = stillFailed.filter(f => String(f.b2Key || '').endsWith('.m3u8'));
+      const sample = stillFailed.slice(0, 5).map(f => ({ key: f.b2Key, error: f.error }));
+
+      // If any playlist is missing, playback will definitely break.
+      if (playlistFails.length > 0) {
+        throw new Error(
+          `HLS upload incomplete: ${stillFailed.length} files failed (including ${playlistFails.length} playlists). ` +
+          `Sample: ${JSON.stringify(sample)}`
+        );
+      }
+
+      // Even missing .ts segments can cause playback failures; fail fast to keep data consistent.
+      throw new Error(
+        `HLS upload incomplete: ${stillFailed.length} segment files failed to upload. ` +
+        `Sample: ${JSON.stringify(sample)}`
+      );
+    }
+
+    console.log('✅ All failed uploads recovered on retry');
+  }
+  
   return uploadedFiles;
 }
 

@@ -23,7 +23,11 @@ export const addView = (id) => axios.put(`${API_URL}/videos/${id}/view`);
 export const searchVideos = (query, params) => axios.get(`${API_URL}/videos/search?q=${query}`, { params });
 export const getSearchSuggestions = (query, limit = 5) => axios.get(`${API_URL}/videos/search/suggestions?q=${query}&limit=${limit}`);
 export const getTrendingVideos = () => axios.get(`${API_URL}/videos/trending`);
+export const getTopCreators = (params) => axios.get(`${API_URL}/videos/creators`, { params });
 export const getDownloadUrl = (id, quality = 'orig') => axios.get(`${API_URL}/videos/${id}/download?quality=${quality}`);
+
+// Processing
+export const getProcessingStatus = (id) => axios.get(`${API_URL}/processing/${id}/status`);
 
 // Comments
 export const getComments = (videoId) => axios.get(`${API_URL}/videos/${videoId}/comments`);

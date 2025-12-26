@@ -9,6 +9,10 @@ client/node_modules/
 *.log
 logs/
 
+# Redis
+dump.rdb
+*.rdb
+
 # Uploads and temporary files
 uploads/
 tmp/

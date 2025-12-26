@@ -1,15 +1,15 @@
 const { Queue } = require('bullmq');
 const IORedis = require('ioredis');
 
-// Redis connection to Worker EC2
+// Redis connection (local WSL or Worker EC2)
 const connection = new IORedis({
-  host: '172.30.5.116', // Worker EC2 private IP
-  port: 6379,
+  host: process.env.REDIS_HOST || '127.0.0.1',
+  port: process.env.REDIS_PORT || 6379,
   maxRetriesPerRequest: null
 });
 
 connection.on('connect', () => {
-  console.log('✅ Connected to Redis on Worker EC2');
+  console.log('✅ Connected to Redis for video processing');
 });
 
 connection.on('error', (err) => {

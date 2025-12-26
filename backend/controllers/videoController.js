@@ -10,6 +10,11 @@ const mime = require('mime-types');
 const { uploadFilePath, deleteFile } = require('../utils/b2');
 const { generateVideoVariants, getVideoResolution } = require('../utils/videoTranscoder');
 const { cdnUrlFrom, extractKeyFromUrl } = require('../utils/cdn');
+const { addToHLSQueue } = require('../utils/hlsQueue');
+
+// HLS-only mode: when enabled, the app serves only HLS (.m3u8) playback URLs.
+// Non-HLS videos are treated as "processing" and can be auto-queued for HLS conversion.
+const HLS_ONLY = String(process.env.HLS_ONLY || 'true').toLowerCase() === 'true';
 
 // Log CDN configuration on startup
 const CDN_BASE = process.env.CDN_BASE || process.env.CDN_URL;
@@ -21,6 +26,78 @@ if (CDN_BASE) {
 }
 
 const axios = require('axios');
+
+function isAbsoluteHttpUrl(value) {
+  if (typeof value !== 'string') return false;
+  return /^https?:\/\//i.test(value.trim());
+}
+
+function isPlaceholderUrl(value) {
+  return typeof value === 'string' && value.trim().toLowerCase() === 'processing';
+}
+
+async function downloadToLocalTmp(sourceUrl, videoId) {
+  const urlObj = new URL(sourceUrl);
+  const ext = path.extname(urlObj.pathname) || '.mp4';
+  const tmpDir = path.join(__dirname, '../../tmp/reprocess');
+  fs.mkdirSync(tmpDir, { recursive: true });
+  const localPath = path.join(tmpDir, `reprocess_${videoId}_${Date.now()}${ext}`);
+
+  const resp = await axios.get(sourceUrl, {
+    responseType: 'stream',
+    timeout: 600000,
+    maxBodyLength: Infinity,
+    maxContentLength: Infinity,
+    validateStatus: () => true
+  });
+
+  if (!(resp.status >= 200 && resp.status < 300)) {
+    throw new Error(`Failed to download source (${resp.status}) from ${sourceUrl}`);
+  }
+
+  await new Promise((resolve, reject) => {
+    const out = fs.createWriteStream(localPath);
+    resp.data.pipe(out);
+    out.on('finish', resolve);
+    out.on('error', reject);
+  });
+
+  return localPath;
+}
+
+async function autoQueueHlsIfNeeded(videoDoc) {
+  if (!HLS_ONLY) return;
+  if (!videoDoc) return;
+  if (videoDoc.hlsUrl) return;
+  if (videoDoc.processingStatus === 'queued' || videoDoc.processingStatus === 'processing') return;
+
+  const sourceUrl = videoDoc.videoUrl || videoDoc.cdnUrl;
+  if (!isAbsoluteHttpUrl(sourceUrl) || isPlaceholderUrl(sourceUrl)) return;
+
+  const userId = (videoDoc.user && videoDoc.user._id ? videoDoc.user._id.toString() : String(videoDoc.user));
+
+  // Set status first to avoid double-queueing if multiple requests hit.
+  await Video.findByIdAndUpdate(videoDoc._id, {
+    processingStatus: 'queued',
+    processingError: null,
+    videoUrl: 'processing'
+  });
+
+  // Download + enqueue in background
+  (async () => {
+    try {
+      const localPath = await downloadToLocalTmp(sourceUrl, videoDoc._id.toString());
+      await addToHLSQueue(videoDoc._id.toString(), localPath, userId);
+      console.log(`✅ Auto-queued HLS processing for video ${videoDoc._id}`);
+    } catch (e) {
+      console.error(`❌ Auto-queue HLS failed for video ${videoDoc._id}:`, e.message);
+      await Video.findByIdAndUpdate(videoDoc._id, {
+        processingStatus: 'failed',
+        processingError: e.message
+      });
+    }
+  })();
+}
 
 // Configure ffmpeg/ffprobe paths (use static binaries)
 if (ffmpegPath) {
@@ -68,6 +145,15 @@ exports.getVideos = async (req, res, next) => {
       }
     }
     
+    // Only show videos that are ready (not still processing or failed)
+    if (HLS_ONLY) {
+      query.hlsUrl = { $exists: true, $ne: null };
+      query.processingStatus = { $in: ['completed', undefined, null] };
+    } else {
+      query.processingStatus = { $in: ['completed', undefined, null] };
+      query.videoUrl = { $ne: 'processing' }; // Exclude videos with placeholder URL
+    }
+    
     // Filter for clips (videos under 2 minutes / less than 120 seconds)
     if (clips === 'true') {
       query.duration = { $lt: 120 };
@@ -92,11 +178,21 @@ exports.getVideos = async (req, res, next) => {
       
       // Set videoUrl based on format
       if (hlsUrl) {
-        videoObj.videoUrl = cdnUrlFrom(hlsUrl);
+        // ✅ Keep proxy URLs as-is (don't convert to CDN)
+        if (hlsUrl.includes('/api/hls/')) {
+          videoObj.videoUrl = hlsUrl; // Keep proxy URL
+        } else {
+          videoObj.videoUrl = cdnUrlFrom(hlsUrl); // Convert B2/CDN URLs
+        }
         videoObj.isHLS = true;
       } else {
-        videoObj.videoUrl = videoObj.cdnUrl;
-        videoObj.isHLS = false;
+        if (HLS_ONLY) {
+          videoObj.videoUrl = 'processing';
+          videoObj.isHLS = false;
+        } else {
+          videoObj.videoUrl = videoObj.cdnUrl;
+          videoObj.isHLS = false;
+        }
       }
       
       // Convert thumbnail URL to CDN URL
@@ -141,6 +237,56 @@ exports.getVideos = async (req, res, next) => {
   }
 };
 
+// @desc    Get top creators (by public video count)
+// @route   GET /api/videos/creators
+// @access  Public
+exports.getTopCreators = async (req, res) => {
+  try {
+    const rawLimit = parseInt(req.query.limit, 10);
+    const limit = Number.isFinite(rawLimit) ? Math.min(Math.max(rawLimit, 1), 200) : 50;
+    const { category } = req.query;
+
+    const match = { visibility: 'public', user: { $ne: null } };
+    if (category && category !== 'all') {
+      const mainCategories = ['movies', 'series', 'documentaries', 'animation'];
+      if (mainCategories.includes(category)) {
+        match.mainCategory = category;
+      } else {
+        match.$or = [{ primaryGenre: category }, { secondaryGenres: category }];
+      }
+    }
+
+    const creators = await Video.aggregate([
+      { $match: match },
+      { $group: { _id: '$user', videoCount: { $sum: 1 } } },
+      { $sort: { videoCount: -1 } },
+      { $limit: limit },
+      {
+        $lookup: {
+          from: 'users',
+          localField: '_id',
+          foreignField: '_id',
+          as: 'user'
+        }
+      },
+      { $unwind: '$user' },
+      {
+        $project: {
+          _id: '$user._id',
+          username: '$user.username',
+          avatar: '$user.avatar',
+          channelName: '$user.channelName',
+          videoCount: 1
+        }
+      }
+    ]);
+
+    res.status(200).json({ success: true, data: creators });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
 // @desc    Get single video
 // @route   GET /api/videos/:id
 // @access  Public
@@ -159,6 +305,12 @@ exports.getVideo = async (req, res, next) => {
         success: false,
         message: 'Video not found'
       });
+    }
+
+    // In HLS-only mode, auto-queue HLS processing for non-HLS videos.
+    // This lets old MP4/MKV videos become playable without manual deletion.
+    if (HLS_ONLY) {
+      await autoQueueHlsIfNeeded(video);
     }
 
     // Check if user can view private video
@@ -182,13 +334,27 @@ exports.getVideo = async (req, res, next) => {
     // Set videoUrl based on format
     if (hlsUrl) {
       // HLS streaming - use master playlist
-      videoObj.videoUrl = cdnUrlFrom(hlsUrl);
+      // ✅ Keep proxy URLs as-is (don't convert to CDN)
+      if (hlsUrl.includes('/api/hls/')) {
+        videoObj.videoUrl = hlsUrl; // Keep proxy URL
+        console.log(`📺 HLS video ${video._id} (using proxy): ${videoObj.videoUrl}`);
+      } else {
+        videoObj.videoUrl = cdnUrlFrom(hlsUrl); // Convert B2/CDN URLs
+        console.log(`📺 HLS video ${video._id} (using CDN): ${videoObj.videoUrl}`);
+      }
       videoObj.isHLS = true;
-      console.log(`📺 HLS video ${video._id}: ${videoObj.videoUrl}`);
     } else {
-      // Fallback to regular video URL
-      videoObj.videoUrl = videoObj.cdnUrl;
-      videoObj.isHLS = false;
+      if (HLS_ONLY) {
+        videoObj.videoUrl = 'processing';
+        videoObj.isHLS = false;
+        if (videoObj.processingStatus === 'completed' || !videoObj.processingStatus) {
+          videoObj.processingStatus = 'queued';
+        }
+      } else {
+        // Fallback to regular video URL
+        videoObj.videoUrl = videoObj.cdnUrl;
+        videoObj.isHLS = false;
+      }
     }
     
     // Debug: Log URL conversion
@@ -266,18 +432,18 @@ exports.uploadVideo = async (req, res, next) => {
       });
     }
 
-    // Use temp directory for staging before B2 upload
-    const tmpDir = path.join(__dirname, '../../tmp');
+    // Use temp directory - keep local for HLS processing
+    const tmpDir = path.join(__dirname, '../../tmp/uploads');
     try { fs.mkdirSync(tmpDir, { recursive: true }); } catch { }
     const ts = Date.now();
     const videoExt = path.parse(videoFile.name).ext || '.mp4';
-    const tmpVideoPath = path.join(tmpDir, `video_${ts}${videoExt}`);
+    const tmpVideoPath = path.join(tmpDir, `upload_${req.user.id}_${ts}${videoExt}`);
+    
+    console.log(`📥 Receiving upload: ${videoFile.name} (${Math.round(videoFile.size / 1024 / 1024)}MB)`);
     await videoFile.mv(tmpVideoPath);
 
-    // Upload to R2
-    const videoKey = `videos/${req.user.id}/${ts}_${path.basename(tmpVideoPath)}`;
-    const videoCT = mime.lookup(tmpVideoPath) || 'application/octet-stream';
-    const videoUrl = await uploadFilePath(tmpVideoPath, videoKey, videoCT);
+    // No need to upload original to B2 - HLS processor will upload HLS files
+    const videoUrl = null; // Will be set after HLS processing
 
     // Thumbnail handling
     let thumbnailUrl = '';
@@ -338,49 +504,41 @@ exports.uploadVideo = async (req, res, next) => {
       duration = 0;
     }
 
-    // Create video record first (without variants)
+    // Create video record with queued status
     const video = await Video.create({
       title,
       description,
-      videoUrl,
+      videoUrl: videoUrl || 'processing', // Temporary placeholder
+      hlsUrl: null, // Will be set by HLS worker
       thumbnailUrl,
       duration,
       category,
       tags: tags ? tags.split(',').map(t => t.trim()) : [],
       visibility: visibility || 'public',
       user: req.user.id,
+      originalName: videoFile.name,
       variants: [],
-      sources: []
+      sources: [],
+      processingStatus: 'queued' // Always queue for HLS processing
     });
 
     await User.findByIdAndUpdate(req.user.id, { $push: { videos: video._id } });
 
-    // Generate video variants in background (non-blocking)
-    generateVideoVariants(tmpVideoPath, req.user.id, video._id.toString(), videoHeight)
-      .then(async (variants) => {
-        if (variants.length > 0) {
-          // Update video with variants
-          await Video.findByIdAndUpdate(video._id, {
-            variants: variants,
-            sources: variants // Also populate sources for compatibility
-          });
-          console.log(`✓ Video ${video._id} variants generated: ${variants.length} qualities`);
-        }
-      })
-      .catch((err) => {
-        console.error(`Error generating variants for video ${video._id}:`, err);
-        // Don't fail the upload if variant generation fails
-      })
-      .finally(() => {
-        // Cleanup temp video file after processing
-        fs.unlink(tmpVideoPath, () => { });
+    // Add to HLS processing queue (local GPU processing with NVENC)
+    try {
+      await addToHLSQueue(video._id.toString(), tmpVideoPath, req.user.id);
+      console.log(`✅ Video ${video._id} queued for HLS processing (GPU acceleration)`);
+    } catch (queueError) {
+      console.error('Failed to queue video for HLS processing:', queueError);
+      // Update video status to failed
+      await Video.findByIdAndUpdate(video._id, {
+        processingStatus: 'failed',
+        processingError: 'Failed to queue for processing'
       });
+    }
 
-    // Return immediately (variants will be generated in background)
+    // Return immediately (HLS processing will happen in background with GPU)
     const videoObj = video.toObject();
-    // Convert URLs to CDN URLs
-    videoObj.cdnUrl = cdnUrlFrom(video.videoUrl);
-    videoObj.videoUrl = videoObj.cdnUrl; // Use CDN URL for streaming
     if (videoObj.thumbnailUrl) {
       videoObj.thumbnailUrl = cdnUrlFrom(videoObj.thumbnailUrl);
     }
@@ -389,7 +547,7 @@ exports.uploadVideo = async (req, res, next) => {
       success: true,
       data: videoObj,
       video: videoObj,
-      message: 'Video uploaded successfully. Quality variants are being generated in the background.'
+      message: 'Video uploaded successfully! Processing to HLS format with GPU acceleration (NVIDIA NVENC). This will take a few minutes.'
     });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
@@ -689,14 +847,21 @@ exports.addView = async (req, res, next) => {
     
     // Check if this view was already counted (within last 24 hours for same user/IP)
     const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
-    const existingView = await View.findOne({
-      video: video._id,
-      $or: [
-        ...(userId ? [{ user: userId }] : []),
-        { ip: ip }
-      ],
-      createdAt: { $gte: oneDayAgo }
-    });
+    let existingView = null;
+    
+    try {
+      existingView = await View.findOne({
+        video: video._id,
+        $or: [
+          ...(userId ? [{ user: userId }] : []),
+          { ip: ip }
+        ],
+        createdAt: { $gte: oneDayAgo }
+      });
+    } catch (e) {
+      console.error('⚠️ Error checking existing view:', e.message);
+      // Continue without checking for duplicates
+    }
 
     // Only count if this is a new view (not viewed in last 24 hours)
     if (!existingView) {
@@ -712,7 +877,7 @@ exports.addView = async (req, res, next) => {
         });
       } catch (e) {
         // Silently ignore view logging errors
-        console.error('Error recording view:', e);
+        console.error('⚠️ Error recording view:', e.message);
       }
     }
 
@@ -724,6 +889,7 @@ exports.addView = async (req, res, next) => {
       } 
     });
   } catch (error) {
+    console.error('❌ Error in addView:', error);
     res.status(500).json({ success: false, message: error.message });
   }
 };

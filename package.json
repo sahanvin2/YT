@@ -8,8 +8,8 @@
     "server": "nodemon backend/server.js",
     "hls-worker": "node backend/hlsWorker.js",
     "client": "npm start --prefix client",
-    "dev": "concurrently \"npm run server\" \"npm run client\"",
-    "dev-with-worker": "concurrently \"npm run server\" \"npm run client\" \"npm run hls-worker\"",
+    "dev": "concurrently \"npm run server\" \"wait-on http://localhost:5000/api/health && npm run client\"",
+    "dev-with-worker": "concurrently \"npm run server\" \"npm run hls-worker\" \"wait-on http://localhost:5000/api/health && npm run client\"",
     "build": "npm install && cd client && npm install && npm run build",
     "db:check": "node scripts/check_db.js",
     "user:reset": "node scripts/reset_password.js",
@@ -50,6 +50,7 @@
   },
   "devDependencies": {
     "concurrently": "^8.2.1",
-    "nodemon": "^3.0.1"
+    "nodemon": "^3.0.1",
+    "wait-on": "^7.2.0"
   }
 }

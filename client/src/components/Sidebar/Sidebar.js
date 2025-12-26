@@ -159,6 +159,13 @@ const Sidebar = ({ isOpen }) => {
     { path: '/category/adventure', icon: FiCompass, label: 'Adventure' }
   ];
 
+  const categoryPathsSeen = new Set();
+  const uniqueCategories = categories.filter((category) => {
+    if (categoryPathsSeen.has(category.path)) return false;
+    categoryPathsSeen.add(category.path);
+    return true;
+  });
+
   const isActive = (path) => {
     return location.pathname === path ? 'active' : '';
   };
@@ -298,7 +305,7 @@ const Sidebar = ({ isOpen }) => {
         {/* Section 5: Categories */}
         <div className="sidebar-section">
           <div className="sidebar-title">Categories</div>
-          {categories.map((category) => (
+          {uniqueCategories.map((category) => (
             <Link
               key={category.path}
               to={category.path}

@@ -1,3 +1,6 @@
+// Load environment variables FIRST before any other imports
+require('dotenv').config();
+
 const { Worker } = require('bullmq');
 const IORedis = require('ioredis');
 const mongoose = require('mongoose');
@@ -5,7 +8,6 @@ const fs = require('fs');
 const path = require('path');
 const os = require('os');
 const { processVideoToHLS } = require('./utils/hlsProcessor');
-require('dotenv').config();
 
 // Redis connection
 const connection = new IORedis({
@@ -23,12 +25,15 @@ connection.on('error', (err) => {
 });
 
 // MongoDB connection
-mongoose.connect(process.env.MONGODB_URI || 'mongodb://127.0.0.1:27017/movia', {
+mongoose.connect(process.env.MONGO_URI || process.env.MONGODB_URI || 'mongodb://127.0.0.1:27017/movia', {
   useNewUrlParser: true,
   useUnifiedTopology: true
 })
 .then(() => console.log('✅ HLS Worker connected to MongoDB'))
-.catch(err => console.error('❌ MongoDB connection error:', err));
+.catch(err => {
+  console.error('❌ MongoDB connection error:', err);
+  process.exit(1);
+});
 
 const Video = require('./models/Video');
 
@@ -78,24 +83,50 @@ async function processHLSJob(job) {
     await job.updateProgress(90);
 
     // Update video document with HLS URL
-    const updatedVideo = await Video.findByIdAndUpdate(
-      videoId,
-      {
-        hlsUrl: result.hlsUrl,
-        videoUrl: result.hlsUrl, // Use HLS as primary video URL
-        duration: result.duration,
-        processingStatus: 'completed',
-        processingCompleted: new Date(),
-        processingError: null,
-        // Store quality information
-        variants: result.variants.map(v => ({
-          quality: v.quality,
-          url: result.hlsUrl, // All variants use master playlist
-          resolution: v.resolution
-        }))
-      },
-      { new: true }
-    );
+    console.log(`📝 Updating database for video ${videoId}...`);
+    
+    // Use same-origin PROXY URL instead of B2/CDN - solves CORS issues and works in prod behind reverse proxy
+    const proxyUrl = `/api/hls/${userId}/${videoId}/master.m3u8`;
+    
+    console.log(`   B2 URL: ${result.hlsUrl}`);
+    console.log(`   Proxy URL (CORS-free): ${proxyUrl}`);
+    
+    try {
+      const updatedVideo = await Video.findByIdAndUpdate(
+        videoId,
+        {
+          hlsUrl: proxyUrl,
+          videoUrl: proxyUrl,
+          cdnUrl: proxyUrl, // Frontend checks this first
+          duration: result.duration,
+          processingStatus: 'completed',
+          processingCompleted: new Date(),
+          processingError: null,
+          hlsEnabled: true,
+          // Store quality information
+          variants: result.variants.map(v => {
+            const qualityNum = parseInt(String(v.quality).replace(/[^0-9]/g, ''), 10);
+            const variantPlaylist = `/api/hls/${userId}/${videoId}/hls_${v.quality}/playlist.m3u8`;
+            return {
+              quality: Number.isFinite(qualityNum) ? qualityNum : v.quality,
+              url: variantPlaylist,
+              resolution: v.resolution
+            };
+          })
+        },
+        { new: true }
+      );
+      
+      if (!updatedVideo) {
+        throw new Error(`Video ${videoId} not found in database`);
+      }
+      
+      console.log(`✅ Database updated successfully`);
+      
+    } catch (dbError) {
+      console.error(`❌ Database update failed:`, dbError);
+      throw new Error(`Failed to update database: ${dbError.message}`);
+    }
 
     await job.updateProgress(95);
 

@@ -1,10 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { useLocation, useParams, useNavigate, Link } from 'react-router-dom';
-import { FiPlay, FiPlus, FiZap, FiMusic, FiMonitor, FiTarget, FiSmile, FiRadio, FiTv, FiCompass, FiFilm, FiVideo, FiBook } from 'react-icons/fi';
-import AdBanner from '../../components/Ad/AdBanner';
-import { getVideos, getTrendingVideos, searchVideos } from '../../utils/api';
+import { FiPlay, FiPlus, FiZap, FiTarget, FiSmile, FiTv, FiCompass, FiFilm, FiVideo } from 'react-icons/fi';
+import { getVideos, getTrendingVideos, searchVideos, getTopCreators } from '../../utils/api';
 import { formatDuration } from '../../utils/helpers';
-import { MAIN_CATEGORIES } from '../../utils/categories';
 import './Home.css';
 
 const Home = ({ mode }) => {
@@ -21,6 +19,30 @@ const Home = ({ mode }) => {
   const location = useLocation();
   const { category } = useParams();
   const navigate = useNavigate();
+
+  const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+  const shouldRetryNetworkError = (err) => {
+    // axios browser network errors often have no response
+    if (!err) return false;
+    if (!err.response) return true;
+    const status = err.response?.status;
+    return status === 502 || status === 503 || status === 504;
+  };
+
+  const withRetry = async (fn, retries = 4) => {
+    let lastErr;
+    for (let attempt = 0; attempt <= retries; attempt++) {
+      try {
+        return await fn();
+      } catch (err) {
+        lastErr = err;
+        if (attempt >= retries || !shouldRetryNetworkError(err)) throw err;
+        await sleep(250 * (attempt + 1));
+      }
+    }
+    throw lastErr;
+  };
 
   const topCategories = [
     { id: 'movies', label: 'Movies', icon: FiFilm, color: 'linear-gradient(135deg, #FF6B35 0%, #F7931E 100%)' },
@@ -52,7 +74,7 @@ const Home = ({ mode }) => {
 
   const fetchFeaturedVideos = async () => {
     try {
-      const res = await getTrendingVideos();
+      const res = await withRetry(() => getTrendingVideos());
       const trending = res.data.data || res.data;
       if (trending && trending.length > 0) {
         setFeaturedVideos(trending.slice(0, 8));
@@ -64,29 +86,9 @@ const Home = ({ mode }) => {
 
   const fetchTopCreators = async () => {
     try {
-      // Get videos and extract unique creators
-      const res = await getVideos({ page: 1, limit: 50 });
-      const allVideos = res.data.data || res.data;
-      const creatorMap = new Map();
-      
-      allVideos.forEach(video => {
-        if (video.user) {
-          const userId = video.user._id || video.user;
-          if (!creatorMap.has(userId)) {
-            creatorMap.set(userId, {
-              ...video.user,
-              videoCount: 0
-            });
-          }
-          creatorMap.get(userId).videoCount++;
-        }
-      });
-      
-      const creators = Array.from(creatorMap.values())
-        .sort((a, b) => (b.videoCount || 0) - (a.videoCount || 0))
-        .slice(0, 8);
-      
-      setTopCreators(creators);
+      const res = await withRetry(() => getTopCreators({ limit: 200 }));
+      const creators = res.data.data || res.data;
+      setTopCreators(Array.isArray(creators) ? creators : []);
     } catch (err) {
       console.error('Error fetching top creators:', err);
     }
@@ -94,28 +96,9 @@ const Home = ({ mode }) => {
 
   const fetchTopCreatorsForCategory = async () => {
     try {
-      const res = await getVideos({ page: 1, limit: 50, category });
-      const allVideos = res.data.data || res.data;
-      const creatorMap = new Map();
-      
-      allVideos.forEach(video => {
-        if (video.user) {
-          const userId = video.user._id || video.user;
-          if (!creatorMap.has(userId)) {
-            creatorMap.set(userId, {
-              ...video.user,
-              videoCount: 0
-            });
-          }
-          creatorMap.get(userId).videoCount++;
-        }
-      });
-      
-      const creators = Array.from(creatorMap.values())
-        .sort((a, b) => (b.videoCount || 0) - (a.videoCount || 0))
-        .slice(0, 8);
-      
-      setTopCreators(creators);
+      const res = await withRetry(() => getTopCreators({ limit: 200, category }));
+      const creators = res.data.data || res.data;
+      setTopCreators(Array.isArray(creators) ? creators : []);
     } catch (err) {
       console.error('Error fetching top creators for category:', err);
     }
@@ -123,7 +106,7 @@ const Home = ({ mode }) => {
 
   const fetchAllTrendingVideos = async () => {
     try {
-      const res = await getTrendingVideos();
+      const res = await withRetry(() => getTrendingVideos());
       const trending = res.data.data || res.data;
       if (trending && trending.length > 0) {
         setAllTrendingVideos(trending);
@@ -135,7 +118,7 @@ const Home = ({ mode }) => {
 
   const fetchFeaturedVideo = async () => {
     try {
-      const res = await getTrendingVideos();
+      const res = await withRetry(() => getTrendingVideos());
       const trending = res.data.data || res.data;
       if (trending && trending.length > 0) {
         setFeaturedVideo(trending[0]);
@@ -150,14 +133,14 @@ const Home = ({ mode }) => {
       setLoading(true);
       let res;
       if (mode === 'trending') {
-        res = await getTrendingVideos();
+        res = await withRetry(() => getTrendingVideos());
       } else if (mode === 'category') {
-        res = await getVideos({ page: pageToLoad, limit: 12, category });
+        res = await withRetry(() => getVideos({ page: pageToLoad, limit: 12, category }));
       } else if (mode === 'search') {
         const q = new URLSearchParams(location.search).get('q') || '';
-        res = await searchVideos(q, { page: pageToLoad, limit: 12 });
+        res = await withRetry(() => searchVideos(q, { page: pageToLoad, limit: 12 }));
       } else {
-        res = await getVideos({ page: pageToLoad, limit: 12 });
+        res = await withRetry(() => getVideos({ page: pageToLoad, limit: 12 }));
       }
       const nextVideos = res.data.data || res.data; // trending returns data only
       // For trending section, limit to 8 videos

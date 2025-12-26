@@ -37,8 +37,12 @@ const channels = require('./routes/channels');
 const transcode = require('./routes/transcode');
 const notifications = require('./routes/notifications');
 const processing = require('./routes/processing');
+const hlsProxy = require('./routes/hlsProxy');
 
 const app = express();
+
+// Avoid 304 responses for API calls (browser axios treats 304 as error)
+app.disable('etag');
 
 // Body parser
 app.use(express.json({ limit: "3000mb" }));
@@ -89,6 +93,7 @@ app.use('/api/channels', channels);
 app.use('/api/transcode', transcode);
 app.use('/api/notifications', notifications);
 app.use('/api/processing', processing);
+app.use('/api', hlsProxy); // HLS proxy for CORS-free streaming
 
 // Error handler
 app.use(errorHandler);
@@ -98,6 +103,29 @@ const PORT = process.env.PORT || 5000;
 // Connect to database and start server
 let server;
 
+const startListening = (attempt = 1) => {
+  server = app.listen(PORT, () => {
+    console.log(`✅ Server running in ${process.env.NODE_ENV} mode on port ${PORT}`);
+    console.log(`✅ MongoDB connected successfully`);
+    console.log(`🔗 Frontend URL: ${process.env.CLIENT_URL}`);
+  });
+
+  server.on('error', (err) => {
+    if (err.code === 'EADDRINUSE') {
+      const maxAttempts = 10;
+      if (attempt >= maxAttempts) {
+        console.error(`❌ Port ${PORT} still in use after ${maxAttempts} attempts.`);
+        process.exit(1);
+      }
+      const delayMs = 750;
+      console.warn(`⚠️ Port ${PORT} in use (TIME_WAIT). Retrying in ${delayMs}ms... (${attempt}/${maxAttempts})`);
+      setTimeout(() => startListening(attempt + 1), delayMs);
+      return;
+    }
+    console.error('❌ Server error:', err);
+  });
+};
+
 (async () => {
   try {
     console.log('Attempting to connect to MongoDB...');
@@ -106,20 +134,7 @@ let server;
     await connectDB();
 
     console.log('Starting Express server...');
-    server = app.listen(PORT, () => {
-      console.log(`✅ Server running in ${process.env.NODE_ENV} mode on port ${PORT}`);
-      console.log(`✅ MongoDB connected successfully`);
-      console.log(`🔗 Frontend URL: ${process.env.CLIENT_URL}`);
-    });
-
-    server.on('error', (err) => {
-      if (err.code === 'EADDRINUSE') {
-        console.error(`❌ Port ${PORT} already in use. Kill the process or change PORT in .env`);
-        process.exit(1);
-      } else {
-        console.error('❌ Server error:', err);
-      }
-    });
+    startListening(1);
   } catch (err) {
     console.error('❌ Failed to start server:', err.message);
     console.error('Full error:', err);
