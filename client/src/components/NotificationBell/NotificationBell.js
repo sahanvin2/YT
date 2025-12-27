@@ -12,7 +12,9 @@ const NotificationBell = () => {
   const [loading, setLoading] = useState(false);
   const dropdownRef = useRef(null);
   const navigate = useNavigate();
-  const { socket, connected } = useSocket();
+  const socketContext = useSocket();
+  const socket = socketContext?.socket;
+  const connected = socketContext?.connected;
 
   useEffect(() => {
     fetchUnreadCount();
@@ -191,7 +193,7 @@ const NotificationBell = () => {
           <div className="notification-dropdown-body">
             {loading ? (
               <div className="notification-loading">Loading...</div>
-            ) : notifications.length === 0 ? (
+            ) : !notifications || notifications.length === 0 ? (
               <div className="notification-empty">
                 <FiBell size={40} />
                 <p>No notifications yet</p>
@@ -219,7 +221,7 @@ const NotificationBell = () => {
             )}
           </div>
 
-          {notifications.length > 0 && (
+          {notifications && notifications.length > 0 && (
             <div className="notification-dropdown-footer">
               <button onClick={viewAllNotifications} className="view-all-btn">
                 View All Notifications

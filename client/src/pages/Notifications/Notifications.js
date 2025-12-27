@@ -11,7 +11,8 @@ const Notifications = () => {
   const [filter, setFilter] = useState('all'); // all, unread, read
   const [typeFilter, setTypeFilter] = useState('all');
   const navigate = useNavigate();
-  const { socket } = useSocket();
+  const socketContext = useSocket();
+  const socket = socketContext?.socket;
 
   useEffect(() => {
     fetchNotifications();
