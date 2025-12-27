@@ -6,6 +6,7 @@ import { useTheme } from '../../context/ThemeContext';
 import { getSearchSuggestions } from '../../utils/api';
 import XclubLogo from '../Logo/MoviaLogo';
 import NotificationPanel from '../NotificationPanel/NotificationPanel';
+import NotificationBell from '../NotificationBell/NotificationBell';
 import axios from 'axios';
 import './Navbar.css';
 
@@ -200,16 +201,7 @@ const Navbar = ({ toggleSidebar }) => {
           </Link>
         )}
         {isAuthenticated && (
-          <button 
-            className="notification-btn"
-            onClick={() => setShowNotifications(!showNotifications)}
-            title="Notifications"
-          >
-            <FiBell size={20} />
-            {unreadCount > 0 && (
-              <span className="notification-badge">{unreadCount > 99 ? '99+' : unreadCount}</span>
-            )}
-          </button>
+          <NotificationBell />
         )}
         <button
           className="theme-toggle"

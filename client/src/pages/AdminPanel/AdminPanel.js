@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { FiUsers, FiShield, FiVideo, FiEdit, FiTrash2, FiUserPlus, FiUserMinus, FiSearch, FiAlertCircle } from 'react-icons/fi';
+import { FiUsers, FiShield, FiVideo, FiEdit, FiTrash2, FiUserPlus, FiUserMinus, FiSearch, FiAlertCircle, FiBell, FiMail, FiSend } from 'react-icons/fi';
 import { useAuth } from '../../context/AuthContext';
 import axios from 'axios';
 import './AdminPanel.css';
@@ -16,6 +16,20 @@ const AdminPanel = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
+  
+  // Notification state
+  const [notificationForm, setNotificationForm] = useState({
+    title: '',
+    message: '',
+    type: 'info',
+    recipients: 'all_users',
+    selectedUsers: [],
+    priority: 'normal',
+    expiresAt: '',
+    link: ''
+  });
+  const [allUsers, setAllUsers] = useState([]);
+  const [sendingNotification, setSendingNotification] = useState(false);
 
   // Check if user is admin
   useEffect(() => {
@@ -47,6 +61,10 @@ const AdminPanel = () => {
       } else if (activeTab === 'videos') {
         const res = await axios.get('/api/admin/videos', config);
         setVideos(res.data.data);
+      } else if (activeTab === 'notifications') {
+        // Fetch all users for notification sending
+        const res = await axios.get('/api/system-notifications/users', config);
+        setAllUsers(res.data.data.users);
       }
     } catch (err) {
       setError(err.response?.data?.message || 'Failed to fetch data');
@@ -131,6 +149,59 @@ const AdminPanel = () => {
     }
   };
 
+  const sendNotification = async (e) => {
+    e.preventDefault();
+    if (!isMasterAdmin) {
+      setError('Only master admin can send notifications');
+      setTimeout(() => setError(''), 3000);
+      return;
+    }
+
+    if (!notificationForm.title || !notificationForm.message) {
+      setError('Title and message are required');
+      setTimeout(() => setError(''), 3000);
+      return;
+    }
+
+    setSendingNotification(true);
+    try {
+      const token = localStorage.getItem('token');
+      await axios.post('/api/system-notifications', notificationForm, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      setSuccess('Notification sent successfully!');
+      setNotificationForm({
+        title: '',
+        message: '',
+        type: 'info',
+        recipients: 'all_users',
+        selectedUsers: [],
+        priority: 'normal',
+        expiresAt: '',
+        link: ''
+      });
+      setTimeout(() => setSuccess(''), 3000);
+    } catch (err) {
+      setError(err.response?.data?.message || 'Failed to send notification');
+      setTimeout(() => setError(''), 3000);
+    } finally {
+      setSendingNotification(false);
+    }
+  };
+
+  const handleNotificationChange = (field, value) => {
+    setNotificationForm(prev => ({ ...prev, [field]: value }));
+  };
+
+  const toggleUserSelection = (userId) => {
+    setNotificationForm(prev => ({
+      ...prev,
+      selectedUsers: prev.selectedUsers.includes(userId)
+        ? prev.selectedUsers.filter(id => id !== userId)
+        : [...prev.selectedUsers, userId]
+    }));
+  };
+
   const filteredUsers = users.filter(u => 
     u.username?.toLowerCase().includes(searchQuery.toLowerCase()) ||
     u.email?.toLowerCase().includes(searchQuery.toLowerCase())
@@ -188,17 +259,35 @@ const AdminPanel = () => {
         >
           <FiVideo /> Videos ({videos.length})
         </button>
+        {isMasterAdmin && (
+          <>
+            <button 
+              className={`admin-tab ${activeTab === 'notifications' ? 'active' : ''}`}
+              onClick={() => setActiveTab('notifications')}
+            >
+              <FiBell /> Send Notification
+            </button>
+            <button 
+              className={`admin-tab ${activeTab === 'messages' ? 'active' : ''}`}
+              onClick={() => setActiveTab('messages')}
+            >
+              <FiMail /> Messages
+            </button>
+          </>
+        )}
       </div>
 
-      <div className="admin-search">
-        <FiSearch />
-        <input 
-          type="text" 
-          placeholder={`Search ${activeTab}...`}
-          value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
-        />
-      </div>
+      {activeTab !== 'notifications' && activeTab !== 'messages' && (
+        <div className="admin-search">
+          <FiSearch />
+          <input 
+            type="text" 
+            placeholder={`Search ${activeTab}...`}
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+          />
+        </div>
+      )}
 
       {loading ? (
         <div className="admin-loading">Loading...</div>
@@ -383,6 +472,147 @@ const AdminPanel = () => {
                   )}
                 </tbody>
               </table>
+            </div>
+          )}
+
+          {activeTab === 'notifications' && isMasterAdmin && (
+            <div className="notification-form-container">
+              <h2>Send System Notification</h2>
+              <p className="notification-description">
+                Send important announcements to users and admins
+              </p>
+
+              <form onSubmit={sendNotification} className="notification-form">
+                <div className="form-group">
+                  <label>Title *</label>
+                  <input
+                    type="text"
+                    value={notificationForm.title}
+                    onChange={(e) => handleNotificationChange('title', e.target.value)}
+                    placeholder="Enter notification title"
+                    required
+                  />
+                </div>
+
+                <div className="form-group">
+                  <label>Message *</label>
+                  <textarea
+                    value={notificationForm.message}
+                    onChange={(e) => handleNotificationChange('message', e.target.value)}
+                    placeholder="Enter notification message"
+                    rows="4"
+                    required
+                  />
+                </div>
+
+                <div className="form-row">
+                  <div className="form-group">
+                    <label>Type</label>
+                    <select
+                      value={notificationForm.type}
+                      onChange={(e) => handleNotificationChange('type', e.target.value)}
+                    >
+                      <option value="info">💡 Info</option>
+                      <option value="announcement">📢 Announcement</option>
+                      <option value="warning">⚠️ Warning</option>
+                      <option value="success">✅ Success</option>
+                      <option value="error">❌ Error</option>
+                      <option value="update">🔄 Update</option>
+                    </select>
+                  </div>
+
+                  <div className="form-group">
+                    <label>Priority</label>
+                    <select
+                      value={notificationForm.priority}
+                      onChange={(e) => handleNotificationChange('priority', e.target.value)}
+                    >
+                      <option value="normal">Normal</option>
+                      <option value="high">High Priority</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div className="form-group">
+                  <label>Send To</label>
+                  <select
+                    value={notificationForm.recipients}
+                    onChange={(e) => handleNotificationChange('recipients', e.target.value)}
+                  >
+                    <option value="all_users">All Users</option>
+                    <option value="all_admins">All Admins</option>
+                    <option value="selected">Selected Users</option>
+                  </select>
+                </div>
+
+                {notificationForm.recipients === 'selected' && (
+                  <div className="form-group">
+                    <label>Select Users ({notificationForm.selectedUsers.length} selected)</label>
+                    <div className="user-selection-grid">
+                      {allUsers.map(user => (
+                        <div key={user._id} className="user-checkbox">
+                          <input
+                            type="checkbox"
+                            id={`user-${user._id}`}
+                            checked={notificationForm.selectedUsers.includes(user._id)}
+                            onChange={() => toggleUserSelection(user._id)}
+                          />
+                          <label htmlFor={`user-${user._id}`}>
+                            <img src={user.avatar || '/avatars/default-avatar.png'} alt={user.username} />
+                            <span>{user.username}</span>
+                          </label>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                <div className="form-row">
+                  <div className="form-group">
+                    <label>Link (Optional)</label>
+                    <input
+                      type="text"
+                      value={notificationForm.link}
+                      onChange={(e) => handleNotificationChange('link', e.target.value)}
+                      placeholder="/watch/12345 or full URL"
+                    />
+                  </div>
+
+                  <div className="form-group">
+                    <label>Expires At (Optional)</label>
+                    <input
+                      type="datetime-local"
+                      value={notificationForm.expiresAt}
+                      onChange={(e) => handleNotificationChange('expiresAt', e.target.value)}
+                    />
+                  </div>
+                </div>
+
+                <button 
+                  type="submit" 
+                  className="send-notification-btn"
+                  disabled={sendingNotification}
+                >
+                  <FiSend /> {sendingNotification ? 'Sending...' : 'Send Notification'}
+                </button>
+              </form>
+            </div>
+          )}
+
+          {activeTab === 'messages' && isMasterAdmin && (
+            <div className="messages-container">
+              <h2>Admin Messaging System</h2>
+              <p className="coming-soon">
+                📧 Full messaging system is ready on the backend!<br />
+                You can send emails via API endpoints or use the send-welcome-emails.js script.<br />
+                <br />
+                <strong>Quick Actions:</strong><br />
+                • Run <code>node send-welcome-emails.js</code> to send welcome emails to all users<br />
+                • Run <code>node send-verification-emails.js</code> to send verification emails<br />
+                • Use <code>node test-email.js your-email@example.com</code> to test email sending<br />
+                <br />
+                Full UI interface coming soon!
+              </p>
             </div>
           )}
         </div>

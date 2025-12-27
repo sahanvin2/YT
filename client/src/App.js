@@ -23,6 +23,7 @@ import Saved from './pages/Library/Saved';
 import Clips from './pages/Library/Clips';
 import Subscriptions from './pages/Library/Subscriptions';
 import AdminPanel from './pages/AdminPanel/AdminPanel';
+import Notifications from './pages/Notifications/Notifications';
 import './App.css';
 
 function App() {
@@ -132,6 +133,7 @@ function App() {
                     <Route path="/profile" element={<Profile />} />
                     <Route path="/profile/edit" element={<ProfileEdit />} />
                     <Route path="/admin" element={<AdminPanel />} />
+                    <Route path="/notifications" element={<Notifications />} />
                   </Routes>
                 </main>
               </div>
