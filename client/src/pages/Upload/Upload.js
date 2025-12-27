@@ -1199,7 +1199,7 @@ const Upload = () => {
                           )}
                         </div>
                       </>
-                    ) : (
+                    ) : videoFile ? (
                       // Regular video preview
                       <>
                         <div className="video-preview">
@@ -1243,7 +1243,7 @@ const Upload = () => {
                           )}
                         </div>
                       </>
-                    )}
+                    ) : null}
                   </>
                 )}
 
@@ -1271,11 +1271,15 @@ const Upload = () => {
                     <div className="upload-status-info">
                       <div className="status-info-item">
                         <span className="status-label">File name</span>
-                        <span className="status-value">{videoFile.name}</span>
+                        <span className="status-value">
+                          {videoFile ? videoFile.name : hlsFiles.length > 0 ? folderName : 'Unknown'}
+                        </span>
                       </div>
                       <div className="status-info-item">
                         <span className="status-label">File size</span>
-                        <span className="status-value">{formatFileSize(videoFile.size)}</span>
+                        <span className="status-value">
+                          {videoFile ? formatFileSize(videoFile.size) : hlsFiles.length > 0 ? formatFileSize(hlsFiles.reduce((sum, f) => sum + f.size, 0)) : '0 B'}
+                        </span>
                       </div>
                     </div>
                   </div>
