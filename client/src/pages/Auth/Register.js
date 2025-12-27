@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
+import { FcGoogle } from 'react-icons/fc';
+import { SiMicrosoft } from 'react-icons/si';
 import XclubLogo from '../../components/Logo/MoviaLogo';
 import './Auth.css';
 
@@ -50,6 +52,14 @@ const Register = () => {
       setError(result.message);
     }
     setLoading(false);
+  };
+
+  const handleGoogleLogin = () => {
+    window.location.href = '/api/auth/google';
+  };
+
+  const handleMicrosoftLogin = () => {
+    window.location.href = '/api/auth/microsoft';
   };
 
   return (
@@ -123,6 +133,21 @@ const Register = () => {
             {loading ? 'Creating Account...' : 'Sign Up'}
           </button>
         </form>
+
+        <div className="auth-divider">
+          <span>OR</span>
+        </div>
+
+        <div className="oauth-buttons">
+          <button onClick={handleGoogleLogin} className="btn-oauth btn-google">
+            <FcGoogle size={20} />
+            <span>Continue with Google</span>
+          </button>
+          <button onClick={handleMicrosoftLogin} className="btn-oauth btn-microsoft">
+            <SiMicrosoft size={18} color="#00A4EF" />
+            <span>Continue with Microsoft</span>
+          </button>
+        </div>
 
         <div className="auth-footer">
           <p>
