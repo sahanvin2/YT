@@ -145,10 +145,16 @@ const Upload = () => {
     const files = Array.from(e.target.files);
     if (!files || files.length === 0) return;
 
-    // Check for master.m3u8
-    const hasMaster = files.some(file => file.name === 'master.m3u8');
-    if (!hasMaster) {
-      setError('⚠️ Selected folder must contain master.m3u8 file!');
+    // Check for HLS files - accept .m3u8 or .ts files
+    const hasHlsFiles = files.some(file => {
+      const fileName = file.name.toLowerCase();
+      const filePath = (file.webkitRelativePath || file.name).toLowerCase();
+      return fileName.endsWith('.m3u8') || fileName.endsWith('.ts') || 
+             filePath.endsWith('.m3u8') || filePath.endsWith('.ts');
+    });
+    
+    if (!hasHlsFiles) {
+      setError('⚠️ Selected folder must contain HLS files (.m3u8 or .ts files)!');
       setHlsFiles([]);
       setFolderName('');
       return;
@@ -156,10 +162,12 @@ const Upload = () => {
 
     // Get folder name from first file's path
     const firstFile = files[0];
+    let folderPath = '';
     if (firstFile.webkitRelativePath) {
       const pathParts = firstFile.webkitRelativePath.split('/');
       const folder = pathParts[0];
       setFolderName(folder);
+      folderPath = folder;
       
       // Auto-fill title if empty
       if (!formData.title) {
@@ -169,6 +177,14 @@ const Upload = () => {
         });
       }
     }
+
+    console.log(`📁 HLS folder selected: ${folderPath}`);
+    console.log(`📦 Total files: ${files.length}`);
+    console.log(`📊 Files breakdown:`, {
+      m3u8: files.filter(f => f.name.endsWith('.m3u8')).length,
+      ts: files.filter(f => f.name.endsWith('.ts')).length,
+      other: files.filter(f => !f.name.endsWith('.m3u8') && !f.name.endsWith('.ts')).length
+    });
 
     setHlsFiles(files);
     setError('');
@@ -1187,31 +1203,30 @@ const Upload = () => {
                               <span className="video-info-value">{formatFileSize(videoFile.size)}</span>
                             </div>
                           </div>
+                          {videoLink && (
+                            <div className="video-info-item">
+                              <div className="video-info-content">
+                                <span className="video-info-label">Link to video</span>
+                                <div className="video-link-container">
+                                  <a href={videoLink} className="video-link">
+                                    {window.location.origin}{videoLink}
+                                  </a>
+                                  <button
+                                    type="button"
+                                    className="copy-link-btn"
+                                    onClick={() => {
+                                      navigator.clipboard.writeText(`${window.location.origin}${videoLink}`);
+                                    }}
+                                  >
+                                    <FiFile size={16} />
+                                  </button>
+                                </div>
+                              </div>
+                            </div>
+                          )}
                         </div>
                       </>
                     )}
-                      {videoLink && (
-                        <div className="video-info-item">
-                          <div className="video-info-content">
-                            <span className="video-info-label">Link to video</span>
-                            <div className="video-link-container">
-                              <a href={videoLink} className="video-link">
-                                {window.location.origin}{videoLink}
-                              </a>
-                              <button
-                                type="button"
-                                className="copy-link-btn"
-                                onClick={() => {
-                                  navigator.clipboard.writeText(`${window.location.origin}${videoLink}`);
-                                }}
-                              >
-                                <FiFile size={16} />
-                              </button>
-                            </div>
-                          </div>
-                        </div>
-                      )}
-                    </div>
                   </>
                 )}
 
@@ -1274,7 +1289,6 @@ const Upload = () => {
                     ref={fileInputRef}
                     type="file"
                     id="video"
-                    accept="video/*"
                     onChange={onVideoChange}
                     multiple
                     webkitdirectory=""
@@ -1285,7 +1299,7 @@ const Upload = () => {
                     <FiUpload size={18} />
                     <span>Select HLS Folder</span>
                   </label>
-                  <small className="upload-hint">Select HLS folder containing master.m3u8 and quality folders - Max 12GB</small>
+                  <small className="upload-hint">Select HLS folder with .m3u8 and .ts files (all qualities) - Max 12GB</small>
                 </div>
               </div>
             )}

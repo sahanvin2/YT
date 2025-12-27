@@ -763,12 +763,15 @@ exports.uploadHlsComplete = async (req, res) => {
     const hlsFiles = Array.isArray(req.files.hlsFiles) ? req.files.hlsFiles : [req.files.hlsFiles];
     const thumbnailFile = req.files.thumbnail;
 
-    // Check for master.m3u8
-    const hasMaster = hlsFiles.some(file => file.name === 'master.m3u8');
-    if (!hasMaster) {
+    // Check for HLS files (.m3u8 or .ts)
+    const hasHlsFiles = hlsFiles.some(file => 
+      file.name.endsWith('.m3u8') || file.name.endsWith('.ts')
+    );
+    
+    if (!hasHlsFiles) {
       return res.status(400).json({ 
         success: false, 
-        message: 'master.m3u8 file is required in HLS folder' 
+        message: 'HLS files (.m3u8 or .ts) are required' 
       });
     }
 
