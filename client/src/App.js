@@ -3,6 +3,7 @@ import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import { AuthProvider } from './context/AuthContext';
 import { ThemeProvider } from './context/ThemeContext';
 import { AdProvider } from './context/AdContext';
+import { SocketProvider } from './context/SocketContext';
 import Navbar from './components/Navbar/Navbar';
 import Sidebar from './components/Sidebar/Sidebar';
 import Home from './pages/Home/Home';
@@ -103,14 +104,15 @@ function App() {
   return (
     <ThemeProvider>
       <AuthProvider>
-        <AdProvider>
-          <Router>
-            <div className="app">
-              <div className="hero-mesh"></div>
-              <Navbar toggleSidebar={toggleSidebar} />
-              <div className="app-content">
-                <Sidebar isOpen={sidebarOpen} />
-                <main className={`main-content ${sidebarOpen ? 'sidebar-open' : 'sidebar-closed'}`}>
+        <SocketProvider>
+          <AdProvider>
+            <Router>
+              <div className="app">
+                <div className="hero-mesh"></div>
+                <Navbar toggleSidebar={toggleSidebar} />
+                <div className="app-content">
+                  <Sidebar isOpen={sidebarOpen} />
+                  <main className={`main-content ${sidebarOpen ? 'sidebar-open' : 'sidebar-closed'}`}>
                   <Routes>
                     <Route path="/" element={<Home />} />
                     <Route path="/watch/:id" element={<Watch />} />
@@ -140,6 +142,7 @@ function App() {
             </div>
           </Router>
         </AdProvider>
+      </SocketProvider>
       </AuthProvider>
     </ThemeProvider>
   );

@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { FiBell } from 'react-icons/fi';
 import { useNavigate } from 'react-router-dom';
+import { useSocket } from '../../context/SocketContext';
 import axios from 'axios';
 import './NotificationBell.css';
 
@@ -11,12 +12,63 @@ const NotificationBell = () => {
   const [loading, setLoading] = useState(false);
   const dropdownRef = useRef(null);
   const navigate = useNavigate();
+  const { socket, connected } = useSocket();
 
   useEffect(() => {
     fetchUnreadCount();
     const interval = setInterval(fetchUnreadCount, 30000); // Check every 30 seconds
     return () => clearInterval(interval);
   }, []);
+
+  // Listen for real-time notifications
+  useEffect(() => {
+    if (!socket) return;
+
+    const handleNewNotification = (data) => {
+      console.log('🔔 New notification received:', data);
+      // Play sound or show browser notification
+      if (Notification.permission === 'granted') {
+        new Notification(data.notification.title, {
+          body: data.notification.message,
+          icon: '/logo192.png',
+          badge: '/logo192.png'
+        });
+      }
+      
+      // Update unread count
+      fetchUnreadCount();
+      
+      // If dropdown is open, refresh notifications
+      if (showDropdown) {
+        fetchNotifications();
+      }
+      
+      // Show toast notification (optional)
+      showToast(data.notification.title);
+    };
+
+    socket.on('new-notification', handleNewNotification);
+
+    return () => {
+      socket.off('new-notification', handleNewNotification);
+    };
+  }, [socket, showDropdown]);
+
+  // Request notification permission on mount
+  useEffect(() => {
+    if ('Notification' in window && Notification.permission === 'default') {
+      Notification.requestPermission();
+    }
+  }, []);
+
+  const showToast = (message) => {
+    // Simple toast - you can use a library like react-toastify
+    const toast = document.createElement('div');
+    toast.textContent = message;
+    toast.style.cssText = 'position:fixed;top:20px;right:20px;background:#007bff;color:white;padding:12px 20px;border-radius:8px;z-index:10000;box-shadow:0 4px 12px rgba(0,0,0,0.15);';
+    document.body.appendChild(toast);
+    setTimeout(() => toast.remove(), 3000);
+  };
 
   useEffect(() => {
     if (showDropdown) {

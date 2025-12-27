@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { FiBell, FiTrash2, FiCheckCircle, FiFilter } from 'react-icons/fi';
 import { useNavigate } from 'react-router-dom';
+import { useSocket } from '../../context/SocketContext';
 import axios from 'axios';
 import './Notifications.css';
 
@@ -10,10 +11,28 @@ const Notifications = () => {
   const [filter, setFilter] = useState('all'); // all, unread, read
   const [typeFilter, setTypeFilter] = useState('all');
   const navigate = useNavigate();
+  const { socket } = useSocket();
 
   useEffect(() => {
     fetchNotifications();
   }, []);
+
+  // Listen for real-time notifications
+  useEffect(() => {
+    if (!socket) return;
+
+    const handleNewNotification = (data) => {
+      console.log('🔔 New notification on page:', data);
+      // Add new notification to the top of the list
+      setNotifications(prev => [data.notification, ...prev]);
+    };
+
+    socket.on('new-notification', handleNewNotification);
+
+    return () => {
+      socket.off('new-notification', handleNewNotification);
+    };
+  }, [socket]);
 
   const fetchNotifications = async () => {
     setLoading(true);

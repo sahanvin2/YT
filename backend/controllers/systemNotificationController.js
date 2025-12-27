@@ -85,6 +85,36 @@ exports.sendNotification = async (req, res) => {
       recipientCount = selectedUsers.length;
     }
 
+    // Emit real-time notification via Socket.IO
+    const io = req.app.get('io');
+    if (io) {
+      if (recipients === 'all_users') {
+        // Broadcast to all connected users
+        io.emit('new-notification', {
+          notification: notification.toObject(),
+          timestamp: new Date()
+        });
+      } else if (recipients === 'all_admins') {
+        // Send to all admins (would need user-room mapping)
+        const admins = await User.find({ role: 'admin' }, '_id');
+        admins.forEach(admin => {
+          io.to(`user:${admin._id}`).emit('new-notification', {
+            notification: notification.toObject(),
+            timestamp: new Date()
+          });
+        });
+      } else if (selectedUsers.length > 0) {
+        // Send to selected users
+        selectedUsers.forEach(userId => {
+          io.to(`user:${userId}`).emit('new-notification', {
+            notification: notification.toObject(),
+            timestamp: new Date()
+          });
+        });
+      }
+      console.log(`🔔 Real-time notification sent to ${recipientCount} user(s)`);
+    }
+
     res.status(201).json({
       success: true,
       data: notification,

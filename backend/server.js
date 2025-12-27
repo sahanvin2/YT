@@ -6,6 +6,8 @@ const cookieParser = require('cookie-parser');
 const fileUpload = require('express-fileupload');
 const fs = require('fs');
 const path = require('path');
+const http = require('http');
+const { Server } = require('socket.io');
 const connectDB = require('./config/db');
 const errorHandler = require('./middleware/error');
 
@@ -47,6 +49,34 @@ const oauth = require('./routes/oauth');
 const systemNotifications = require('./routes/systemNotifications');
 
 const app = express();
+const server = http.createServer(app);
+
+// Initialize Socket.IO with CORS
+const io = new Server(server, {
+  cors: {
+    origin: process.env.CLIENT_URL || 'http://localhost:3000',
+    methods: ['GET', 'POST'],
+    credentials: true
+  }
+});
+
+// Make io accessible to routes
+app.set('io', io);
+
+// Socket.IO connection handling
+io.on('connection', (socket) => {
+  console.log(`✅ User connected: ${socket.id}`);
+  
+  socket.on('authenticate', (userId) => {
+    socket.userId = userId;
+    socket.join(`user:${userId}`);
+    console.log(`👤 User ${userId} authenticated and joined their room`);
+  });
+
+  socket.on('disconnect', () => {
+    console.log(`❌ User disconnected: ${socket.id}`);
+  });
+});
 
 // Avoid 304 responses for API calls (browser axios treats 304 as error)
 app.disable('etag');
@@ -126,13 +156,12 @@ app.use(errorHandler);
 const PORT = process.env.PORT || 5000;
 
 // Connect to database and start server
-let server;
-
 const startListening = (attempt = 1) => {
-  server = app.listen(PORT, () => {
+  server.listen(PORT, () => {
     console.log(`✅ Server running in ${process.env.NODE_ENV} mode on port ${PORT}`);
     console.log(`✅ MongoDB connected successfully`);
     console.log(`🔗 Frontend URL: ${process.env.CLIENT_URL}`);
+    console.log(`🔌 Socket.IO enabled for real-time notifications`);
   });
 
   server.on('error', (err) => {
