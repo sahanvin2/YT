@@ -142,13 +142,7 @@ const Upload = () => {
     const files = Array.from(e.target.files);
     if (!files || files.length === 0) return;
 
-    // Multi-upload mode
-    if (files.length > 1) {
-      handleMultiFileSelection(files);
-      return;
-    }
-
-    // Single video file
+    // Single video file (for now, disable multi-upload)
     const file = files[0];
     setVideoFile(file);
     setVideoPreview(URL.createObjectURL(file));
