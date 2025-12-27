@@ -171,7 +171,11 @@ const Upload = () => {
       return;
     }
 
-    // Single file upload (original behavior)
+    // Single file upload - DISABLED (HLS folders only)
+    setError('Direct video upload is disabled. Please use the HLS folder upload script. See documentation for details.');
+    return;
+    
+    /* OLD CODE - DISABLED
     const file = files[0];
     if (file.size > 5368709120) { // 5GB
       setError('Video file must be less than 5GB');
@@ -191,6 +195,7 @@ const Upload = () => {
     setProcessingProgress(0);
     setUploadStatus('idle');
     setVideoLink('');
+    */
   };
 
   const onThumbnailChange = (e) => {

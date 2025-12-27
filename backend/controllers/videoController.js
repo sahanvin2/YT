@@ -422,10 +422,17 @@ exports.getVideo = async (req, res, next) => {
   }
 };
 
-// @desc    Upload video (R2 storage)
+// @desc    Upload video (DISABLED - HLS folders only)
 // @route   POST /api/videos
 // @access  Private
 exports.uploadVideo = async (req, res, next) => {
+  return res.status(400).json({
+    success: false,
+    message: 'Direct video upload is disabled. Please upload pre-processed HLS folders using /api/videos/upload-hls-folder endpoint.',
+    hint: 'Use the upload-hls-video.js script or see HLS_UPLOAD_GUIDE.md for instructions.'
+  });
+  
+  /* OLD CODE - DISABLED
   try {
     const { title, description, category, tags, visibility } = req.body;
 
@@ -564,6 +571,7 @@ exports.uploadVideo = async (req, res, next) => {
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }
+  */
 };
 
 // @desc    Create video record from an existing R2 URL (client uploaded via presign)

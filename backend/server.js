@@ -81,9 +81,9 @@ io.on('connection', (socket) => {
 // Avoid 304 responses for API calls (browser axios treats 304 as error)
 app.disable('etag');
 
-// Body parser
-app.use(express.json({ limit: "3000mb" }));
-app.use(express.urlencoded({ extended: true, limit: "3000mb" }));
+// Body parser - 12GB for HLS folder metadata
+app.use(express.json({ limit: "12000mb" }));
+app.use(express.urlencoded({ extended: true, limit: "12000mb" }));
 
 // Cookie parser
 app.use(cookieParser());
@@ -108,8 +108,8 @@ if (process.env.NODE_ENV === 'development') {
   app.use(morgan('dev'));
 }
 
-// File uploading
-const maxSizeMb = parseInt(process.env.MAX_VIDEO_SIZE_MB || '5120'); // 5GB default
+// File uploading - 12GB max for HLS folders
+const maxSizeMb = parseInt(process.env.MAX_VIDEO_SIZE_MB || '12288'); // 12GB default
 const tempDir = path.join(__dirname, '../tmp');
 if (!fs.existsSync(tempDir)) fs.mkdirSync(tempDir, { recursive: true });
 app.use(fileUpload({
@@ -118,8 +118,8 @@ app.use(fileUpload({
   tempFileDir: tempDir,
   limits: { fileSize: maxSizeMb * 1024 * 1024 },
   abortOnLimit: false,
-  responseOnLimit: 'File size limit exceeded. Maximum allowed: 5GB',
-  uploadTimeout: 600000 // 10 minutes timeout
+  responseOnLimit: `File size limit exceeded. Maximum allowed: ${maxSizeMb}MB (${Math.round(maxSizeMb/1024)}GB)`,
+  uploadTimeout: 1200000 // 20 minutes timeout for large HLS folders
 }));
 
 // Enable CORS
