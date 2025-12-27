@@ -7,13 +7,21 @@
     "start": "node backend/server.js",
     "server": "nodemon backend/server.js",
     "hls-worker": "node backend/hlsWorker.js",
+    "worker": "node backend/hlsWorker.js",
     "client": "npm start --prefix client",
     "dev": "concurrently \"npm run server\" \"wait-on http://localhost:5000/api/health && npm run client\"",
     "dev-with-worker": "concurrently \"npm run server\" \"npm run hls-worker\" \"wait-on http://localhost:5000/api/health && npm run client\"",
+    "start:all": "concurrently \"npm run server\" \"npm run hls-worker\" \"wait-on http://localhost:5000/api/health && npm run client\"",
     "build": "npm install && cd client && npm install && npm run build",
     "db:check": "node scripts/check_db.js",
     "user:reset": "node scripts/reset_password.js",
-    "cleanup": "node scripts/cleanup_tmp.js"
+    "cleanup": "node scripts/cleanup_tmp.js",
+    "email:test": "node test-email.js",
+    "email:send": "node send-verification-emails.js",
+    "videos:fix": "node fix-orphaned-videos.js",
+    "cleanup:temp": "node cleanup-temp-files.js",
+    "status": "node check-system-status.js",
+    "queue:clear": "node clear-redis-queue.js"
   },
   "keywords": [
     "video",
@@ -35,6 +43,7 @@
     "dotenv": "^16.3.1",
     "express": "^4.18.2",
     "express-fileupload": "^1.4.0",
+    "express-session": "^1.18.2",
     "express-validator": "^7.0.1",
     "ffmpeg-static": "^5.3.0",
     "ffprobe-static": "^3.1.0",
@@ -46,7 +55,10 @@
     "mongoose": "^7.5.0",
     "morgan": "^1.10.0",
     "multer": "^1.4.5-lts.1",
-    "nodemailer": "^7.0.12"
+    "nodemailer": "^7.0.12",
+    "passport": "^0.7.0",
+    "passport-google-oauth20": "^2.0.0",
+    "passport-microsoft": "^2.1.0"
   },
   "devDependencies": {
     "concurrently": "^8.2.1",

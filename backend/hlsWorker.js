@@ -92,6 +92,23 @@ async function processHLSJob(job) {
     console.log(`   Proxy URL (CORS-free): ${proxyUrl}`);
     
     try {
+      // First, check if video exists in database
+      const existingVideo = await Video.findById(videoId);
+      
+      if (!existingVideo) {
+        console.error(`❌ Video ${videoId} not found in database`);
+        console.log('   This may happen if:');
+        console.log('   1. Video was deleted before processing completed');
+        console.log('   2. Video ID is incorrect');
+        console.log('   3. Database connection issue');
+        console.log(`   Skipping database update but HLS files are uploaded to B2:`);
+        console.log(`   ${result.hlsUrl}`);
+        
+        // Don't throw error - files are already on B2
+        // Admin can manually fix this in database
+        return result; // Return successfully to avoid reprocessing
+      }
+      
       const updatedVideo = await Video.findByIdAndUpdate(
         videoId,
         {
@@ -103,6 +120,7 @@ async function processHLSJob(job) {
           processingCompleted: new Date(),
           processingError: null,
           hlsEnabled: true,
+          isPublished: true, // ✅ FIX: Automatically publish when processing completes
           // Store quality information
           variants: result.variants.map(v => {
             const qualityNum = parseInt(String(v.quality).replace(/[^0-9]/g, ''), 10);
@@ -118,13 +136,24 @@ async function processHLSJob(job) {
       );
       
       if (!updatedVideo) {
-        throw new Error(`Video ${videoId} not found in database`);
+        throw new Error(`Video ${videoId} not found after update`);
       }
       
       console.log(`✅ Database updated successfully`);
       
     } catch (dbError) {
       console.error(`❌ Database update failed:`, dbError);
+      console.error(`   Video ID: ${videoId}`);
+      console.error(`   User ID: ${userId}`);
+      
+      // Log more details for debugging
+      try {
+        const videoCount = await Video.countDocuments();
+        console.log(`   Total videos in database: ${videoCount}`);
+      } catch (e) {
+        console.error(`   Could not count videos:`, e.message);
+      }
+      
       throw new Error(`Failed to update database: ${dbError.message}`);
     }
 
@@ -184,11 +213,12 @@ async function processHLSJob(job) {
   }
 }
 
-// Create worker with concurrency based on GPU capability
-// RTX 2050 can handle 1-2 concurrent encodes efficiently
+// Create worker with higher concurrency for parallel processing
+// Process 3 videos simultaneously: encode + upload + encode in parallel
+// This maximizes GPU utilization and throughput
 const worker = new Worker('hls-processing', processHLSJob, {
   connection,
-  concurrency: 1, // Process one video at a time for optimal GPU usage
+  concurrency: 3, // Process 3 videos simultaneously (maximum throughput)
   limiter: {
     max: 10,
     duration: 60000 // Max 10 jobs per minute
@@ -206,7 +236,7 @@ worker.on('ready', () => {
   console.log(`💾 CPU: ${os.cpus()[0].model}`);
   console.log(`🧠 Cores: ${os.cpus().length}`);
   console.log(`💿 RAM: ${Math.round(os.totalmem() / 1024 / 1024 / 1024)}GB`);
-  console.log(`🔄 Concurrency: 1 video at a time`);
+  console.log(`🔄 Concurrency: 3 videos (maximum parallel processing)`);
   console.log(`✨ Status: Ready for processing`);
   console.log('='.repeat(60) + '\n');
 });

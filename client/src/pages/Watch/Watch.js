@@ -645,19 +645,28 @@ const Watch = () => {
   const normalizePlaybackUrl = (inputUrl) => {
     if (!inputUrl || typeof inputUrl !== 'string') return inputUrl;
 
+    // ✅ FIX: Keep ALL /api/hls/ URLs as proxy URLs (don't convert to CDN)
+    // This ensures videos play through the backend proxy which handles B2 access
+    if (inputUrl.includes('/api/hls/')) {
+      // Convert relative URLs to absolute localhost URLs for local development
+      if (!inputUrl.startsWith('http')) {
+        return `http://localhost:5000${inputUrl}`;
+      }
+      return inputUrl;
+    }
+
     // Keep localhost URLs as-is for local development/testing
     if (inputUrl.includes('localhost') || inputUrl.includes('127.0.0.1')) {
       return inputUrl;
     }
 
-    // If the URL contains our backend HLS proxy route, convert to direct CDN access
-    // Pattern: /api/hls/userId/videoId/master.m3u8 → https://Xclub.b-cdn.net/videos/userId/videoId/master.m3u8
-    const proxyMatch = inputUrl.match(/\/api\/hls\/([^\/]+)\/([^\/]+)\/(.+)/);
-    if (proxyMatch) {
-      const [, userId, videoId, file] = proxyMatch;
-      const cdnBase = process.env.REACT_APP_CDN_BASE || 'https://Xclub.b-cdn.net';
-      return `${cdnBase}/videos/${userId}/${videoId}/${file}`;
-    }
+    // For production: If you want to use CDN, uncomment this
+    // const proxyMatch = inputUrl.match(/\/api\/hls\/([^\/]+)\/([^\/]+)\/(.+)/);
+    // if (proxyMatch) {
+    //   const [, userId, videoId, file] = proxyMatch;
+    //   const cdnBase = process.env.REACT_APP_CDN_BASE || 'https://Xclub.b-cdn.net';
+    //   return `${cdnBase}/videos/${userId}/${videoId}/${file}`;
+    // }
 
     return inputUrl;
   };

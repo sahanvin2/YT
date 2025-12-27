@@ -123,12 +123,23 @@ exports.updateProfile = async (req, res, next) => {
       }
     ).select('-password');
 
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: 'User not found'
+      });
+    }
+
     res.status(200).json({
       success: true,
       data: user
     });
   } catch (error) {
-    res.status(500).json({ success: false, message: error.message });
+    console.error('Profile update error:', error);
+    res.status(500).json({ 
+      success: false, 
+      message: error.message || 'Failed to update profile. Please try again.' 
+    });
   }
 };
 

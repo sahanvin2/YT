@@ -230,13 +230,6 @@ const Upload = () => {
     ));
   };
 
-  const formatDuration = (seconds) => {
-    if (!seconds) return '0:00';
-    const mins = Math.floor(seconds / 60);
-    const secs = Math.floor(seconds % 60);
-    return `${mins}:${secs.toString().padStart(2, '0')}`;
-  };
-
   // Multi-upload handler
   const handleMultiUpload = async () => {
     if (uploadQueue.length === 0) return;
@@ -444,8 +437,8 @@ const Upload = () => {
             if (fileInputRef.current) fileInputRef.current.value = '';
             if (thumbnailInputRef.current) thumbnailInputRef.current.value = '';
             
-            // Show success notification
-            alert(`✅ Video uploaded successfully! You can upload another video now.\n\nView video: ${window.location.origin}/watch/${uploadedVideoId}`);
+            // Success - video is processing in background
+            console.log('✅ Video uploaded successfully:', uploadedVideoId);
           }, 2000);
         }, 3000);
       } else {
@@ -514,8 +507,8 @@ const Upload = () => {
           if (fileInputRef.current) fileInputRef.current.value = '';
           if (thumbnailInputRef.current) thumbnailInputRef.current.value = '';
           
-          // Show success notification
-          alert(`✅ Video uploaded successfully! You can upload another video now.\n\nView video: ${window.location.origin}/watch/${uploadedVideoId}`);
+          // Success - video is processing in background
+          console.log('✅ Video uploaded successfully:', uploadedVideoId);
         }, 2000);
       }
     } catch (err) {

@@ -9,6 +9,7 @@ import Home from './pages/Home/Home';
 import Watch from './pages/Watch/Watch';
 import Login from './pages/Auth/Login';
 import Register from './pages/Auth/Register';
+import AuthCallback from './pages/AuthCallback/AuthCallback';
 import VerifyEmail from './pages/Auth/VerifyEmail';
 import Upload from './pages/Upload/Upload';
 import CategoryPage from './pages/Category/CategoryPage';
@@ -114,6 +115,7 @@ function App() {
                     <Route path="/watch/:id" element={<Watch />} />
                     <Route path="/login" element={<Login />} />
                     <Route path="/register" element={<Register />} />
+                    <Route path="/auth/callback" element={<AuthCallback />} />
                     <Route path="/verify-email/:token" element={<VerifyEmail />} />
                     <Route path="/upload" element={<Upload />} />
                     <Route path="/video-manager" element={<VideoManager />} />

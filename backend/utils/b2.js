@@ -33,8 +33,8 @@ const s3 = new S3Client({
 async function uploadFilePath(filePath, key, contentType = 'application/octet-stream') {
   if (!fs.existsSync(filePath)) throw new Error(`File does not exist: ${filePath}`);
 
-  const maxAttempts = 3;
-  const baseDelayMs = 500;
+  const maxAttempts = 5; // Increased from 3 to 5 for HLS uploads
+  const baseDelayMs = 1000; // Increased from 500ms to 1000ms
 
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     const fileStream = fs.createReadStream(filePath);
@@ -53,18 +53,25 @@ async function uploadFilePath(filePath, key, contentType = 'application/octet-st
       const message = err?.message || String(err);
       const code = err?.code;
 
+      // Expanded list of retryable errors for HLS uploads
       const isTransient =
         message.toLowerCase().includes('socket hang up') ||
+        message.toLowerCase().includes('non-retryable streaming request') ||
+        message.toLowerCase().includes('internal error') ||
+        message.toLowerCase().includes('stream reset') ||
         code === 'ECONNRESET' ||
         code === 'ETIMEDOUT' ||
         code === 'EPIPE' ||
-        code === 'ENOTFOUND';
+        code === 'ENOTFOUND' ||
+        code === 'ECONNREFUSED';
 
       if (!isTransient || attempt === maxAttempts) {
         throw err;
       }
 
-      const delay = baseDelayMs * Math.pow(2, attempt - 1);
+      // Exponential backoff with jitter
+      const delay = baseDelayMs * Math.pow(2, attempt - 1) + Math.random() * 500;
+      console.log(`   🔄 Retry ${attempt}/${maxAttempts} after ${Math.round(delay)}ms...`);
       await new Promise((resolve) => setTimeout(resolve, delay));
     }
   }

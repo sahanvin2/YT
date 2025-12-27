@@ -12,8 +12,17 @@ ffmpeg.setFfprobePath(ffprobePath);
 /**
  * HLS Quality Presets for GPU encoding (NVIDIA RTX 2050)
  * Using 8-bit encoding (RTX 2050 doesn't support 10-bit efficiently)
+ * Added 4K support for high-quality source videos
  */
 const HLS_PRESETS = {
+  '4K': {
+    width: 3840,
+    height: 2160,
+    bitrate: '15000k',
+    maxBitrate: '16000k',
+    bufsize: '22500k',
+    audioBitrate: '256k'
+  },
   '1080p': {
     width: 1920,
     height: 1080,
@@ -89,9 +98,18 @@ function getVideoInfo(filePath) {
 
 /**
  * Determine which qualities to encode based on source resolution
+ * Preserves original quality - if 1080p upload, start from 1080p
+ * If 4K upload, add 4K quality and downscale from there
  */
 function determineQualities(sourceWidth, sourceHeight) {
   const qualities = [];
+  
+  // Add 4K if source is 4K or higher
+  if (sourceWidth >= 3840 && sourceHeight >= 2160) {
+    qualities.push('4K');
+  }
+  
+  // Add qualities from highest to lowest that source supports
   const allQualities = ['1080p', '720p', '480p', '360p', '240p', '144p'];
   
   for (const quality of allQualities) {
@@ -272,8 +290,9 @@ async function uploadHLSToB2(localDir, videoId, userId) {
 
   console.log(`   📦 Found ${filesToUpload.length} files to upload`);
 
-  // Upload in parallel batches for speed
-  const BATCH_SIZE = 50; // Upload 50 files at once
+  // Upload in parallel batches - optimized for speed + reliability
+  // 8 files at once = good balance between speed and stability
+  const BATCH_SIZE = 8; // Upload 8 files at once (balanced)
   let uploadedCount = 0;
   
   for (let i = 0; i < filesToUpload.length; i += BATCH_SIZE) {
@@ -309,6 +328,11 @@ async function uploadHLSToB2(localDir, videoId, userId) {
         const failedCount = batch.length - successCount;
         console.warn(`   ⚠️ ${failedCount} files failed in this batch`);
       }
+      
+      // Reduced delay for faster uploads while maintaining stability
+      if (i + BATCH_SIZE < filesToUpload.length) {
+        await new Promise(resolve => setTimeout(resolve, 250)); // 250ms delay (faster)
+      }
     } catch (error) {
       console.error(`   ❌ Batch upload error:`, error.message);
       throw error;
@@ -322,7 +346,7 @@ async function uploadHLSToB2(localDir, videoId, userId) {
     console.warn(`⚠️ Retrying ${failedUploads.length} failed uploads...`);
 
     const stillFailed = [];
-    const RETRY_BATCH_SIZE = 10;
+    const RETRY_BATCH_SIZE = 5; // Smaller retry batch for better stability
 
     for (let i = 0; i < failedUploads.length; i += RETRY_BATCH_SIZE) {
       const batch = failedUploads.slice(i, i + RETRY_BATCH_SIZE);
@@ -343,6 +367,11 @@ async function uploadHLSToB2(localDir, videoId, userId) {
       stillFailed.push(...retryFailed);
 
       console.log(`   🔁 Retry progress: recovered ${retrySuccess.length}/${batch.length}`);
+      
+      // Faster retry delays
+      if (i + RETRY_BATCH_SIZE < failedUploads.length) {
+        await new Promise(resolve => setTimeout(resolve, 500)); // 500ms delay for retries
+      }
     }
 
     if (stillFailed.length > 0) {

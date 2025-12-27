@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
+import { FcGoogle } from 'react-icons/fc';
+import { SiMicrosoft } from 'react-icons/si';
 import XclubLogo from '../../components/Logo/MoviaLogo';
 import axios from 'axios';
 import './Auth.css';
@@ -58,6 +60,14 @@ const Login = () => {
     } finally {
       setResendLoading(false);
     }
+  };
+
+  const handleGoogleLogin = () => {
+    window.location.href = '/api/auth/google';
+  };
+
+  const handleMicrosoftLogin = () => {
+    window.location.href = '/api/auth/microsoft';
   };
 
   return (
@@ -155,6 +165,21 @@ const Login = () => {
             {loading ? 'Signing in...' : 'Sign In'}
           </button>
         </form>
+
+        <div className="auth-divider">
+          <span>OR</span>
+        </div>
+
+        <div className="oauth-buttons">
+          <button onClick={handleGoogleLogin} className="btn-oauth btn-google">
+            <FcGoogle size={20} />
+            <span>Continue with Google</span>
+          </button>
+          <button onClick={handleMicrosoftLogin} className="btn-oauth btn-microsoft">
+            <SiMicrosoft size={18} color="#00A4EF" />
+            <span>Continue with Microsoft</span>
+          </button>
+        </div>
 
         <div className="auth-footer">
           <p>

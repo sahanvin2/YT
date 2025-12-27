@@ -18,18 +18,22 @@ const s3 = new S3Client({
 
 async function deleteAllVideos() {
   try {
-    console.log('🗑️  Starting to delete all videos from B2 bucket...');
+    console.log('🗑️  Starting to delete ALL files from B2 bucket (including all folders)...');
     console.log(`📦 Bucket: ${B2_BUCKET}`);
     
     let continuationToken = null;
     let totalDeleted = 0;
+    let batchCount = 0;
     
     do {
-      // List objects
+      batchCount++;
+      console.log(`\n📋 Batch ${batchCount}: Listing objects...`);
+      
+      // List objects (no prefix - get everything)
       const listCommand = new ListObjectsV2Command({
         Bucket: B2_BUCKET,
         ContinuationToken: continuationToken,
-        MaxKeys: 1000
+        MaxKeys: 1000  // Max allowed per request
       });
       
       const listResponse = await s3.send(listCommand);
@@ -39,7 +43,19 @@ async function deleteAllVideos() {
         break;
       }
       
-      console.log(`📋 Found ${listResponse.Contents.length} objects...`);
+      console.log(`📋 Found ${listResponse.Contents.length} objects in this batch...`);
+      
+      // Show first few file paths
+      if (listResponse.Contents.length > 0) {
+        console.log('   Examples:');
+        listResponse.Contents.slice(0, 5).forEach(obj => {
+          const size = (obj.Size / 1024 / 1024).toFixed(2);
+          console.log(`   - ${obj.Key} (${size} MB)`);
+        });
+        if (listResponse.Contents.length > 5) {
+          console.log(`   ... and ${listResponse.Contents.length - 5} more files`);
+        }
+      }
       
       // Prepare objects for deletion
       const objectsToDelete = listResponse.Contents.map(obj => ({
@@ -47,6 +63,7 @@ async function deleteAllVideos() {
       }));
       
       // Delete objects in batch
+      console.log(`🗑️  Deleting ${objectsToDelete.length} objects...`);
       const deleteCommand = new DeleteObjectsCommand({
         Bucket: B2_BUCKET,
         Delete: {
@@ -63,7 +80,7 @@ async function deleteAllVideos() {
       }
       
       if (deleteResponse.Errors && deleteResponse.Errors.length > 0) {
-        console.error('❌ Some objects failed to delete:');
+        console.error(`❌ ${deleteResponse.Errors.length} objects failed to delete:`);
         deleteResponse.Errors.forEach(err => {
           console.error(`  - ${err.Key}: ${err.Message}`);
         });
@@ -72,9 +89,17 @@ async function deleteAllVideos() {
       // Check if there are more objects
       continuationToken = listResponse.NextContinuationToken;
       
+      // Small delay to avoid rate limiting
+      if (continuationToken) {
+        await new Promise(resolve => setTimeout(resolve, 100));
+      }
+      
     } while (continuationToken);
     
-    console.log(`\n🎉 Deletion complete! Total objects deleted: ${totalDeleted}`);
+    console.log(`\n🎉 Deletion complete!`);
+    console.log(`📊 Total batches: ${batchCount}`);
+    console.log(`📊 Total objects deleted: ${totalDeleted}`);
+    console.log(`✅ B2 bucket is now empty!`);
     
   } catch (error) {
     console.error('❌ Error deleting videos from B2:', error);

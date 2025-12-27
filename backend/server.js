@@ -12,6 +12,10 @@ const errorHandler = require('./middleware/error');
 // Load env vars
 dotenv.config();
 
+// Initialize Passport for OAuth
+const passport = require('./config/passport');
+const session = require('express-session');
+
 // Check CDN configuration on startup
 const CDN_BASE = process.env.CDN_BASE || process.env.CDN_URL;
 if (CDN_BASE) {
@@ -38,6 +42,9 @@ const transcode = require('./routes/transcode');
 const notifications = require('./routes/notifications');
 const processing = require('./routes/processing');
 const hlsProxy = require('./routes/hlsProxy');
+const adminMessages = require('./routes/adminMessages');
+const oauth = require('./routes/oauth');
+const systemNotifications = require('./routes/systemNotifications');
 
 const app = express();
 
@@ -50,6 +57,21 @@ app.use(express.urlencoded({ extended: true, limit: "3000mb" }));
 
 // Cookie parser
 app.use(cookieParser());
+
+// Session for OAuth
+app.use(session({
+  secret: process.env.SESSION_SECRET || process.env.JWT_SECRET,
+  resave: false,
+  saveUninitialized: false,
+  cookie: {
+    secure: process.env.NODE_ENV === 'production',
+    maxAge: 24 * 60 * 60 * 1000 // 24 hours
+  }
+}));
+
+// Initialize Passport
+app.use(passport.initialize());
+app.use(passport.session());
 
 // Dev logging middleware
 if (process.env.NODE_ENV === 'development') {
@@ -93,6 +115,9 @@ app.use('/api/channels', channels);
 app.use('/api/transcode', transcode);
 app.use('/api/notifications', notifications);
 app.use('/api/processing', processing);
+app.use('/api/admin', adminMessages); // Admin-to-admin messaging
+app.use('/api/auth', oauth); // OAuth routes (Google, Microsoft)
+app.use('/api/system-notifications', systemNotifications); // System-wide notifications
 app.use('/api', hlsProxy); // HLS proxy for CORS-free streaming
 
 // Error handler
