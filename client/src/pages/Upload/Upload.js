@@ -145,6 +145,8 @@ const Upload = () => {
     const files = Array.from(e.target.files);
     if (!files || files.length === 0) return;
 
+    console.log(`📂 Processing ${files.length} files from folder...`);
+
     // Check for HLS files - accept .m3u8 or .ts files
     const hasHlsFiles = files.some(file => {
       const fileName = file.name.toLowerCase();
@@ -176,9 +178,14 @@ const Upload = () => {
           title: folder.replace(/-|_/g, ' ').replace(/\.\w+$/, '')
         });
       }
+    } else {
+      // Fallback folder name from file name
+      const fileName = firstFile.name;
+      setFolderName(fileName.split('.')[0]);
+      folderPath = fileName.split('.')[0];
     }
 
-    console.log(`📁 HLS folder selected: ${folderPath}`);
+    console.log(`✅ HLS folder selected: ${folderPath}`);
     console.log(`📦 Total files: ${files.length}`);
     console.log(`📊 Files breakdown:`, {
       m3u8: files.filter(f => f.name.endsWith('.m3u8')).length,
@@ -191,6 +198,16 @@ const Upload = () => {
     setIsMultiUpload(false);
     setUploadProgress(0);
     setUploadStatus('idle');
+    setVideoFile(null);
+    setVideoPreview(null);
+    
+    // Scroll to form after folder selection
+    setTimeout(() => {
+      const formElement = document.querySelector('.upload-form');
+      if (formElement) {
+        formElement.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
+    }, 100);
   };
 
   const onThumbnailChange = (e) => {
@@ -1058,15 +1075,15 @@ const Upload = () => {
             <button
               type="button"
               className="btn btn-secondary"
-                  onClick={handleCancel}
-                  disabled={uploadStatus === 'uploading' || uploadStatus === 'processing'}
+              onClick={handleCancel}
+              disabled={uploadStatus === 'uploading' || uploadStatus === 'processing'}
             >
-                  {uploadStatus === 'uploading' || uploadStatus === 'processing' ? 'Cancel' : 'Delete video'}
+              {uploadStatus === 'uploading' || uploadStatus === 'processing' ? 'Cancel' : (hlsFiles.length > 0 ? 'Remove folder' : 'Delete video')}
             </button>
             <button
               type="submit"
               className="btn btn-primary"
-                  disabled={loading || (!videoFile && uploadQueue.length === 0) || (!isMultiUpload && !title.trim()) || uploadStatus === 'uploading' || uploadStatus === 'processing'}
+              disabled={loading || (!videoFile && !hlsFiles.length && uploadQueue.length === 0) || (!isMultiUpload && !title.trim()) || uploadStatus === 'uploading' || uploadStatus === 'processing'}
             >
                   {isMultiUpload ? (
                     <>
