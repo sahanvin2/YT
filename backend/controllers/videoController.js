@@ -743,7 +743,7 @@ exports.uploadHlsFolder = async (req, res) => {
 // @access  Private
 exports.uploadHlsComplete = async (req, res) => {
   try {
-    const { title, description, mainCategory, primaryGenre, tags, duration } = req.body;
+    const { title, description, mainCategory, primaryGenre, secondaryGenres, subCategory, tags, visibility, duration } = req.body;
 
     // Validate required fields
     if (!title) {
@@ -784,12 +784,14 @@ exports.uploadHlsComplete = async (req, res) => {
       description: description || '',
       mainCategory: mainCategory || 'movies',
       primaryGenre: primaryGenre || 'action',
+      secondaryGenres: secondaryGenres ? JSON.parse(secondaryGenres) : [],
+      subCategory: subCategory || '',
       tags: tags ? tags.split(',').map(t => t.trim()).filter(t => t) : [],
-      visibility: 'public',
+      visibility: visibility || 'public',
       user: req.user.id,
       duration: duration ? parseInt(duration) : 0,
       videoUrl: 'processing',
-      processingStatus: 'uploading'
+      processingStatus: 'processing'
     });
 
     await video.save();
