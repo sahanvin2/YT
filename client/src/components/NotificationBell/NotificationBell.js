@@ -97,7 +97,7 @@ const NotificationBell = () => {
       const res = await axios.get('/api/system-notifications/unread-count', {
         headers: { Authorization: `Bearer ${token}` }
       });
-      setUnreadCount(res.data.data.count);
+      setUnreadCount(res.data.count || 0);
     } catch (err) {
       console.error('Failed to fetch unread count:', err);
     }
