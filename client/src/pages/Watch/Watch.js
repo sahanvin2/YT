@@ -648,15 +648,31 @@ const Watch = () => {
     // ✅ FIX: Keep ALL /api/hls/ URLs as proxy URLs (don't convert to CDN)
     // This ensures videos play through the backend proxy which handles B2 access
     if (inputUrl.includes('/api/hls/')) {
-      // Convert relative URLs to absolute localhost URLs for local development
+      // Convert relative URLs to absolute URLs
       if (!inputUrl.startsWith('http')) {
-        return `http://localhost:5000${inputUrl}`;
+        // Use production domain in production, localhost in development
+        const baseUrl = window.location.hostname === 'localhost' 
+          ? 'http://localhost:5000' 
+          : window.location.origin;
+        return `${baseUrl}${inputUrl}`;
       }
+      
+      // Fix localhost URLs to use production domain if we're in production
+      if (window.location.hostname !== 'localhost' && 
+          (inputUrl.includes('localhost') || inputUrl.includes('127.0.0.1'))) {
+        // Replace localhost with production domain
+        return inputUrl.replace(/http:\/\/(localhost|127\.0\.0\.1):5000/, window.location.origin);
+      }
+      
       return inputUrl;
     }
 
     // Keep localhost URLs as-is for local development/testing
     if (inputUrl.includes('localhost') || inputUrl.includes('127.0.0.1')) {
+      // But fix them if we're in production
+      if (window.location.hostname !== 'localhost') {
+        return inputUrl.replace(/http:\/\/(localhost|127\.0\.0\.1):5000/, window.location.origin);
+      }
       return inputUrl;
     }
 
