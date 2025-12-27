@@ -32,7 +32,8 @@ const transporter = createTransporter();
 if (transporter) {
   transporter.verify(function (error, success) {
     if (error) {
-      console.error('❌ Email service configuration error:', error);
+      console.warn('⚠️ Email service configuration error (non-fatal):', error.message);
+      // Don't crash - email is optional
     } else {
       console.log('✅ Email service is ready to send messages');
     }

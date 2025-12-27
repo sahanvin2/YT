@@ -199,9 +199,12 @@ const startListening = (attempt = 1) => {
 // Handle unhandled promise rejections
 process.on('unhandledRejection', (err) => {
   console.error(`❌ Unhandled Rejection: ${err.message}`);
-  if (server) {
-    server.close(() => process.exit(1));
-  } else {
-    process.exit(1);
-  }
+  console.error('Full error:', err);
+  console.error('Stack:', err.stack);
+  // Don't exit immediately - log the error for debugging
+  // if (server) {
+  //   server.close(() => process.exit(1));
+  // } else {
+  //   process.exit(1);
+  // }
 });
