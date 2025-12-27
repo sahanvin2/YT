@@ -435,7 +435,7 @@ exports.uploadVideo = async (req, res, next) => {
     const videoFile = req.files.video;
     const thumbnailFile = req.files.thumbnail;
 
-    const maxSizeBytes = parseInt(process.env.MAX_VIDEO_SIZE_MB || '2048') * 1024 * 1024;
+    const maxSizeBytes = parseInt(process.env.MAX_VIDEO_SIZE_MB || '5120') * 1024 * 1024;
     if (videoFile.size > maxSizeBytes) {
       return res.status(400).json({
         success: false,
