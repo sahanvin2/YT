@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
 import { useNavigate, Link } from 'react-router-dom';
-import { FiUpload, FiX, FiImage, FiFile, FiCheck, FiAlertCircle } from 'react-icons/fi';
+import { FiUpload, FiX, FiImage, FiFile, FiCheck, FiAlertCircle, FiFolder } from 'react-icons/fi';
 import { uploadVideo, presignPut, createVideoFromUrl, getPlaylists } from '../../utils/api';
 import { useAuth } from '../../context/AuthContext';
 import { formatFileSize } from '../../utils/helpers';
@@ -24,6 +24,8 @@ const Upload = () => {
     playlist: ''
   });
   const [videoFile, setVideoFile] = useState(null);
+  const [hlsFiles, setHlsFiles] = useState([]); // HLS folder files
+  const [folderName, setFolderName] = useState('');
   const [thumbnailFile, setThumbnailFile] = useState(null);
   const [subtitleFiles, setSubtitleFiles] = useState([]); // Array of {file, language, label}
   const [videoPreview, setVideoPreview] = useState(null);
@@ -35,6 +37,7 @@ const Upload = () => {
   const [usePresigned, setUsePresigned] = useState(false);
   const [error, setError] = useState('');
   const [videoLink, setVideoLink] = useState('');
+  const [uploadStage, setUploadStage] = useState('');
   const fileInputRef = useRef(null);
   const thumbnailInputRef = useRef(null);
   const subtitleInputRef = useRef(null);
@@ -139,63 +142,39 @@ const Upload = () => {
   const availableSubCategories = SUB_CATEGORIES[primaryGenre] || [];
 
   const onVideoChange = (e) => {
-    const files = e.target.files;
+    const files = Array.from(e.target.files);
     if (!files || files.length === 0) return;
 
-    // Check if multiple files selected
-    if (files.length > 1) {
-      setIsMultiUpload(true);
-      const newQueue = [];
+    // Check for master.m3u8
+    const hasMaster = files.some(file => file.name === 'master.m3u8');
+    if (!hasMaster) {
+      setError('⚠️ Selected folder must contain master.m3u8 file!');
+      setHlsFiles([]);
+      setFolderName('');
+      return;
+    }
+
+    // Get folder name from first file's path
+    const firstFile = files[0];
+    if (firstFile.webkitRelativePath) {
+      const pathParts = firstFile.webkitRelativePath.split('/');
+      const folder = pathParts[0];
+      setFolderName(folder);
       
-      for (let i = 0; i < files.length; i++) {
-        const file = files[i];
-        
-        if (file.size > 5368709120) { // 5GB
-          alert(`${file.name} is too large (max 5GB). Skipping...`);
-          continue;
-        }
-        
-        newQueue.push({
-          id: Date.now() + i,
-          file: file,
-          title: file.name.replace(/\.[^/.]+$/, ''), // filename without extension
-          status: 'pending', // pending, uploading, completed, error
-          progress: 0,
-          error: null,
-          videoId: null
+      // Auto-fill title if empty
+      if (!formData.title) {
+        setFormData({
+          ...formData,
+          title: folder.replace(/-|_/g, ' ').replace(/\.\w+$/, '')
         });
       }
-      
-      setUploadQueue(newQueue);
-      setError('');
-      return;
     }
 
-    // Single file upload - DISABLED (HLS folders only)
-    setError('Direct video upload is disabled. Please use the HLS folder upload script. See documentation for details.');
-    return;
-    
-    /* OLD CODE - DISABLED
-    const file = files[0];
-    if (file.size > 5368709120) { // 5GB
-      setError('Video file must be less than 5GB');
-      return;
-    }
-
-    setVideoFile(file);
+    setHlsFiles(files);
     setError('');
     setIsMultiUpload(false);
-
-    // Create preview
-    const videoUrl = URL.createObjectURL(file);
-    setVideoPreview(videoUrl);
-
-    // Reset upload status
     setUploadProgress(0);
-    setProcessingProgress(0);
     setUploadStatus('idle');
-    setVideoLink('');
-    */
   };
 
   const onThumbnailChange = (e) => {
@@ -332,8 +311,94 @@ const Upload = () => {
       return;
     }
 
+    // Check if HLS folder upload
+    if (hlsFiles.length > 0) {
+      // HLS folder upload logic
+      if (!thumbnailFile) {
+        setError('Please upload a thumbnail for the HLS video');
+        return;
+      }
+
+      if (!title.trim()) {
+        setError('Please enter a video title');
+        return;
+      }
+
+      // Validate genre selection
+      const allGenres = [primaryGenre, ...secondaryGenres];
+      const validation = validateGenreSelection(allGenres);
+      if (!validation.valid) {
+        setError(validation.message);
+        return;
+      }
+
+      // Collapse sidebar when upload starts
+      window.dispatchEvent(new CustomEvent('collapseSidebar'));
+
+      try {
+        setLoading(true);
+        setUploadStatus('uploading');
+        setUploadStage('Preparing HLS files...');
+        setUploadProgress(0);
+
+        // Create FormData with all HLS files
+        const data = new FormData();
+        data.append('title', title);
+        data.append('description', description || ' ');
+        data.append('mainCategory', mainCategory);
+        data.append('primaryGenre', primaryGenre);
+        data.append('secondaryGenres', JSON.stringify(secondaryGenres));
+        if (subCategory) data.append('subCategory', subCategory);
+        data.append('tags', tags);
+        data.append('visibility', visibility);
+        data.append('folderName', folderName);
+        data.append('thumbnail', thumbnailFile);
+
+        // Add all HLS files
+        setUploadStage(`Adding ${hlsFiles.length} files...`);
+        hlsFiles.forEach((file) => {
+          data.append('hlsFiles', file, file.webkitRelativePath || file.name);
+        });
+
+        // Upload to backend
+        setUploadStage('Uploading to B2 storage...');
+        const res = await axios.post('/api/videos/upload-hls-complete', data, {
+          headers: {
+            'Content-Type': 'multipart/form-data',
+          },
+          onUploadProgress: (progressEvent) => {
+            if (progressEvent.total) {
+              const percentCompleted = Math.round(
+                (progressEvent.loaded * 100) / progressEvent.total
+              );
+              setUploadProgress(percentCompleted);
+            }
+          },
+        });
+
+        setUploadProgress(100);
+        setUploadStage('Upload complete!');
+        setUploadStatus('completed');
+        const uploadedVideoId = res.data.data._id;
+        setVideoLink(`/watch/${uploadedVideoId}`);
+
+        // Redirect to video after 2 seconds
+        setTimeout(() => {
+          navigate(`/watch/${uploadedVideoId}`);
+        }, 2000);
+      } catch (err) {
+        setError(err.response?.data?.message || err.message || 'Failed to upload HLS folder');
+        setUploadStatus('error');
+        console.error('HLS Upload error:', err);
+      } finally {
+        setLoading(false);
+      }
+      return;
+    }
+
+    // Regular video upload
     if (!videoFile) {
-      setError('Please select a video file');
+      setError('Please select a video file or HLS folder');
       return;
     }
 
@@ -1057,28 +1122,74 @@ const Upload = () => {
               </div>
             )}
 
-            {videoFile && !isMultiUpload ? (
+            {(videoFile || hlsFiles.length > 0) && !isMultiUpload ? (
               <div className="video-preview-container">
                 {uploadStatus === 'idle' && (
                   <>
-                    <div className="video-preview">
-                      <video src={videoPreview} controls />
-                    </div>
-                    <div className="video-info">
-                      <div className="video-info-item">
-                        <FiFile size={18} />
-                        <div className="video-info-content">
-                          <span className="video-info-label">File name</span>
-                          <span className="video-info-value">{videoFile.name}</span>
+                    {hlsFiles.length > 0 ? (
+                      // HLS folder preview
+                      <>
+                        <div className="video-preview" style={{ backgroundColor: '#1a1a1a', display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', padding: '40px' }}>
+                          <FiFolder size={64} style={{ color: '#3ea6ff', marginBottom: '20px' }} />
+                          <h3 style={{ color: '#fff', marginBottom: '10px' }}>HLS Folder Selected</h3>
+                          <p style={{ color: '#aaa' }}>{folderName}</p>
                         </div>
-                      </div>
-                      <div className="video-info-item">
-                        <FiFile size={18} />
-                        <div className="video-info-content">
-                          <span className="video-info-label">File size</span>
-                          <span className="video-info-value">{formatFileSize(videoFile.size)}</span>
+                        <div className="video-info">
+                          <div className="video-info-item">
+                            <FiFolder size={18} />
+                            <div className="video-info-content">
+                              <span className="video-info-label">Folder name</span>
+                              <span className="video-info-value">{folderName}</span>
+                            </div>
+                          </div>
+                          <div className="video-info-item">
+                            <FiFile size={18} />
+                            <div className="video-info-content">
+                              <span className="video-info-label">Total files</span>
+                              <span className="video-info-value">{hlsFiles.length} files</span>
+                            </div>
+                          </div>
+                          <div className="video-info-item">
+                            <FiFile size={18} />
+                            <div className="video-info-content">
+                              <span className="video-info-label">Total size</span>
+                              <span className="video-info-value">{formatFileSize(hlsFiles.reduce((sum, f) => sum + f.size, 0))}</span>
+                            </div>
+                          </div>
+                          {uploadStage && (
+                            <div className="video-info-item">
+                              <div className="video-info-content">
+                                <span className="video-info-label">Status</span>
+                                <span className="video-info-value" style={{ color: '#3ea6ff' }}>{uploadStage}</span>
+                              </div>
+                            </div>
+                          )}
                         </div>
-                      </div>
+                      </>
+                    ) : (
+                      // Regular video preview
+                      <>
+                        <div className="video-preview">
+                          <video src={videoPreview} controls />
+                        </div>
+                        <div className="video-info">
+                          <div className="video-info-item">
+                            <FiFile size={18} />
+                            <div className="video-info-content">
+                              <span className="video-info-label">File name</span>
+                              <span className="video-info-value">{videoFile.name}</span>
+                            </div>
+                          </div>
+                          <div className="video-info-item">
+                            <FiFile size={18} />
+                            <div className="video-info-content">
+                              <span className="video-info-label">File size</span>
+                              <span className="video-info-value">{formatFileSize(videoFile.size)}</span>
+                            </div>
+                          </div>
+                        </div>
+                      </>
+                    )}
                       {videoLink && (
                         <div className="video-info-item">
                           <div className="video-info-content">
@@ -1166,13 +1277,15 @@ const Upload = () => {
                     accept="video/*"
                     onChange={onVideoChange}
                     multiple
+                    webkitdirectory=""
+                    directory=""
                     style={{ display: 'none' }}
                   />
                   <label htmlFor="video" className="upload-file-btn">
                     <FiUpload size={18} />
-                    <span>Select Videos (Multiple)</span>
+                    <span>Select HLS Folder</span>
                   </label>
-                  <small className="upload-hint">Select one or multiple videos - Max 5GB each</small>
+                  <small className="upload-hint">Select HLS folder containing master.m3u8 and quality folders - Max 12GB</small>
                 </div>
               </div>
             )}
