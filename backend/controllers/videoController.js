@@ -738,6 +738,148 @@ exports.uploadHlsFolder = async (req, res) => {
   }
 };
 
+// @desc    Upload HLS folder with files (new user-friendly version)
+// @route   POST /api/videos/upload-hls-complete
+// @access  Private
+exports.uploadHlsComplete = async (req, res) => {
+  try {
+    const { title, description, mainCategory, primaryGenre, tags, duration } = req.body;
+
+    // Validate required fields
+    if (!title) {
+      return res.status(400).json({ 
+        success: false, 
+        message: 'Title is required' 
+      });
+    }
+
+    if (!req.files || !req.files.hlsFiles || !req.files.thumbnail) {
+      return res.status(400).json({ 
+        success: false, 
+        message: 'HLS files and thumbnail are required' 
+      });
+    }
+
+    const hlsFiles = Array.isArray(req.files.hlsFiles) ? req.files.hlsFiles : [req.files.hlsFiles];
+    const thumbnailFile = req.files.thumbnail;
+
+    // Check for master.m3u8
+    const hasMaster = hlsFiles.some(file => file.name === 'master.m3u8');
+    if (!hasMaster) {
+      return res.status(400).json({ 
+        success: false, 
+        message: 'master.m3u8 file is required in HLS folder' 
+      });
+    }
+
+    console.log(`📁 Starting HLS complete upload for: ${title}`);
+    console.log(`   Files received: ${hlsFiles.length}`);
+
+    // Create video entry
+    const video = new Video({
+      title,
+      description: description || '',
+      mainCategory: mainCategory || 'movies',
+      primaryGenre: primaryGenre || 'action',
+      tags: tags ? tags.split(',').map(t => t.trim()).filter(t => t) : [],
+      visibility: 'public',
+      user: req.user.id,
+      duration: duration ? parseInt(duration) : 0,
+      videoUrl: 'processing',
+      processingStatus: 'uploading'
+    });
+
+    await video.save();
+    const videoId = video._id.toString();
+    console.log(`✅ Video entry created with ID: ${videoId}`);
+
+    // Upload thumbnail first
+    console.log(`📸 Uploading thumbnail...`);
+    const thumbExt = path.extname(thumbnailFile.name) || '.jpg';
+    const thumbKey = `thumbnails/${req.user.id}/${Date.now()}_thumb_${videoId}${thumbExt}`;
+    const thumbnailUrl = await uploadFilePath(thumbnailFile.tempFilePath, thumbKey, thumbnailFile.mimetype);
+    console.log(`✅ Thumbnail uploaded: ${thumbnailUrl}`);
+
+    // Upload all HLS files
+    console.log(`📦 Uploading ${hlsFiles.length} HLS files...`);
+    let uploadedFiles = 0;
+    let totalSize = 0;
+    const variants = [];
+
+    for (const file of hlsFiles) {
+      // Reconstruct folder structure from filename
+      const relativePath = file.name.replace(/\\/g, '/');
+      const hlsKey = `hls/${req.user.id}/${videoId}/${relativePath}`;
+      
+      const mimeType = mime.lookup(file.name) || 'application/octet-stream';
+      await uploadFilePath(file.tempFilePath, hlsKey, mimeType);
+      
+      uploadedFiles++;
+      totalSize += file.size;
+
+      // Track quality variants
+      if (relativePath.includes('/') && relativePath.includes('hls_')) {
+        const qualityMatch = relativePath.match(/hls_(\d+p)/);
+        if (qualityMatch) {
+          const quality = qualityMatch[1];
+          if (!variants.find(v => v.resolution === quality)) {
+            variants.push({
+              resolution: quality,
+              url: `/api/hls/${req.user.id}/${videoId}/hls_${quality}/playlist.m3u8`
+            });
+          }
+        }
+      }
+    }
+
+    console.log(`✅ All HLS files uploaded (${uploadedFiles} files, ${(totalSize / 1024 / 1024).toFixed(2)} MB)`);
+
+    // Update video with URLs
+    const hlsUrl = `/api/hls/${req.user.id}/${videoId}/master.m3u8`;
+    video.hlsUrl = hlsUrl;
+    video.videoUrl = hlsUrl;
+    video.thumbnailUrl = thumbnailUrl;
+    video.processingStatus = 'completed';
+    video.isPublished = true;
+
+    if (variants.length > 0) {
+      video.sources = variants.map(v => ({
+        quality: v.resolution,
+        url: v.url,
+        type: 'application/x-mpegURL'
+      }));
+    }
+
+    await video.save();
+
+    // Add to user's videos
+    await User.findByIdAndUpdate(req.user.id, { $push: { videos: video._id } });
+
+    console.log(`✅ HLS video uploaded successfully: ${title}`);
+
+    // Convert to CDN URLs
+    const videoObj = video.toObject();
+    videoObj.cdnUrl = cdnUrlFrom(videoObj.hlsUrl);
+    videoObj.videoUrl = videoObj.cdnUrl;
+    if (videoObj.thumbnailUrl) {
+      videoObj.thumbnailUrl = cdnUrlFrom(videoObj.thumbnailUrl);
+    }
+
+    res.status(201).json({ 
+      success: true, 
+      data: videoObj,
+      message: 'Video uploaded successfully!'
+    });
+
+  } catch (error) {
+    console.error('❌ HLS complete upload error:', error);
+    res.status(500).json({ 
+      success: false, 
+      message: error.message || 'Failed to upload video' 
+    });
+  }
+};
+
 // @desc    Update video
 // @route   PUT /api/videos/:id
 // @access  Private

@@ -14,6 +14,7 @@ const {
   getTopCreators,
   createVideoFromUrl,
   uploadHlsFolder,
+  uploadHlsComplete,
   streamVideo,
   getDownloadUrl,
   downloadVideoProxy
@@ -35,6 +36,9 @@ router.post('/create', protect, requireUploadAdmin, createVideoFromUrl);
 
 // Upload pre-processed HLS folder (skip processing queue)
 router.post('/upload-hls-folder', protect, requireUploadAdmin, uploadHlsFolder);
+
+// Upload HLS folder with files (new user-friendly version)
+router.post('/upload-hls-complete', protect, requireUploadAdmin, uploadHlsComplete);
 
 
 router.get('/search', searchVideos);
