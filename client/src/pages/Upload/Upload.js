@@ -1071,7 +1071,6 @@ const Upload = () => {
                           )}
                         </div>
                       </>
-                  </>
                 )}
 
                 {(uploadStatus === 'uploading' || uploadStatus === 'processing') && (
