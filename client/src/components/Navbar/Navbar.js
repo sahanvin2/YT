@@ -195,9 +195,9 @@ const Navbar = ({ toggleSidebar }) => {
 
       <div className="navbar-right">
         {isAuthenticated && isUploadAdmin && (
-          <Link to="/upload" className="create-btn">
+          <Link to="/upload-hls" className="create-btn">
             <FiPlus size={16} />
-            <span>Create</span>
+            <span>Upload</span>
           </Link>
         )}
         {isAuthenticated && (

@@ -13,6 +13,7 @@ import Register from './pages/Auth/Register';
 import AuthCallback from './pages/AuthCallback/AuthCallback';
 import VerifyEmail from './pages/Auth/VerifyEmail';
 import Upload from './pages/Upload/Upload';
+import UploadHLS from './pages/UploadHLS/UploadHLS';
 import CategoryPage from './pages/Category/CategoryPage';
 import Channel from './pages/Channel/Channel';
 import VideoManager from './pages/VideoManager/VideoManager';
@@ -121,6 +122,7 @@ function App() {
                     <Route path="/auth/callback" element={<AuthCallback />} />
                     <Route path="/verify-email/:token" element={<VerifyEmail />} />
                     <Route path="/upload" element={<Upload />} />
+                    <Route path="/upload-hls" element={<UploadHLS />} />
                     <Route path="/video-manager" element={<VideoManager />} />
                     <Route path="/channel/:id" element={<Channel />} />
                     <Route path="/trending" element={<Home mode="trending" />} />
