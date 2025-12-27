@@ -13,6 +13,7 @@ const {
   getTrendingVideos,
   getTopCreators,
   createVideoFromUrl,
+  uploadHlsFolder,
   streamVideo,
   getDownloadUrl,
   downloadVideoProxy
@@ -31,6 +32,9 @@ router.route('/')
 
 // Create a video from an already uploaded R2 URL (via presigned PUT)
 router.post('/create', protect, requireUploadAdmin, createVideoFromUrl);
+
+// Upload pre-processed HLS folder (skip processing queue)
+router.post('/upload-hls-folder', protect, requireUploadAdmin, uploadHlsFolder);
 
 
 router.get('/search', searchVideos);

@@ -11,6 +11,7 @@ const { uploadFilePath, deleteFile } = require('../utils/b2');
 const { generateVideoVariants, getVideoResolution } = require('../utils/videoTranscoder');
 const { cdnUrlFrom, extractKeyFromUrl } = require('../utils/cdn');
 const { addToHLSQueue } = require('../utils/hlsQueue');
+const { uploadHlsFolderToB2 } = require('../utils/uploadHlsFolder');
 
 // HLS-only mode: when enabled, the app serves only HLS (.m3u8) playback URLs.
 // Non-HLS videos are treated as "processing" and can be auto-queued for HLS conversion.
@@ -598,6 +599,134 @@ exports.createVideoFromUrl = async (req, res) => {
     res.status(201).json({ success: true, data: videoObj });
   } catch (e) {
     res.status(500).json({ success: false, message: e.message });
+  }
+};
+
+// @desc    Upload pre-processed HLS video folder (skip processing)
+// @route   POST /api/videos/upload-hls-folder
+// @access  Private (Admin only)
+exports.uploadHlsFolder = async (req, res) => {
+  try {
+    const { 
+      hlsFolderPath, 
+      title, 
+      description, 
+      category,
+      mainCategory,
+      primaryGenre,
+      secondaryGenres,
+      tags, 
+      visibility,
+      duration,
+      thumbnailPath
+    } = req.body;
+
+    // Validate required fields
+    if (!hlsFolderPath || !title) {
+      return res.status(400).json({ 
+        success: false, 
+        message: 'hlsFolderPath and title are required' 
+      });
+    }
+
+    // Check if folder exists
+    if (!fs.existsSync(hlsFolderPath)) {
+      return res.status(400).json({ 
+        success: false, 
+        message: `Folder not found: ${hlsFolderPath}` 
+      });
+    }
+
+    // Check for master.m3u8
+    const masterPath = path.join(hlsFolderPath, 'master.m3u8');
+    if (!fs.existsSync(masterPath)) {
+      return res.status(400).json({ 
+        success: false, 
+        message: 'master.m3u8 not found in folder. Please ensure this is a valid HLS video folder.' 
+      });
+    }
+
+    console.log(`📁 Starting HLS folder upload for: ${title}`);
+    
+    // Create video entry first to get ID
+    const video = new Video({
+      title,
+      description,
+      category: category || 'other',
+      mainCategory: mainCategory || 'movies',
+      primaryGenre: primaryGenre || 'other',
+      secondaryGenres: Array.isArray(secondaryGenres) ? secondaryGenres : [],
+      tags: typeof tags === 'string' ? tags.split(',').map(t => t.trim()) : (Array.isArray(tags) ? tags : []),
+      visibility: visibility || 'public',
+      user: req.user.id,
+      duration: duration ? parseInt(duration) : 0,
+      videoUrl: 'processing',
+      processingStatus: 'processing'
+    });
+
+    await video.save();
+    const videoId = video._id.toString();
+
+    console.log(`✅ Video entry created with ID: ${videoId}`);
+
+    // Upload HLS folder to B2
+    const uploadResult = await uploadHlsFolderToB2(hlsFolderPath, videoId);
+
+    // Upload thumbnail if provided
+    let thumbnailUrl = uploadResult.thumbnailUrl;
+    if (thumbnailPath && fs.existsSync(thumbnailPath)) {
+      console.log(`📸 Uploading custom thumbnail...`);
+      const thumbKey = `thumbnails/${videoId}${path.extname(thumbnailPath)}`;
+      thumbnailUrl = await uploadFilePath(thumbnailPath, thumbKey, 'image/jpeg');
+    }
+
+    // Update video with HLS URLs
+    video.hlsUrl = uploadResult.hlsUrl;
+    video.videoUrl = uploadResult.hlsUrl;
+    video.thumbnailUrl = thumbnailUrl;
+    video.processingStatus = 'completed';
+    video.isPublished = true;
+    
+    // Add variants info
+    if (uploadResult.variants && uploadResult.variants.length > 0) {
+      video.sources = uploadResult.variants.map(v => ({
+        quality: v.resolution,
+        url: v.url,
+        type: 'application/x-mpegURL'
+      }));
+    }
+
+    await video.save();
+
+    // Add to user's videos
+    await User.findByIdAndUpdate(req.user.id, { $push: { videos: video._id } });
+
+    console.log(`✅ HLS video uploaded successfully: ${title}`);
+
+    // Convert URLs to CDN URLs for response
+    const videoObj = video.toObject();
+    videoObj.cdnUrl = cdnUrlFrom(videoObj.hlsUrl);
+    videoObj.videoUrl = videoObj.cdnUrl;
+    if (videoObj.thumbnailUrl) {
+      videoObj.thumbnailUrl = cdnUrlFrom(videoObj.thumbnailUrl);
+    }
+
+    res.status(201).json({ 
+      success: true, 
+      data: videoObj,
+      uploadStats: {
+        filesUploaded: uploadResult.uploadedFiles,
+        totalSize: uploadResult.totalSize,
+        variants: uploadResult.variants.length
+      }
+    });
+
+  } catch (error) {
+    console.error('❌ HLS folder upload error:', error);
+    res.status(500).json({ 
+      success: false, 
+      message: error.message || 'Failed to upload HLS folder' 
+    });
   }
 };
 
