@@ -56,8 +56,64 @@ if (REDIS_ENABLED) {
  */
 async function addToHLSQueue(videoId, localFilePath, userId) {
   if (!REDIS_ENABLED || !hlsQueue) {
-    console.warn('⚠️  Cannot add to queue - Redis is disabled (HLS-only mode)');
-    throw new Error('Video processing queue is disabled. Please upload pre-processed HLS videos.');
+    console.log('⚠️  Redis disabled - Processing video directly without queue');
+    // Process video directly without queue for local development
+    try {
+      const { processVideoToHLS } = require('./hlsProcessor');
+      const Video = require('../models/Video');
+      
+      // Update status to processing
+      await Video.findByIdAndUpdate(videoId, {
+        processingStatus: 'processing',
+        processingError: null
+      });
+      
+      console.log(`🎬 Starting direct HLS processing for video ${videoId}`);
+      
+      // Process video with progress callback
+      const onProgress = (quality, percent) => {
+        console.log(`   ${quality}: ${percent.toFixed(1)}%`);
+      };
+      
+      const result = await processVideoToHLS(localFilePath, videoId, userId, onProgress);
+      
+      // Update video in database
+      const proxyUrl = `/api/hls/${userId}/${videoId}/master.m3u8`;
+      await Video.findByIdAndUpdate(videoId, {
+        hlsUrl: proxyUrl,
+        videoUrl: proxyUrl,
+        cdnUrl: proxyUrl,
+        duration: result.duration,
+        processingStatus: 'completed',
+        processingCompleted: new Date(),
+        processingError: null,
+        hlsEnabled: true,
+        isPublished: true,
+        variants: result.variants.map(v => {
+          const qualityNum = parseInt(String(v.quality).replace(/[^0-9]/g, ''), 10);
+          const variantPlaylist = `/api/hls/${userId}/${videoId}/hls_${v.quality}/playlist.m3u8`;
+          return {
+            quality: Number.isFinite(qualityNum) ? qualityNum : v.quality,
+            url: variantPlaylist,
+            resolution: v.resolution
+          };
+        })
+      });
+      
+      console.log(`✅ Video ${videoId} processed successfully (direct mode)`);
+      return `direct_${videoId}`;
+    } catch (error) {
+      console.error(`❌ Direct processing failed for video ${videoId}:`, error);
+      
+      // Update video with error
+      const Video = require('../models/Video');
+      await Video.findByIdAndUpdate(videoId, {
+        processingStatus: 'failed',
+        processingError: error.message
+      }).catch(() => {});
+      
+      throw error;
+    }
   }
   
   try {

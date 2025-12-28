@@ -98,6 +98,8 @@ const Watch = () => {
   const qualityMenuRef = useRef(null);
   const [hlsLevels, setHlsLevels] = useState([]);
   const [selectedHlsLevel, setSelectedHlsLevel] = useState(-1); // -1 = Auto
+  const [useCdnFallback, setUseCdnFallback] = useState(false);
+  const cdnErrorCountRef = useRef(0);
   const [currentQuality, setCurrentQuality] = useState('Auto');
   const viewCountedRef = useRef(false);
   const watchedDurationRef = useRef(0);
@@ -394,7 +396,7 @@ const Watch = () => {
 
       // ✅ Prioritize localhost proxy URLs (no CORS issues) over CDN URLs
       let finalVideoUrl;
-      if (videoData.videoUrl?.includes('localhost:5000/api/hls')) {
+      if (videoData.videoUrl?.includes('localhost:5001/api/hls') || videoData.videoUrl?.includes('localhost:5000/api/hls')) {
         finalVideoUrl = videoData.videoUrl; // Use proxy URL
         console.log('✅ Using proxy URL (no CORS):', finalVideoUrl);
         // Update videoData to use proxy URL
@@ -652,7 +654,7 @@ const Watch = () => {
       if (!inputUrl.startsWith('http')) {
         // Use production domain in production, localhost in development
         const baseUrl = window.location.hostname === 'localhost' 
-          ? 'http://localhost:5000' 
+          ? 'http://localhost:5001' 
           : window.location.origin;
         return `${baseUrl}${inputUrl}`;
       }
@@ -661,7 +663,7 @@ const Watch = () => {
       if (window.location.hostname !== 'localhost' && 
           (inputUrl.includes('localhost') || inputUrl.includes('127.0.0.1'))) {
         // Replace localhost with production domain
-        return inputUrl.replace(/http:\/\/(localhost|127\.0\.0\.1):5000/, window.location.origin);
+        return inputUrl.replace(/http:\/\/(localhost|127\.0\.0\.1):(5000|5001)/, window.location.origin);
       }
       
       return inputUrl;
@@ -671,7 +673,7 @@ const Watch = () => {
     if (inputUrl.includes('localhost') || inputUrl.includes('127.0.0.1')) {
       // But fix them if we're in production
       if (window.location.hostname !== 'localhost') {
-        return inputUrl.replace(/http:\/\/(localhost|127\.0\.0\.1):5000/, window.location.origin);
+        return inputUrl.replace(/http:\/\/(localhost|127\.0\.0\.1):(5000|5001)/, window.location.origin);
       }
       return inputUrl;
     }
@@ -695,7 +697,7 @@ const Watch = () => {
   const pickPlaybackUrl = () => {
     if (!video) return undefined;
 
-    // HLS-only mode: only consider HLS playlist URLs.
+    // Support direct uploaded videos (MP4, MKV, WebM, etc.)
     const baseCandidates = [video.hlsUrl, video.videoUrl, video.cdnUrl];
 
     const candidates = selectedSource
@@ -708,7 +710,12 @@ const Watch = () => {
       : baseCandidates;
 
     const isHlsUrl = (u) => typeof u === 'string' && (u.includes('/api/hls/') || u.includes('.m3u8'));
+    const isDirectVideo = (u) => typeof u === 'string' && (
+      u.endsWith('.mp4') || u.endsWith('.mkv') || u.endsWith('.webm') || 
+      u.endsWith('.avi') || u.endsWith('.mov') || u.endsWith('.flv')
+    );
     const isLocalhostUrl = (u) => typeof u === 'string' && (u.includes('localhost') || u.includes('127.0.0.1'));
+    const isCdnUrl = (u) => typeof u === 'string' && u.includes('b-cdn.net');
 
     // Support localhost URLs for local development/testing
     const localhostCandidate = candidates.find(
@@ -719,15 +726,51 @@ const Watch = () => {
       return localhostCandidate; // Don't normalize localhost URLs
     }
 
-    // Prefer proxy URLs for HLS.
+    // If CDN failed, convert to proxy URL
+    if (useCdnFallback) {
+      const cdnCandidate = candidates.find((u) => isCdnUrl(u) && isHlsUrl(u));
+      if (cdnCandidate) {
+        // Convert CDN URL to proxy URL
+        const match = cdnCandidate.match(/\/videos\/([^\/]+)\/([^\/]+)\/(.+)/);
+        if (match) {
+          const [, userId, videoId, file] = match;
+          const proxyUrl = `/api/hls/${userId}/${videoId}/${file}`;
+          console.log('🔄 Using proxy fallback:', proxyUrl);
+          return normalizePlaybackUrl(proxyUrl);
+        }
+      }
+    }
+
+    // 1. Prefer direct video files (MP4, MKV, etc.) from CDN
+    const directVideoCdn = candidates.find(
+      (u) => isCdnUrl(u) && isDirectVideo(u) && u.trim().length > 0 && !isPlaceholderUrl(u)
+    );
+    if (directVideoCdn) {
+      console.log('🎥 Using direct video from CDN:', directVideoCdn);
+      return directVideoCdn;
+    }
+
+    // 2. Prefer CDN URLs for HLS
+    const cdnCandidate = candidates.find(
+      (u) => isCdnUrl(u) && isHlsUrl(u) && u.trim().length > 0 && !isPlaceholderUrl(u)
+    );
+    
+    // 3. Fallback to proxy URLs for HLS
     const proxyCandidate = candidates.find(
       (u) => isHlsUrl(u) && u.includes('/api/hls/') && u.trim().length > 0 && !isPlaceholderUrl(u)
     );
+    
+    // 4. Any HLS URL
     const firstHlsCandidate = candidates.find(
       (u) => isHlsUrl(u) && u.trim().length > 0 && !isPlaceholderUrl(u)
     );
 
-    return normalizePlaybackUrl(proxyCandidate || firstHlsCandidate);
+    // 5. Any direct video file
+    const directVideoFallback = candidates.find(
+      (u) => isDirectVideo(u) && u.trim().length > 0 && !isPlaceholderUrl(u)
+    );
+
+    return normalizePlaybackUrl(cdnCandidate || proxyCandidate || firstHlsCandidate || directVideoFallback);
   };
 
   const playbackUrl = pickPlaybackUrl();
@@ -965,6 +1008,19 @@ const Watch = () => {
                     console.error('❌ ReactPlayer error:', e);
                     console.error('Video URL:', playbackUrl);
                     console.error('Is HLS:', isHlsPlayback);
+                    console.error('Is CDN URL:', playbackUrl?.includes('b-cdn.net'));
+                    
+                    // If CDN URL failed and we haven't tried fallback yet, try proxy
+                    if (playbackUrl?.includes('b-cdn.net') && cdnErrorCountRef.current < 2) {
+                      cdnErrorCountRef.current++;
+                      console.log('🔄 CDN failed, trying proxy fallback...');
+                      setUseCdnFallback(true);
+                      setError(''); // Clear error to retry
+                      setTimeout(() => {
+                        setPlaying(true); // Auto-play after fallback
+                      }, 500);
+                      return;
+                    }
                     
                     let errorMsg = 'Failed to play video. ';
                     if (!playbackUrl) {

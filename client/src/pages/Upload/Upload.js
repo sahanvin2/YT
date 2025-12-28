@@ -353,8 +353,8 @@ const Upload = () => {
                 (progressEvent.loaded * 100) / progressEvent.total
               );
               setUploadProgress(percentCompleted);
-            }
-          }
+              
+            
         });
 
         setUploadProgress(100);
@@ -372,42 +372,43 @@ const Upload = () => {
           });
         }, 500);
 
-        // Wait a bit for processing
-        setTimeout(() => {
-          clearInterval(processingInterval);
-          setProcessingProgress(100);
-          setUploadStatus('completed');
-          const uploadedVideoId = res.data.data._id;
+        // Video uploaded successfully - processing in background
+        clearInterval(processingInterval);
+        setProcessingProgress(100);
+        setUploadStatus('completed');
+        const uploadedVideoId = res.data?.data?._id || res.data?.video?._id;
+        if (uploadedVideoId) {
           setVideoLink(`/watch/${uploadedVideoId}`);
-          
-          // Show success message and reset form for next upload
-          setTimeout(() => {
-            // Reset form for next upload
-            setUploadStatus('idle');
-            setUploadProgress(0);
-            setProcessingProgress(0);
-            setVideoFile(null);
-            setThumbnailFile(null);
-            setVideoPreview(null);
-            setThumbnailPreview(null);
-            setFormData({
-              title: '',
-              description: ' ',
-              mainCategory: 'movies',
-              primaryGenre: 'action',
-              secondaryGenres: [],
-              subCategory: '',
-              tags: '',
-              visibility: 'public',
-              playlist: ''
-            });
-            setActiveTab('information');
-            if (fileInputRef.current) fileInputRef.current.value = '';
-            if (thumbnailInputRef.current) thumbnailInputRef.current.value = '';
-            
-            // Success - video is processing in background
-            console.log('✅ Video uploaded successfully:', uploadedVideoId);
-          }, 2000);
+          console.log('✅ Video uploaded successfully:', uploadedVideoId, '- Processing in background');
+        }
+        
+        // Auto-reset form for next upload after showing success message
+        setTimeout(() => {
+          setUploadStatus('idle');
+          setUploadProgress(0);
+          setProcessingProgress(0);
+          setVideoFile(null);
+          setThumbnailFile(null);
+          setSubtitleFiles([]);
+          setVideoPreview(null);
+          setThumbnailPreview(null);
+          setFormData({
+            title: '',
+            description: ' ',
+            mainCategory: 'movies',
+            primaryGenre: 'action',
+            secondaryGenres: [],
+            subCategory: '',
+            tags: '',
+            visibility: 'public',
+            playlist: ''
+          });
+          setActiveTab('information');
+          if (fileInputRef.current) fileInputRef.current.value = '';
+          if (thumbnailInputRef.current) thumbnailInputRef.current.value = '';
+          if (subtitleInputRef.current) subtitleInputRef.current.value = '';
+          setVideoLink('');
+          setError('');
         }, 3000);
       } else {
         // Presigned upload
@@ -448,16 +449,20 @@ const Upload = () => {
 
         setProcessingProgress(100);
         setUploadStatus('completed');
-        const uploadedVideoId = createRes.data.data._id;
-        setVideoLink(`/watch/${uploadedVideoId}`);
+        const uploadedVideoId = createRes.data?.data?._id || createRes.data?.video?._id;
+        if (uploadedVideoId) {
+          setVideoLink(`/watch/${uploadedVideoId}`);
+          console.log('✅ Video uploaded successfully:', uploadedVideoId);
+        }
         
+        // Auto-reset form for next upload after showing success message
         setTimeout(() => {
-          // Reset form for next upload
           setUploadStatus('idle');
           setUploadProgress(0);
           setProcessingProgress(0);
           setVideoFile(null);
           setThumbnailFile(null);
+          setSubtitleFiles([]);
           setVideoPreview(null);
           setThumbnailPreview(null);
           setFormData({
@@ -474,15 +479,28 @@ const Upload = () => {
           setActiveTab('information');
           if (fileInputRef.current) fileInputRef.current.value = '';
           if (thumbnailInputRef.current) thumbnailInputRef.current.value = '';
-          
-          // Success - video is processing in background
-          console.log('✅ Video uploaded successfully:', uploadedVideoId);
-        }, 2000);
+          if (subtitleInputRef.current) subtitleInputRef.current.value = '';
+          setVideoLink('');
+          setError('');
+        }, 3000);
       }
     } catch (err) {
-      setError(err.response?.data?.message || err.message || 'Failed to upload video');
-      setUploadStatus('error');
       console.error('Upload error:', err);
+      
+      // Better error handling
+      let errorMessage = 'Failed to upload video';
+      
+      if (err.code === 'ERR_NETWORK' || err.message === 'Network Error') {
+        errorMessage = 'Network error - Please check your internet connection and ensure the backend server is running on port 5001';
+      } else if (err.response?.data?.message) {
+        errorMessage = err.response.data.message;
+      } else if (err.message) {
+        errorMessage = err.message;
+      }
+      
+      setError(errorMessage);
+      setUploadStatus('error');
+      setLoading(false);
     } finally {
       setLoading(false);
     }
@@ -919,21 +937,21 @@ const Upload = () => {
                       <label className="checkbox-label">
               <input
                 type="checkbox"
-                checked={usePresigned}
-                onChange={(e) => setUsePresigned(e.target.checked)}
+                checked={directUpload}
+                onChange={(e) => setDirectUpload(e.target.checked)}
                         />
-                        <span>Use direct browser upload (presigned) for large files</span>
+                        <span>⚡ Direct Upload (No Processing) - Upload videos instantly without HLS conversion</span>
             </label>
+                      <small style={{ color: '#888', display: 'block', marginTop: '5px' }}>
+                        Recommended for testing large files. Videos play directly in MP4/MKV/WebM format.
+                      </small>
           </div>
-                  </div>
-                </>
-              )}
-
-              {error && (
-                <div className="error-message">
-                  <FiAlertCircle size={18} />
-                  <span>{error}</span>
-                </div>
+          <div className="form-group">
+                      <label className="checkbox-label">
+              <input
+                type="checkbox"
+                checked={usePresigned}
+                onChange={(e) => setUsePresigned(e.target.checked)
               )}
 
           <div className="form-actions">
@@ -1088,21 +1106,21 @@ const Upload = () => {
                         {uploadStatus === 'uploading' ? uploadProgress : processingProgress}%
                       </span>
                     </div>
-                    <div className="upload-status-info">
-                      <div className="status-info-item">
-                        <span className="status-label">File name</span>
-                        <span className="status-value">{videoFile?.name || 'Unknown'}</span>
-                      </div>
-                      <div className="status-info-item">
-                        <span className="status-label">File size</span>
-                        <span className="status-value">{videoFile ? formatFileSize(videoFile.size) : '0 B'}</span>
-                      </div>
-                    </div>
-                  </div>
-                )}
-
-                {uploadStatus === 'completed' && (
-                  <div className="upload-completed">
+                    
+                    {uploadStatus === 'uploading' && (
+                      <div className="upload-speed-stats">
+                        <div className="speed-stat-item">
+                          <span className="stat-label">📊 Upload Speed</span>
+                          <span className="stat-value">{uploadSpeed.toFixed(2)} MB/s</span>
+                        </div>
+                        <div className="speed-stat-item">
+                          <span className="stat-label">📦 Uploaded</span>
+                          <span className="stat-value">
+                            {(uploadedSize / (1024 * 1024)).toFixed(1)} MB / {(totalSize / (1024 * 1024)).toFixed(1)} MB
+                          </span>
+                        </div>
+                        <div className="speed-stat-item">
+                    iv className="upload-completed">
                     <div className="completed-icon">
                       <FiCheck size={48} />
                     </div>

@@ -452,6 +452,8 @@ exports.uploadVideo = async (req, res, next) => {
     const tmpVideoPath = path.join(tmpDir, `upload_${req.user.id}_${ts}${videoExt}`);
     
     console.log(`📥 Receiving upload: ${videoFile.name} (${Math.round(videoFile.size / 1024 / 1024)}MB)`);
+    
+    console.log(`📥 Receiving upload: ${videoFile.name} (${Math.round(videoFile.size / 1024 / 1024)}MB)`);
     await videoFile.mv(tmpVideoPath);
 
     // Thumbnail handling
@@ -513,6 +515,21 @@ exports.uploadVideo = async (req, res, next) => {
       duration = 0;
     }
 
+    // Parse secondaryGenres safely
+    let parsedSecondaryGenres = [];
+    if (secondaryGenres) {
+      try {
+        parsedSecondaryGenres = typeof secondaryGenres === 'string' 
+          ? JSON.parse(secondaryGenres) 
+          : secondaryGenres;
+      } catch (err) {
+        console.error('Failed to parse secondaryGenres:', err);
+        parsedSecondaryGenres = [];
+      }
+    }
+
+    await videoFile.mv(tmpVideoPath);
+
     // Create video record with queued status
     const video = await Video.create({
       title,
@@ -523,7 +540,7 @@ exports.uploadVideo = async (req, res, next) => {
       duration,
       mainCategory: mainCategory || 'movies',
       primaryGenre: primaryGenre || 'action',
-      secondaryGenres: secondaryGenres ? JSON.parse(secondaryGenres) : [],
+      secondaryGenres: parsedSecondaryGenres,
       subCategory: subCategory || '',
       tags: tags ? tags.split(',').map(t => t.trim()) : [],
       visibility: visibility || 'public',
@@ -562,7 +579,9 @@ exports.uploadVideo = async (req, res, next) => {
       message: 'Video uploaded successfully! Processing to HLS format with GPU acceleration (NVIDIA NVENC). This will take a few minutes.'
     });
   } catch (error) {
-    res.status(500).json({ success: false, message: error.message });
+    console.error('❌ Video upload error:', error);
+    console.error('Error stack:', error.stack);
+    res.status(500).json({ success: false, message: error.message, error: error.toString() });
   }
 };
 

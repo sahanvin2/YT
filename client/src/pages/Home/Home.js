@@ -155,8 +155,15 @@ const Home = ({ mode }) => {
       }
       setError('');
     } catch (err) {
-      setError('Failed to load videos');
-      console.error(err);
+      const errorMsg = err.response?.data?.message || err.message || 'Failed to load videos';
+      setError(errorMsg);
+      console.error('❌ Failed to load videos:', err);
+      console.error('Error details:', {
+        message: err.message,
+        response: err.response?.data,
+        status: err.response?.status,
+        config: err.config
+      });
     } finally {
       setLoading(false);
     }

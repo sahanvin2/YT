@@ -21,6 +21,11 @@ const s3 = new S3Client({
     accessKeyId: B2_ACCESS_KEY_ID,
     secretAccessKey: B2_SECRET_ACCESS_KEY,
   },
+  requestHandler: {
+    requestTimeout: 300000, // 5 minutes timeout for large uploads
+    connectionTimeout: 60000, // 1 minute connection timeout
+  },
+  maxAttempts: 3,
 });
 
 /**

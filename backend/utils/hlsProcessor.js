@@ -4,6 +4,8 @@ const ffprobePath = require('ffprobe-static').path;
 const path = require('path');
 const fs = require('fs');
 const { uploadFilePath } = require('./b2');
+const UploadTracker = require('./uploadTracker');
+const { verifyHLSUpload } = require('./verifyUpload');
 
 // Configure FFmpeg paths
 ffmpeg.setFfmpegPath(ffmpegPath);
@@ -156,7 +158,7 @@ function processQualityVariant(inputPath, outputDir, quality, onProgress) {
       .videoCodec('h264_nvenc')
       .outputOptions([
         // NVENC-specific options
-        '-preset p4', // Medium quality/speed (p1=fastest, p7=slowest/best)
+        '-preset p2', // Fast encoding (p1=fastest, p7=slowest/best) - 2x faster!
         '-tune hq', // High quality tuning
         '-profile:v high', // H.264 High Profile
         '-level 4.1',
@@ -180,7 +182,7 @@ function processQualityVariant(inputPath, outputDir, quality, onProgress) {
       // HLS options
       .outputOptions([
         '-f hls',
-        '-hls_time 6', // 6-second segments (good balance)
+        '-hls_time 4', // 4-second segments (faster processing)
         '-hls_list_size 0', // Keep all segments in playlist
         '-hls_segment_filename', segmentPattern,
         '-hls_flags independent_segments', // Better seeking
@@ -250,8 +252,10 @@ function createMasterPlaylist(outputDir, variants) {
 async function uploadHLSToB2(localDir, videoId, userId) {
   const uploadedFiles = [];
   const failedUploads = [];
+  const startTime = Date.now();
   
   console.log(`☁️  Uploading HLS files to B2...`);
+  console.log(`   🚀 Starting upload at ${new Date().toLocaleTimeString()}`);
   
   // Upload master playlist
   const masterPath = path.join(localDir, 'master.m3u8');
@@ -289,88 +293,181 @@ async function uploadHLSToB2(localDir, videoId, userId) {
   }
 
   console.log(`   📦 Found ${filesToUpload.length} files to upload`);
+  console.log(`   🚀 Starting upload at ${new Date().toLocaleTimeString()}`);
+
+  // Create upload tracker
+  const tracker = new UploadTracker(videoId, filesToUpload.length);
 
   // Upload in parallel batches - optimized for speed + reliability
-  // 8 files at once = good balance between speed and stability
-  const BATCH_SIZE = 8; // Upload 8 files at once (balanced)
+  // Reduced batch size for better stability with large files
+  const BATCH_SIZE = 5; // Upload 5 files at once (more stable for large videos)
   let uploadedCount = 0;
+  let lastProgressTime = Date.now();
+  let consecutiveFailures = 0;
+  const STALL_TIMEOUT = 90000; // 90 seconds - detect stalled uploads faster
+  const MAX_CONSECUTIVE_FAILURES = 3;
   
-  for (let i = 0; i < filesToUpload.length; i += BATCH_SIZE) {
-    const batch = filesToUpload.slice(i, i + BATCH_SIZE);
-    
-    try {
-      const uploadPromises = batch.map(async ({ localFile, b2Key, contentType }) => {
-        try {
-          const url = await uploadFilePath(localFile, b2Key, contentType);
-          return { success: true, url };
-        } catch (error) {
-          console.error(`   ⚠️ Failed to upload ${path.basename(localFile)}:`, error.message);
-          return { success: false, error: error.message, localFile, b2Key, contentType };
-        }
-      });
-      
-      const results = await Promise.all(uploadPromises);
-      const successCount = results.filter(r => r.success).length;
-      uploadedCount += successCount;
-
-      // Track failed uploads so we can retry after the first pass.
-      failedUploads.push(...results.filter(r => !r.success));
-      
-      uploadedFiles.push(...results.filter(r => r.success).map(r => ({ 
-        type: 'segment', 
-        url: r.url 
-      })));
-      
-      const percentComplete = Math.round((uploadedCount / filesToUpload.length) * 100);
-      console.log(`   ⬆️  Uploaded ${uploadedCount}/${filesToUpload.length} files (${percentComplete}%)`);
-      
-      if (successCount < batch.length) {
-        const failedCount = batch.length - successCount;
-        console.warn(`   ⚠️ ${failedCount} files failed in this batch`);
-      }
-      
-      // Reduced delay for faster uploads while maintaining stability
-      if (i + BATCH_SIZE < filesToUpload.length) {
-        await new Promise(resolve => setTimeout(resolve, 250)); // 250ms delay (faster)
-      }
-    } catch (error) {
-      console.error(`   ❌ Batch upload error:`, error.message);
-      throw error;
+  // Heartbeat to show upload is alive
+  const heartbeat = setInterval(() => {
+    const elapsed = Date.now() - lastProgressTime;
+    if (elapsed > 30000) { // 30 seconds without progress
+      console.log(`   💓 Upload in progress... ${uploadedCount}/${filesToUpload.length} (${Math.round(uploadedCount/filesToUpload.length*100)}%)`);
     }
+  }, 30000);
+  
+  try {
+    for (let i = 0; i < filesToUpload.length; i += BATCH_SIZE) {
+      const batch = filesToUpload.slice(i, i + BATCH_SIZE);
+      
+      // Detect stalled upload and adapt
+      const timeSinceProgress = Date.now() - lastProgressTime;
+      if (timeSinceProgress > STALL_TIMEOUT) {
+        console.warn(`⚠️ Upload stalled for ${Math.round(timeSinceProgress/1000)}s. Reducing batch size and retrying...`);
+        // Reduce batch size dramatically when stalled
+        const smallBatch = batch.slice(0, 1); // Try just 1 file at a time
+        i = i - BATCH_SIZE + 1; // Adjust index
+        continue;
+      }
+      
+      try {
+        const uploadPromises = batch.map(async ({ localFile, b2Key, contentType }) => {
+          try {
+            // Timeout wrapper for individual file uploads (2 minutes per file)
+            const uploadPromise = uploadFilePath(localFile, b2Key, contentType);
+            const timeoutPromise = new Promise((_, reject) => 
+              setTimeout(() => reject(new Error('Upload timeout after 120s')), 120000)
+            );
+            
+            const url = await Promise.race([uploadPromise, timeoutPromise]);
+            lastProgressTime = Date.now(); // Update progress time on success
+            consecutiveFailures = 0; // Reset failure counter
+            return { success: true, url };
+          } catch (error) {
+            console.error(`   ⚠️ Failed to upload ${path.basename(localFile)}:`, error.message);
+            return { success: false, error: error.message, localFile, b2Key, contentType };
+          }
+        });
+        
+        const results = await Promise.all(uploadPromises);
+        const successCount = results.filter(r => r.success).length;
+        uploadedCount += successCount;
+
+        // Track consecutive failures
+        if (successCount === 0) {
+          consecutiveFailures++;
+          if (consecutiveFailures >= MAX_CONSECUTIVE_FAILURES) {
+            console.error(`❌ ${consecutiveFailures} consecutive batch failures. Pausing 5s before continuing...`);
+            await new Promise(resolve => setTimeout(resolve, 5000));
+            consecutiveFailures = 0; // Reset after pause
+          }
+        }
+
+        // Track failed uploads so we can retry after the first pass.
+        failedUploads.push(...results.filter(r => !r.success));
+        
+        uploadedFiles.push(...results.filter(r => r.success).map(r => ({ 
+          type: 'segment', 
+          url: r.url 
+        })));
+        
+        const percentComplete = Math.round((uploadedCount / filesToUpload.length) * 100);
+        const elapsed = Math.round((Date.now() - startTime) / 1000);
+        
+        // Update tracker
+        const progress = tracker.updateProgress(uploadedCount, failedUploads.length);
+        const eta = progress.estimatedRemaining ? `ETA: ${Math.round(progress.estimatedRemaining / 60)}m` : '';
+        
+        console.log(`   ⬆️  Uploaded ${uploadedCount}/${filesToUpload.length} files (${percentComplete}%) - ${elapsed}s elapsed ${eta}`);
+        
+        if (successCount < batch.length) {
+          const failedCount = batch.length - successCount;
+          console.warn(`   ⚠️ ${failedCount} files failed in this batch`);
+        }
+        
+        // Reduced delay for faster uploads while maintaining stability
+        if (i + BATCH_SIZE < filesToUpload.length) {
+          await new Promise(resolve => setTimeout(resolve, 100)); // 100ms delay (even faster)
+      }
+      } catch (error) {
+        console.error(`   ❌ Batch upload error:`, error.message);
+        // Don't throw immediately - try to continue with remaining batches
+    tracker.complete(); // Clean up progress file
+        console.log(`   🔄 Continuing with next batch...`);
+      }
+    }
+  } finally {
+    clearInterval(heartbeat); // Stop heartbeat
   }
 
-  console.log(`✅ All HLS files uploaded (${uploadedFiles.length} total)`);
+  const uploadDuration = Math.round((Date.now() - startTime) / 1000);
+  console.log(`✅ All HLS files uploaded (${uploadedFiles.length} total) in ${uploadDuration}s`);
+
+  // Verify upload completeness
+  const expectedFiles = filesToUpload.length + 1; // +1 for master playlist
+  const actualFiles = uploadedFiles.length;
+  
+  if (actualFiles < expectedFiles) {
+    const missing = expectedFiles - actualFiles;
+    console.warn(`⚠️ Upload verification: ${missing} files may be missing`);
+    console.warn(`   Expected: ${expectedFiles}, Got: ${actualFiles}`);
+    
+    // If critical files missing, throw error
+    if (missing > filesToUpload.length * 0.1) { // More than 10% missing
+      throw new Error(`Too many files missing (${missing}/${expectedFiles}). Upload incomplete.`);
+    }
+  } else {
+    console.log(`✅ Upload verification passed: All ${actualFiles} files confirmed`);
+  }
 
   // Second pass: retry anything that failed in the first pass.
   if (failedUploads.length > 0) {
     console.warn(`⚠️ Retrying ${failedUploads.length} failed uploads...`);
 
     const stillFailed = [];
-    const RETRY_BATCH_SIZE = 5; // Smaller retry batch for better stability
+    const RETRY_BATCH_SIZE = 3; // Even smaller retry batch for maximum stability
+    const MAX_RETRY_ATTEMPTS = 3; // Try each failed file up to 3 times
 
-    for (let i = 0; i < failedUploads.length; i += RETRY_BATCH_SIZE) {
-      const batch = failedUploads.slice(i, i + RETRY_BATCH_SIZE);
+    for (let retryAttempt = 1; retryAttempt <= MAX_RETRY_ATTEMPTS; retryAttempt++) {
+      console.log(`   🔁 Retry attempt ${retryAttempt}/${MAX_RETRY_ATTEMPTS}`);
+      const toRetry = retryAttempt === 1 ? failedUploads : stillFailed;
+      stillFailed.length = 0; // Clear for this attempt
 
-      const retryResults = await Promise.all(batch.map(async (item) => {
-        try {
-          const url = await uploadFilePath(item.localFile, item.b2Key, item.contentType);
-          return { success: true, url };
-        } catch (error) {
-          return { success: false, error: error.message, ...item };
+      for (let i = 0; i < toRetry.length; i += RETRY_BATCH_SIZE) {
+        const batch = toRetry.slice(i, i + RETRY_BATCH_SIZE);
+
+        const retryResults = await Promise.all(batch.map(async (item) => {
+          try {
+            const url = await uploadFilePath(item.localFile, item.b2Key, item.contentType);
+            return { success: true, url };
+          } catch (error) {
+            return { success: false, error: error.message, ...item };
+          }
+        }));
+
+        const retrySuccess = retryResults.filter(r => r.success);
+        const retryFailed = retryResults.filter(r => !r.success);
+
+        uploadedFiles.push(...retrySuccess.map(r => ({ type: 'segment', url: r.url })));
+        stillFailed.push(...retryFailed);
+
+        console.log(`   🔁 Retry progress: recovered ${retrySuccess.length}/${batch.length}`);
+        
+        // Longer delay for retries to avoid rate limiting
+        if (i + RETRY_BATCH_SIZE < toRetry.length) {
+          await new Promise(resolve => setTimeout(resolve, 1000)); // 1 second delay for retries
         }
-      }));
+      }
 
-      const retrySuccess = retryResults.filter(r => r.success);
-      const retryFailed = retryResults.filter(r => !r.success);
+      // If all files uploaded successfully, break early
+      if (stillFailed.length === 0) {
+        console.log(`✅ All failed uploads recovered on attempt ${retryAttempt}`);
+        break;
+      }
 
-      uploadedFiles.push(...retrySuccess.map(r => ({ type: 'segment', url: r.url })));
-      stillFailed.push(...retryFailed);
-
-      console.log(`   🔁 Retry progress: recovered ${retrySuccess.length}/${batch.length}`);
-      
-      // Faster retry delays
-      if (i + RETRY_BATCH_SIZE < failedUploads.length) {
-        await new Promise(resolve => setTimeout(resolve, 500)); // 500ms delay for retries
+      // Wait between full retry attempts
+      if (retryAttempt < MAX_RETRY_ATTEMPTS && stillFailed.length > 0) {
+        console.log(`   ⏳ Waiting 3 seconds before next retry attempt...`);
+        await new Promise(resolve => setTimeout(resolve, 3000));
       }
     }
 
@@ -424,16 +521,22 @@ async function processVideoToHLS(inputPath, videoId, userId, onProgress) {
     const outputDir = path.join(tmpDir, `hls_${videoId}`);
     fs.mkdirSync(outputDir, { recursive: true });
     
-    // Process each quality variant
+    // Process quality variants in parallel for faster encoding
+    // Encode 2 qualities at once (GPU can handle it!)
     const variants = [];
-    for (const quality of qualities) {
-      const result = await processQualityVariant(
-        inputPath, 
-        outputDir, 
-        quality, 
-        onProgress
+    const PARALLEL_ENCODE = 2; // Encode 2 qualities simultaneously
+    
+    for (let i = 0; i < qualities.length; i += PARALLEL_ENCODE) {
+      const batch = qualities.slice(i, i + PARALLEL_ENCODE);
+      console.log(`🔄 Encoding batch: ${batch.join(', ')}`);
+      
+      const batchResults = await Promise.all(
+        batch.map(quality => 
+          processQualityVariant(inputPath, outputDir, quality, onProgress)
+        )
       );
-      variants.push(result);
+      
+      variants.push(...batchResults);
     }
     
     // Create master playlist
@@ -444,6 +547,16 @@ async function processVideoToHLS(inputPath, videoId, userId, onProgress) {
     
     // Get master playlist URL
     const masterUrl = uploadedFiles.find(f => f.type === 'master')?.url;
+    
+    // Verify upload completed successfully
+    console.log(`\n🔍 Verifying upload integrity...`);
+    const verification = await verifyHLSUpload(masterUrl, qualities);
+    
+    if (verification.status === 'failed') {
+      throw new Error('Upload verification failed: Master playlist not accessible');
+    } else if (verification.status === 'partial') {
+      console.warn(`⚠️ Some variants may be missing, but upload can proceed`);
+    }
     
     // Cleanup local files
     console.log(`🧹 Cleaning up temporary files...`);

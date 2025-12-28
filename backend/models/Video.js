@@ -37,15 +37,16 @@ const VideoSchema = new mongoose.Schema({
     required: true,
     default: 'action'
   },
-  secondaryGenres: [{ 
-    type: String,
+  secondaryGenres: {
+    type: [String],
     validate: {
       validator: function(v) {
         return v.length <= 2; // Max 2 secondary genres
       },
       message: 'Maximum 2 secondary genres allowed'
-    }
-  }],
+    },
+    default: []
+  },
   subCategory: { type: String, default: null }, // Optional level 3
   
   // Legacy field for backwards compatibility (deprecated)

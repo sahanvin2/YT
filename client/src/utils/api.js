@@ -11,7 +11,7 @@ export const uploadVideo = (formData, config = {}) => axios.post(`${API_URL}/vid
     'Content-Type': 'multipart/form-data'
   },
   onUploadProgress: config.onUploadProgress,
-  timeout: 600000 // 10 minutes for large files
+  timeout: 36000000 // 10 hours for large video processing (HLS encoding can take hours)
 });
 export const presignPut = (fileName, contentType) => axios.post(`${API_URL}/uploads/presign`, { fileName, contentType });
 export const createVideoFromUrl = (data) => axios.post(`${API_URL}/videos/create`, data);
