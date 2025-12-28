@@ -111,15 +111,23 @@ if (process.env.NODE_ENV === 'development') {
 // File uploading - 12GB max for HLS folders
 const maxSizeMb = parseInt(process.env.MAX_VIDEO_SIZE_MB || '12288'); // 12GB default
 const tempDir = path.join(__dirname, '../tmp');
-if (!fs.existsSync(tempDir)) fs.mkdirSync(tempDir, { recursive: true });
+const uploadsDir = path.join(__dirname, '../tmp/uploads');
+// Ensure temp directories exist with proper permissions
+[tempDir, uploadsDir].forEach(dir => {
+  if (!fs.existsSync(dir)) {
+    fs.mkdirSync(dir, { recursive: true });
+    console.log(`✅ Created directory: ${dir}`);
+  }
+});
+
 app.use(fileUpload({
   createParentPath: true,
-  useTempFiles: true,
-  tempFileDir: tempDir,
+  useTempFiles: false, // Use memory instead of temp files
   limits: { fileSize: maxSizeMb * 1024 * 1024 },
   abortOnLimit: false,
   responseOnLimit: `File size limit exceeded. Maximum allowed: ${maxSizeMb}MB (${Math.round(maxSizeMb/1024)}GB)`,
-  uploadTimeout: 1200000 // 20 minutes timeout for large HLS folders
+  uploadTimeout: 1200000, // 20 minutes timeout for large HLS folders
+  debug: process.env.NODE_ENV === 'development' // Enable debug in dev mode
 }));
 
 // Enable CORS
