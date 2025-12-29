@@ -30,25 +30,27 @@ const IMAGE_MAP = {
   'musical': 'Musical.jpg',
   'sports': 'Sport.jpg',
   'historical': 'Historicle.jpg',
-  'superhero': 'Superhero.jpg',  // Fixed: exact filename
+  'superhero': 'Superhero.jpg',
   'psychological': 'pschology.jpg',
   'survival': 'survive.jpg',
   'disaster': 'Disaster.jpg',
   'spy-espionage': 'Spy.jpg',
   'heist': 'Heist.jpg',
   'political': 'Political.jpg',
-  'martial-arts': 'Martial Arts.jpg',  // Fixed: has space in filename
+  'martial-arts': 'Martial Arts.jpg',  // Has space - will be URL encoded
   'anime': 'Anime.jpg',
   'mythology': 'Mythology.jpg'
 };
 
-// Get category image path with URL encoding for spaces
+// Get category image path - properly handle spaces and special characters
 export const getCategoryImagePath = (categoryId) => {
   const imageName = IMAGE_MAP[categoryId];
   if (imageName) {
-    // Encode spaces and special characters in the filename
-    const encodedName = encodeURIComponent(imageName);
-    return `/categories/${encodedName}`;
+    // For React/HTML img src, we need to encode the filename properly
+    // Split the path and encode only the filename part
+    const parts = imageName.split('/');
+    const encodedParts = parts.map(part => encodeURIComponent(part));
+    return `/categories/${encodedParts.join('/')}`;
   }
   // Fallback to a default image
   console.warn(`Category image not found for: ${categoryId}, using default`);
