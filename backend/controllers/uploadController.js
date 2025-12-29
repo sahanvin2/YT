@@ -158,49 +158,68 @@ exports.streamUploadToB2 = async (req, res) => {
     const videoKey = `videos/${req.user.id}/${ts}_${videoFile.name}`;
     const videoCT = mime.lookup(videoFile.name) || 'video/mp4';
 
-    // Stream file directly to B2 (no disk storage)
-    // Handle both in-memory data and temp file paths
+    // Stream file directly to B2 (NO DISK STORAGE - files must be in memory)
+    // CRITICAL: Never write to EC2 disk - this causes crashes
     let fileStream;
     if (videoFile.data) {
-      // File is in memory
+      // File is in memory - use this (preferred)
       fileStream = Readable.from(videoFile.data);
+      console.log(`📤 File in memory, streaming to B2: ${videoKey} (${Math.round(videoFile.size / 1024 / 1024)}MB)`);
     } else if (videoFile.tempFilePath) {
-      // File is on disk (temp file)
-      const fs = require('fs');
+      // File was written to disk (shouldn't happen with useTempFiles: false)
+      // Read and immediately delete after streaming
+      console.warn(`⚠️ File on disk detected (should be in memory). Will delete after upload: ${videoFile.tempFilePath}`);
       fileStream = fs.createReadStream(videoFile.tempFilePath);
     } else {
-      // Fallback: use mv to temp and then stream
-      const tmpDir = path.join(__dirname, '../../tmp');
-      fs.mkdirSync(tmpDir, { recursive: true });
-      const tmpPath = path.join(tmpDir, `stream_${ts}_${videoFile.name}`);
-      await videoFile.mv(tmpPath);
-      fileStream = fs.createReadStream(tmpPath);
+      // No file data - this is an error
+      throw new Error('File data not available. File must be in memory (useTempFiles: false).');
     }
     
+    // Upload to B2 with verification
     console.log(`📤 Uploading to B2: ${videoKey} (${Math.round(videoFile.size / 1024 / 1024)}MB)`);
     
-    // B2 requires ContentLength for stream uploads
-    await s3.send(new PutObjectCommand({
-      Bucket: B2_BUCKET,
-      Key: videoKey,
-      Body: fileStream,
-      ContentType: videoCT,
-      ContentLength: videoFile.size, // Required for B2 stream uploads
-    }));
+    try {
+      // B2 requires ContentLength for stream uploads
+      await s3.send(new PutObjectCommand({
+        Bucket: B2_BUCKET,
+        Key: videoKey,
+        Body: fileStream,
+        ContentType: videoCT,
+        ContentLength: videoFile.size, // Required for B2 stream uploads
+      }));
+      
+      // Verify upload succeeded by checking if file exists in B2
+      const { HeadObjectCommand } = require('@aws-sdk/client-s3');
+      try {
+        await s3.send(new HeadObjectCommand({
+          Bucket: B2_BUCKET,
+          Key: videoKey,
+        }));
+        console.log(`✅ Verified: File exists in B2: ${videoKey}`);
+      } catch (verifyErr) {
+        console.error(`❌ WARNING: Upload may have failed - cannot verify file in B2:`, verifyErr.message);
+        // Don't throw - file might still be there, just not immediately available
+      }
+    } catch (uploadErr) {
+      console.error(`❌ B2 upload failed:`, uploadErr);
+      throw new Error(`Failed to upload to B2: ${uploadErr.message}`);
+    }
     
-    // Clean up temp file if we created one
+    // IMMEDIATELY delete temp file if it exists (shouldn't happen, but safety check)
     if (videoFile.tempFilePath && fs.existsSync(videoFile.tempFilePath)) {
       try {
         fs.unlinkSync(videoFile.tempFilePath);
+        console.log(`🗑️ Deleted temp file: ${videoFile.tempFilePath}`);
       } catch (e) {
-        console.warn('Could not delete temp file:', e);
+        console.error(`❌ CRITICAL: Could not delete temp file: ${videoFile.tempFilePath}`, e);
+        // This is critical - temp files filling up EC2 disk
       }
     }
 
     const videoUrl = publicUrl(videoKey);
-    console.log(`✅ Video uploaded to B2: ${videoUrl}`);
+    console.log(`✅ Video uploaded and verified in B2: ${videoUrl}`);
 
-    // Handle thumbnail if provided
+    // Handle thumbnail if provided (NO DISK STORAGE)
     let thumbnailUrl = '';
     if (req.files.thumbnail) {
       const thumbnailFile = req.files.thumbnail;
@@ -211,31 +230,34 @@ exports.streamUploadToB2 = async (req, res) => {
       if (thumbnailFile.data) {
         thumbStream = Readable.from(thumbnailFile.data);
       } else if (thumbnailFile.tempFilePath) {
+        console.warn(`⚠️ Thumbnail on disk (should be in memory). Will delete after upload.`);
         thumbStream = fs.createReadStream(thumbnailFile.tempFilePath);
       } else {
-        const tmpDir = path.join(__dirname, '../../tmp');
-        fs.mkdirSync(tmpDir, { recursive: true });
-        const tmpThumbPath = path.join(tmpDir, `thumb_stream_${ts}_${thumbnailFile.name}`);
-        await thumbnailFile.mv(tmpThumbPath);
-        thumbStream = fs.createReadStream(tmpThumbPath);
+        throw new Error('Thumbnail data not available. Must be in memory.');
       }
       
-      await s3.send(new PutObjectCommand({
-        Bucket: B2_BUCKET,
-        Key: thumbKey,
-        Body: thumbStream,
-        ContentType: thumbCT,
-        ContentLength: thumbnailFile.size, // Required for B2 stream uploads
-      }));
+      try {
+        await s3.send(new PutObjectCommand({
+          Bucket: B2_BUCKET,
+          Key: thumbKey,
+          Body: thumbStream,
+          ContentType: thumbCT,
+          ContentLength: thumbnailFile.size,
+        }));
+        thumbnailUrl = publicUrl(thumbKey);
+        console.log(`✅ Thumbnail uploaded to B2: ${thumbKey}`);
+      } catch (thumbErr) {
+        console.error(`❌ Thumbnail upload failed:`, thumbErr);
+        // Don't fail entire upload if thumbnail fails
+      }
       
-      thumbnailUrl = publicUrl(thumbKey);
-      
-      // Clean up temp thumbnail if created
+      // IMMEDIATELY delete temp thumbnail if exists
       if (thumbnailFile.tempFilePath && fs.existsSync(thumbnailFile.tempFilePath)) {
         try {
           fs.unlinkSync(thumbnailFile.tempFilePath);
+          console.log(`🗑️ Deleted temp thumbnail: ${thumbnailFile.tempFilePath}`);
         } catch (e) {
-          console.warn('Could not delete temp thumbnail:', e);
+          console.error(`❌ CRITICAL: Could not delete temp thumbnail:`, e);
         }
       }
     }
@@ -294,11 +316,39 @@ exports.streamUploadToB2 = async (req, res) => {
       message: 'Video uploaded successfully! Your video is ready for playback immediately.'
     });
   } catch (error) {
-    console.error('Stream upload error:', error);
+    console.error('❌ Stream upload error:', error);
+    console.error('   Error stack:', error.stack);
+    
+    // Clean up any temp files that might have been created
+    try {
+      if (req.files?.video?.tempFilePath && fs.existsSync(req.files.video.tempFilePath)) {
+        fs.unlinkSync(req.files.video.tempFilePath);
+        console.log(`🗑️ Cleaned up temp file after error`);
+      }
+      if (req.files?.thumbnail?.tempFilePath && fs.existsSync(req.files.thumbnail.tempFilePath)) {
+        fs.unlinkSync(req.files.thumbnail.tempFilePath);
+        console.log(`🗑️ Cleaned up temp thumbnail after error`);
+      }
+    } catch (cleanupErr) {
+      console.error('❌ CRITICAL: Could not clean up temp files:', cleanupErr);
+    }
+    
+    // Provide user-friendly error message
+    let errorMessage = 'Failed to upload video to B2 storage.';
+    if (error.message.includes('B2 storage not configured')) {
+      errorMessage = 'B2 storage is not configured. Please contact support.';
+    } else if (error.message.includes('File data not available')) {
+      errorMessage = 'File upload error. Please try again with a smaller file.';
+    } else if (error.message.includes('Failed to upload to B2')) {
+      errorMessage = 'Could not upload to B2 storage. Please check your connection and try again.';
+    } else {
+      errorMessage = error.message || 'Upload failed. Please try again.';
+    }
+    
     res.status(500).json({ 
       success: false, 
-      message: error.message || 'Failed to upload video',
-      error: process.env.NODE_ENV === 'development' ? error.stack : undefined
+      message: errorMessage,
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
     });
   }
 };

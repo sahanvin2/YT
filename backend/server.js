@@ -114,27 +114,21 @@ if (process.env.NODE_ENV === 'development') {
   app.use(morgan('dev'));
 }
 
-// File uploading - 12GB max for HLS folders
-const maxSizeMb = parseInt(process.env.MAX_VIDEO_SIZE_MB || '12288'); // 12GB default
-const tempDir = path.join(__dirname, '../tmp');
-const uploadsDir = path.join(__dirname, '../tmp/uploads');
-// Ensure temp directories exist with proper permissions
-[tempDir, uploadsDir].forEach(dir => {
-  if (!fs.existsSync(dir)) {
-    fs.mkdirSync(dir, { recursive: true });
-    console.log(`✅ Created directory: ${dir}`);
-  }
-});
+// File uploading - CRITICAL: Keep files in memory, NEVER write to EC2 disk
+// This prevents EC2 disk from filling up and crashing the server
+const maxSizeMb = parseInt(process.env.MAX_VIDEO_SIZE_MB || '5120'); // 5GB max (reduced to prevent memory issues)
 
 app.use(fileUpload({
-  createParentPath: true,
-  useTempFiles: false, // Keep in memory for streaming to B2 (avoids disk storage)
+  createParentPath: false, // Don't create directories (we don't use disk)
+  useTempFiles: false, // CRITICAL: Keep in memory - NEVER write to EC2 disk
   limits: { fileSize: maxSizeMb * 1024 * 1024 },
-  abortOnLimit: false,
+  abortOnLimit: true, // Abort immediately if file too large
   responseOnLimit: `File size limit exceeded. Maximum allowed: ${maxSizeMb}MB (${Math.round(maxSizeMb/1024)}GB)`,
   uploadTimeout: 7200000, // 2 hours timeout for very large files (4GB+)
-  debug: process.env.NODE_ENV === 'development' // Enable debug in dev mode
+  debug: false // Disable debug to reduce logging
 }));
+
+console.log(`📦 File upload configured: In-memory only (max ${maxSizeMb}MB), NO disk storage`);
 
 // Enable CORS - Allow multiple origins
 const allowedOrigins = [
