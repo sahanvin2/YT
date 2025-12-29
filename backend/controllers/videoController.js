@@ -879,11 +879,17 @@ exports.updateVideo = async (req, res, next) => {
       // Delete old thumbnail if exists
       if (video.thumbnailUrl) {
         try {
-          // Extract key from old URL
-          const oldKey = video.thumbnailUrl.split('/').slice(-2).join('/');
-          if (oldKey) await deleteFile(oldKey);
+          // Extract key from old URL - handle both B2 and CDN URLs
+          // Use the extractKeyFromUrl utility function
+          const oldKey = extractKeyFromUrl(video.thumbnailUrl);
+          
+          if (oldKey && oldKey !== 'thumbnails/') {
+            console.log(`🗑️  Deleting old thumbnail: ${oldKey}`);
+            await deleteFile(oldKey);
+          }
         } catch (e) {
           console.error('Error deleting old thumbnail:', e);
+          // Don't fail the update if deletion fails
         }
       }
 
@@ -925,10 +931,20 @@ exports.updateVideo = async (req, res, next) => {
       runValidators: true
     });
 
+    // Convert URLs to CDN URLs for response
+    const videoObj = video.toObject();
+    if (videoObj.thumbnailUrl) {
+      videoObj.thumbnailUrl = cdnUrlFrom(videoObj.thumbnailUrl);
+    }
+    if (videoObj.videoUrl) {
+      videoObj.videoUrl = cdnUrlFrom(videoObj.videoUrl);
+      videoObj.cdnUrl = videoObj.videoUrl;
+    }
+
     res.status(200).json({
       success: true,
-      data: video,
-      video
+      data: videoObj,
+      video: videoObj
     });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });

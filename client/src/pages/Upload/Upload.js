@@ -401,13 +401,16 @@ const Upload = () => {
       const videoKey = presignRes.data.key;
 
       // Upload directly to B2 with progress tracking
-      await axios.put(putUrl, videoFile, {
-        headers: { 
-          'Content-Type': videoFile.type || 'video/mp4',
-          'Content-Length': videoFile.size
-        },
-        timeout: 7200000, // 2 hours for large files
-        onUploadProgress: (progressEvent) => {
+      try {
+        await axios.put(putUrl, videoFile, {
+          headers: { 
+            'Content-Type': videoFile.type || 'video/mp4',
+            'Content-Length': videoFile.size
+          },
+          timeout: 7200000, // 2 hours for large files
+          maxContentLength: Infinity,
+          maxBodyLength: Infinity,
+          onUploadProgress: (progressEvent) => {
           if (progressEvent.total) {
             const percentCompleted = Math.round(
               (progressEvent.loaded * 100) / progressEvent.total
@@ -445,7 +448,17 @@ const Upload = () => {
             }
           }
         }
-      });
+        });
+      } catch (uploadErr) {
+        console.error('B2 upload error:', uploadErr);
+        if (uploadErr.response) {
+          throw new Error(`B2 upload failed: ${uploadErr.response.status} ${uploadErr.response.statusText}`);
+        } else if (uploadErr.request) {
+          throw new Error('Network error: Could not connect to B2 storage. Please check your connection and try again.');
+        } else {
+          throw new Error(`Upload error: ${uploadErr.message}`);
+        }
+      }
 
       setUploadProgress(100);
       setUploadStatus('processing');
