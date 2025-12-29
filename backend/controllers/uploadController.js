@@ -67,7 +67,20 @@ exports.presignUpload = async (req, res) => {
     const key = `videos/${req.user.id}/${ts}_${fileName}`;
     // Extended expiration for large files (2 hours = 7200 seconds)
     const expiresIn = 7200;
+    
+    console.log(`📝 Generating presigned URL for: ${fileName} (${Math.round((fileSize || 0) / 1024 / 1024)}MB)`);
+    console.log(`   Key: ${key}`);
+    console.log(`   ContentType: ${contentType}`);
+    
     const url = await presignPut(key, contentType, expiresIn);
+    
+    if (!url) {
+      throw new Error('Failed to generate presigned URL - B2 configuration may be incorrect');
+    }
+    
+    console.log(`✅ Presigned URL generated successfully`);
+    console.log(`   URL: ${url.substring(0, 100)}...`);
+    
     res.json({ 
       success: true, 
       url, 
@@ -76,7 +89,12 @@ exports.presignUpload = async (req, res) => {
       expiresIn 
     });
   } catch (e) {
-    res.status(500).json({ success: false, message: e.message });
+    console.error('❌ Presign error:', e);
+    res.status(500).json({ 
+      success: false, 
+      message: e.message || 'Failed to generate upload URL',
+      error: process.env.NODE_ENV === 'development' ? e.stack : undefined
+    });
   }
 };
 

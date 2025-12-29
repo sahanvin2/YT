@@ -139,16 +139,36 @@ async function deleteFile(key) {
 async function presignPut(key, contentType, expires = 900) {
   if (isLocalDev || !s3) {
     // Return local URL for development
+    console.log('⚠️  Local dev mode - returning local URL instead of presigned URL');
     return publicUrl(key);
   }
   
-  const cmd = new PutObjectCommand({
-    Bucket: B2_BUCKET,
-    Key: key,
-    ContentType: contentType,
-    //ACL: 'public-read',
-  });
-  return await getSignedUrl(s3, cmd, { expiresIn: expires });
+  if (!B2_BUCKET || !B2_ENDPOINT) {
+    throw new Error('B2 storage not configured. Please set B2_BUCKET and B2_ENDPOINT environment variables.');
+  }
+  
+  try {
+    const cmd = new PutObjectCommand({
+      Bucket: B2_BUCKET,
+      Key: key,
+      ContentType: contentType,
+      //ACL: 'public-read',
+    });
+    
+    const signedUrl = await getSignedUrl(s3, cmd, { expiresIn: expires });
+    
+    if (!signedUrl) {
+      throw new Error('Failed to generate presigned URL - getSignedUrl returned empty');
+    }
+    
+    return signedUrl;
+  } catch (error) {
+    console.error('❌ Error generating presigned URL:', error);
+    console.error('   B2_BUCKET:', B2_BUCKET ? 'Set' : 'NOT SET');
+    console.error('   B2_ENDPOINT:', B2_ENDPOINT ? B2_ENDPOINT : 'NOT SET');
+    console.error('   Key:', key);
+    throw new Error(`Failed to generate presigned URL: ${error.message}`);
+  }
 }
 
 /**

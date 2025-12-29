@@ -386,19 +386,32 @@ const Upload = () => {
       setUploadStatus('uploading');
       
       // Get presigned URL for direct B2 upload
-      const presignRes = await presignPut(
-        videoFile.name, 
-        videoFile.type || 'video/mp4',
-        videoFile.size
-      );
+      let presignRes;
+      try {
+        presignRes = await presignPut(
+          videoFile.name, 
+          videoFile.type || 'video/mp4',
+          videoFile.size
+        );
+      } catch (presignErr) {
+        console.error('Presign request error:', presignErr);
+        throw new Error(`Failed to get upload URL: ${presignErr.response?.data?.message || presignErr.message}`);
+      }
       
-      if (!presignRes.data?.url) {
-        throw new Error('Failed to get presigned URL');
+      if (!presignRes?.data?.url) {
+        console.error('Presign response:', presignRes);
+        throw new Error('Server did not return a valid upload URL. Please check B2 configuration.');
       }
       
       const putUrl = presignRes.data.url;
       const publicUrl = presignRes.data.publicUrl;
       const videoKey = presignRes.data.key;
+      
+      console.log('📤 Uploading to B2:', {
+        url: putUrl.substring(0, 100) + '...',
+        key: videoKey,
+        size: Math.round(videoFile.size / 1024 / 1024) + 'MB'
+      });
 
       // Upload directly to B2 with progress tracking
       try {
@@ -451,12 +464,35 @@ const Upload = () => {
         });
       } catch (uploadErr) {
         console.error('B2 upload error:', uploadErr);
-        if (uploadErr.response) {
-          throw new Error(`B2 upload failed: ${uploadErr.response.status} ${uploadErr.response.statusText}`);
+        console.error('Error details:', {
+          message: uploadErr.message,
+          code: uploadErr.code,
+          response: uploadErr.response?.data,
+          status: uploadErr.response?.status,
+          statusText: uploadErr.response?.statusText
+        });
+        
+        if (uploadErr.code === 'ECONNABORTED' || uploadErr.message.includes('timeout')) {
+          throw new Error('Upload timeout: The file is too large or connection is too slow. Please try again with a smaller file or better connection.');
+        } else if (uploadErr.response) {
+          const status = uploadErr.response.status;
+          const statusText = uploadErr.response.statusText;
+          const errorMsg = uploadErr.response.data?.message || uploadErr.response.data?.error || statusText;
+          
+          if (status === 403) {
+            throw new Error('Access denied: The upload URL has expired or is invalid. Please try again.');
+          } else if (status === 400) {
+            throw new Error(`Invalid request: ${errorMsg}`);
+          } else if (status >= 500) {
+            throw new Error(`B2 storage error (${status}): ${errorMsg || 'Please try again later.'}`);
+          } else {
+            throw new Error(`Upload failed (${status}): ${errorMsg || statusText}`);
+          }
         } else if (uploadErr.request) {
-          throw new Error('Network error: Could not connect to B2 storage. Please check your connection and try again.');
+          // Request was made but no response received
+          throw new Error('Network error: Could not connect to B2 storage. Please check your internet connection and try again.');
         } else {
-          throw new Error(`Upload error: ${uploadErr.message}`);
+          throw new Error(`Upload error: ${uploadErr.message || 'Unknown error occurred'}`);
         }
       }
 
