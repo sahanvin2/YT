@@ -450,6 +450,9 @@ const Upload = () => {
           }
         });
         
+        setUploadProgress(100);
+        setUploadStatus('completed');
+        const uploadedVideoId = uploadRes.data.data._id;
         setVideoLink(`/watch/${uploadedVideoId}`);
       
       setTimeout(() => {
