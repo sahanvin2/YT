@@ -159,7 +159,23 @@ exports.streamUploadToB2 = async (req, res) => {
     const videoCT = mime.lookup(videoFile.name) || 'video/mp4';
 
     // Stream file directly to B2 (no disk storage)
-    const fileStream = Readable.from(videoFile.data);
+    // Handle both in-memory data and temp file paths
+    let fileStream;
+    if (videoFile.data) {
+      // File is in memory
+      fileStream = Readable.from(videoFile.data);
+    } else if (videoFile.tempFilePath) {
+      // File is on disk (temp file)
+      const fs = require('fs');
+      fileStream = fs.createReadStream(videoFile.tempFilePath);
+    } else {
+      // Fallback: use mv to temp and then stream
+      const tmpDir = path.join(__dirname, '../../tmp');
+      fs.mkdirSync(tmpDir, { recursive: true });
+      const tmpPath = path.join(tmpDir, `stream_${ts}_${videoFile.name}`);
+      await videoFile.mv(tmpPath);
+      fileStream = fs.createReadStream(tmpPath);
+    }
     
     console.log(`📤 Uploading to B2: ${videoKey}`);
     await s3.send(new PutObjectCommand({
@@ -168,6 +184,15 @@ exports.streamUploadToB2 = async (req, res) => {
       Body: fileStream,
       ContentType: videoCT,
     }));
+    
+    // Clean up temp file if we created one
+    if (videoFile.tempFilePath && fs.existsSync(videoFile.tempFilePath)) {
+      try {
+        fs.unlinkSync(videoFile.tempFilePath);
+      } catch (e) {
+        console.warn('Could not delete temp file:', e);
+      }
+    }
 
     const videoUrl = publicUrl(videoKey);
     console.log(`✅ Video uploaded to B2: ${videoUrl}`);
@@ -178,7 +203,19 @@ exports.streamUploadToB2 = async (req, res) => {
       const thumbnailFile = req.files.thumbnail;
       const thumbKey = `thumbnails/${req.user.id}/${ts}_${thumbnailFile.name}`;
       const thumbCT = mime.lookup(thumbnailFile.name) || 'image/jpeg';
-      const thumbStream = Readable.from(thumbnailFile.data);
+      
+      let thumbStream;
+      if (thumbnailFile.data) {
+        thumbStream = Readable.from(thumbnailFile.data);
+      } else if (thumbnailFile.tempFilePath) {
+        thumbStream = fs.createReadStream(thumbnailFile.tempFilePath);
+      } else {
+        const tmpDir = path.join(__dirname, '../../tmp');
+        fs.mkdirSync(tmpDir, { recursive: true });
+        const tmpThumbPath = path.join(tmpDir, `thumb_stream_${ts}_${thumbnailFile.name}`);
+        await thumbnailFile.mv(tmpThumbPath);
+        thumbStream = fs.createReadStream(tmpThumbPath);
+      }
       
       await s3.send(new PutObjectCommand({
         Bucket: B2_BUCKET,
@@ -188,6 +225,15 @@ exports.streamUploadToB2 = async (req, res) => {
       }));
       
       thumbnailUrl = publicUrl(thumbKey);
+      
+      // Clean up temp thumbnail if created
+      if (thumbnailFile.tempFilePath && fs.existsSync(thumbnailFile.tempFilePath)) {
+        try {
+          fs.unlinkSync(thumbnailFile.tempFilePath);
+        } catch (e) {
+          console.warn('Could not delete temp thumbnail:', e);
+        }
+      }
     }
 
     // Parse secondary genres

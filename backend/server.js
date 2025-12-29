@@ -128,8 +128,7 @@ const uploadsDir = path.join(__dirname, '../tmp/uploads');
 
 app.use(fileUpload({
   createParentPath: true,
-  useTempFiles: true, // Use temp files for large uploads to avoid memory issues
-  tempFileDir: path.join(__dirname, '../tmp/uploads'),
+  useTempFiles: false, // Keep in memory for streaming to B2 (avoids disk storage)
   limits: { fileSize: maxSizeMb * 1024 * 1024 },
   abortOnLimit: false,
   responseOnLimit: `File size limit exceeded. Maximum allowed: ${maxSizeMb}MB (${Math.round(maxSizeMb/1024)}GB)`,
