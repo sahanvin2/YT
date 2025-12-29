@@ -1354,11 +1354,86 @@
   overflow-y: auto;
 }
 
-/* On mobile, remove height restrictions */
+/* Mobile optimizations for video player */
 @media (max-width: 968px) {
   .suggested-videos {
     max-height: none;
     overflow-y: visible;
+  }
+
+  /* Better touch targets for mobile */
+  .video-control-btn {
+    padding: 12px;
+    min-width: 44px;
+    min-height: 44px;
+    touch-action: manipulation;
+  }
+
+  .video-progress-bar {
+    height: 6px;
+    touch-action: none;
+  }
+
+  .video-progress-bar::-webkit-slider-thumb {
+    width: 18px;
+    height: 18px;
+  }
+
+  .video-progress-bar::-moz-range-thumb {
+    width: 18px;
+    height: 18px;
+  }
+
+  /* Larger time display on mobile */
+  .time-display-overlay {
+    font-size: 14px;
+    padding: 4px 8px;
+  }
+
+  /* Better control visibility on mobile */
+  .video-controls-overlay.visible {
+    opacity: 1;
+    pointer-events: auto;
+  }
+
+  /* Prevent text selection during seeking */
+  .video-player {
+    -webkit-user-select: none;
+    -moz-user-select: none;
+    -ms-user-select: none;
+    user-select: none;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  /* Larger skip buttons on mobile */
+  .skip-btn {
+    padding: 12px 16px;
+    min-width: 50px;
+    min-height: 44px;
+  }
+
+  /* Better volume control on mobile */
+  .volume-control-group:hover .volume-slider-overlay,
+  .volume-control-group:active .volume-slider-overlay {
+    width: 100px;
+    opacity: 1;
+  }
+}
+
+/* Very small screens */
+@media (max-width: 480px) {
+  .video-control-btn {
+    padding: 10px;
+    min-width: 40px;
+    min-height: 40px;
+  }
+
+  .time-display-overlay {
+    font-size: 12px;
+  }
+
+  .controls-bottom-row {
+    gap: 6px;
   }
 }
 

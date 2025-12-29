@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import ReactPlayer from 'react-player';
-import { FiThumbsUp, FiThumbsDown, FiShare2, FiBookmark, FiChevronDown, FiChevronUp, FiZap, FiMaximize2, FiMinimize2, FiPlay, FiPause, FiVolume2, FiVolumeX, FiSkipBack, FiSkipForward, FiSettings } from 'react-icons/fi';
+import { FiThumbsUp, FiThumbsDown, FiShare2, FiBookmark, FiChevronDown, FiChevronUp, FiZap, FiMaximize2, FiMinimize2, FiPlay, FiPause, FiVolume2, FiVolumeX, FiSkipBack, FiSkipForward } from 'react-icons/fi';
 import { getVideo, getProcessingStatus, likeVideo, dislikeVideo, addView, addToHistory, saveVideo, getSavedVideos } from '../../utils/api';
 import { formatViews, formatDate, formatDuration } from '../../utils/helpers';
 import { useAuth } from '../../context/AuthContext';
@@ -94,13 +94,11 @@ const Watch = () => {
   const [pipEnabled, setPipEnabled] = useState(false);
   const [showSpeedMenu, setShowSpeedMenu] = useState(false);
   const speedMenuRef = useRef(null);
-  const [showQualityMenu, setShowQualityMenu] = useState(false);
-  const qualityMenuRef = useRef(null);
-  const [hlsLevels, setHlsLevels] = useState([]);
-  const [selectedHlsLevel, setSelectedHlsLevel] = useState(-1); // -1 = Auto
+  // Quality menu removed - videos play at best available quality automatically
+  const [hlsLevels] = useState([]);
+  const [selectedHlsLevel] = useState(-1); // Always Auto
   const [useCdnFallback, setUseCdnFallback] = useState(false);
   const cdnErrorCountRef = useRef(0);
-  const [currentQuality, setCurrentQuality] = useState('Auto');
   const viewCountedRef = useRef(false);
   const watchedDurationRef = useRef(0);
   const maxWatchedDurationRef = useRef(0);
@@ -227,25 +225,22 @@ const Watch = () => {
 
   // Timed ads are now handled in handleProgress based on actual video playback time
 
-  // Close download menu, speed menu, and quality menu when clicking outside
+  // Close download menu and speed menu when clicking outside
   useEffect(() => {
     const handleClickOutside = (event) => {
       if (speedMenuRef.current && !speedMenuRef.current.contains(event.target)) {
         setShowSpeedMenu(false);
       }
-      if (qualityMenuRef.current && !qualityMenuRef.current.contains(event.target)) {
-        setShowQualityMenu(false);
-      }
     };
 
-    if (showSpeedMenu || showQualityMenu) {
+    if (showSpeedMenu) {
       document.addEventListener('mousedown', handleClickOutside);
     }
 
     return () => {
       document.removeEventListener('mousedown', handleClickOutside);
     };
-  }, [showSpeedMenu, showQualityMenu]);
+  }, [showSpeedMenu]);
 
   // Keyboard shortcuts for video player
   useEffect(() => {
@@ -885,7 +880,23 @@ const Watch = () => {
                 setShowControls(false);
               }
             }}
-            onClick={() => {
+            onTouchStart={(e) => {
+              // Mobile: Show controls on touch
+              if (hasPlayableUrl && !isProcessing && !needsHls) {
+                setShowControls(true);
+                if (controlsTimeoutRef.current) {
+                  clearTimeout(controlsTimeoutRef.current);
+                }
+                controlsTimeoutRef.current = setTimeout(() => {
+                  if (playing) setShowControls(false);
+                }, 4000); // Longer timeout for mobile
+              }
+            }}
+            onClick={(e) => {
+              // Don't toggle play if clicking on controls
+              if (e.target.closest('.video-controls-overlay, .controls-bottom-section, .video-control-btn')) {
+                return;
+              }
               if (hasPlayableUrl && !isProcessing && !needsHls) {
                 setPlaying(!playing);
               }
@@ -927,28 +938,9 @@ const Watch = () => {
                             const levels = internalPlayer.levels || [];
                             console.log('📊 HLS Levels detected:', levels.length, levels);
                             
+                            // Quality selection removed - player uses auto quality
                             if (levels.length > 0) {
-                              setHlsLevels(levels);
-                              
-                              // Get current level
-                              const currentLevel = internalPlayer.currentLevel ?? -1;
-                              if (currentLevel === -1) {
-                                setCurrentQuality('Auto');
-                              } else if (levels[currentLevel]) {
-                                setCurrentQuality(`${levels[currentLevel].height}p`);
-                              }
-                              
-                              // Listen for level changes
-                              if (internalPlayer.on) {
-                                internalPlayer.on('levelSwitched', (event, data) => {
-                                  console.log('📊 Level switched:', data);
-                                  if (data.level === -1) {
-                                    setCurrentQuality('Auto');
-                                  } else if (levels[data.level]) {
-                                    setCurrentQuality(`${levels[data.level].height}p`);
-                                  }
-                                });
-                              }
+                              console.log('📊 HLS levels available:', levels.length, '- Auto quality enabled');
                             } else {
                               console.warn('⚠️ HLS levels array is empty');
                             }
@@ -1148,63 +1140,7 @@ const Watch = () => {
                       </div>
 
                       <div className="controls-right-group">
-                        <div className="quality-control" ref={qualityMenuRef}>
-                          <button 
-                            className="video-control-btn quality-btn" 
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setShowQualityMenu(!showQualityMenu);
-                            }}
-                            title="Quality Settings"
-                          >
-                            <FiSettings size={18} />
-                            <span className="quality-text">{currentQuality}</span>
-                          </button>
-                          {showQualityMenu && (
-                            <div className="quality-menu-dropdown">
-                              <button
-                                className={`quality-option ${selectedHlsLevel === -1 ? 'active' : ''}`}
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  if (playerRef.current) {
-                                    const internalPlayer = playerRef.current.getInternalPlayer();
-                                    if (internalPlayer && internalPlayer.levels) {
-                                      internalPlayer.currentLevel = -1; // Auto
-                                      setSelectedHlsLevel(-1);
-                                      setCurrentQuality('Auto');
-                                      console.log('✅ Set quality to Auto');
-                                    }
-                                  }
-                                  setShowQualityMenu(false);
-                                }}
-                              >
-                                Auto
-                              </button>
-                              {hlsLevels.map((level, index) => (
-                                <button
-                                  key={index}
-                                  className={`quality-option ${selectedHlsLevel === index ? 'active' : ''}`}
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    if (playerRef.current) {
-                                      const internalPlayer = playerRef.current.getInternalPlayer();
-                                      if (internalPlayer && internalPlayer.levels) {
-                                        internalPlayer.currentLevel = index;
-                                        setSelectedHlsLevel(index);
-                                        setCurrentQuality(`${level.height}p`);
-                                        console.log(`✅ Set quality to ${level.height}p`);
-                                      }
-                                    }
-                                    setShowQualityMenu(false);
-                                  }}
-                                >
-                                  {level.height}p
-                                </button>
-                              ))}
-                            </div>
-                          )}
-                        </div>
-
+                        {/* Quality control removed - videos play at best available quality automatically */}
                         <div className="speed-control" ref={speedMenuRef}>
                           <button 
                             className="video-control-btn" 

@@ -6,13 +6,18 @@ const API_URL = ''; // Empty since baseURL is set in api instance
 // Videos
 export const getVideos = (params) => api.get(`${API_URL}/videos`, { params });
 export const getVideo = (id) => api.get(`${API_URL}/videos/${id}`);
-export const uploadVideo = (formData, config = {}) => api.post(`${API_URL}/videos`, formData, {
-  headers: {
-    'Content-Type': 'multipart/form-data'
-  },
-  onUploadProgress: config.onUploadProgress,
-  timeout: 36000000 // 10 hours for large video processing (HLS encoding can take hours)
-});
+export const uploadVideo = (formData, config = {}) => {
+  // Ensure we're using the correct API instance with proper base URL
+  return api.post(`${API_URL}/videos`, formData, {
+    headers: {
+      'Content-Type': 'multipart/form-data'
+    },
+    onUploadProgress: config.onUploadProgress,
+    timeout: 36000000, // 10 hours for large video uploads
+    maxContentLength: Infinity,
+    maxBodyLength: Infinity
+  });
+};
 export const presignPut = (fileName, contentType) => api.post(`${API_URL}/uploads/presign`, { fileName, contentType });
 export const createVideoFromUrl = (data) => api.post(`${API_URL}/videos/create`, data);
 export const updateVideo = (id, data) => api.put(`${API_URL}/videos/${id}`, data);
