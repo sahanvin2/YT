@@ -274,11 +274,31 @@ exports.streamUploadToB2 = async (req, res) => {
       }
     }
 
-    // Create video record
+    // Verify B2 upload before creating DB record
+    // Double-check that file actually exists in B2
+    const { HeadObjectCommand } = require('@aws-sdk/client-s3');
+    let b2Verified = false;
+    try {
+      await s3.send(new HeadObjectCommand({
+        Bucket: B2_BUCKET,
+        Key: videoKey,
+      }));
+      b2Verified = true;
+      console.log(`✅ B2 upload verified: ${videoKey}`);
+    } catch (verifyErr) {
+      console.error(`❌ WARNING: Cannot verify file in B2 (may be eventual consistency):`, verifyErr.message);
+      // Still create record - file might be there but not immediately available
+    }
+
+    // Create video record ONLY if we have a valid B2 URL
+    if (!videoUrl || !videoUrl.includes('backblazeb2.com')) {
+      throw new Error('Invalid B2 URL generated. Upload may have failed.');
+    }
+
     const video = await Video.create({
       title,
       description: description || ' ',
-      videoUrl: videoUrl,
+      videoUrl: videoUrl, // Direct B2 URL
       hlsUrl: null,
       thumbnailUrl,
       subtitles: [],
@@ -292,14 +312,16 @@ exports.streamUploadToB2 = async (req, res) => {
       visibility: visibility || 'public',
       user: req.user.id,
       originalName: videoFile.name,
-      checksum: videoKey, // Use key as identifier
+      checksum: videoKey,
       processingStatus: 'completed',
       isPublished: true
     });
 
     await User.findByIdAndUpdate(req.user.id, { $push: { videos: video._id } });
 
-    console.log(`✅ Video ${video._id} created (streamed to B2, no EC2 storage)`);
+    console.log(`✅ Video ${video._id} created - B2 URL: ${videoUrl}`);
+    console.log(`   B2 Verified: ${b2Verified ? 'YES' : 'PENDING (eventual consistency)'}`);
+    console.log(`   EC2 Storage Used: NO (file streamed directly to B2)`);
 
     // Notify followers
     notifyFollowersNewVideo(req.user.id, {
