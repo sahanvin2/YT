@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
 import { useNavigate, Link } from 'react-router-dom';
 import { FiUpload, FiX, FiImage, FiFile, FiCheck, FiAlertCircle, FiFolder } from 'react-icons/fi';
-import { uploadVideo, presignPut, createVideoFromUrl, getPlaylists } from '../../utils/api';
+import { uploadVideo, presignPut, createVideoFromB2, createVideoFromUrl, getPlaylists } from '../../utils/api';
 import { useAuth } from '../../context/AuthContext';
 import { formatFileSize } from '../../utils/helpers';
 import { MAIN_CATEGORIES, GENRES, SUB_CATEGORIES, validateGenreSelection } from '../../utils/categories';
@@ -37,7 +37,7 @@ const Upload = () => {
   const [uploadedBytes, setUploadedBytes] = useState(0);
   const [lastUpdateTime, setLastUpdateTime] = useState(Date.now());
   const [lastUploadedBytes, setLastUploadedBytes] = useState(0);
-  const [usePresigned, setUsePresigned] = useState(false);
+  const [usePresigned, setUsePresigned] = useState(true); // Default to presigned (direct B2 upload)
   const [error, setError] = useState('');
   const [videoLink, setVideoLink] = useState('');
   const fileInputRef = useRef(null);
@@ -381,202 +381,129 @@ const Upload = () => {
       setLastUpdateTime(Date.now());
       setLastUploadedBytes(0);
 
-      if (!usePresigned) {
-        // Standard upload with progress tracking
-    const data = new FormData();
-    data.append('title', title);
-    data.append('description', description || ' ');
-    data.append('mainCategory', mainCategory);
-    data.append('primaryGenre', primaryGenre);
-    data.append('secondaryGenres', JSON.stringify(secondaryGenres));
-    if (subCategory) data.append('subCategory', subCategory);
-    data.append('tags', tags);
-    data.append('visibility', visibility);
-    data.append('video', videoFile);
-    if (thumbnailFile) {
-      data.append('thumbnail', thumbnailFile);
-    }
-    
-    // Add subtitles
-    if (subtitleFiles.length > 0) {
-      subtitleFiles.forEach((subtitle, index) => {
-        data.append(`subtitles`, subtitle.file);
-        data.append(`subtitleLanguages`, subtitle.language);
-        data.append(`subtitleLabels`, subtitle.label);
-      });
-    }
-
-        const startTime = Date.now();
-        const totalSize = videoFile.size;
-
-        const res = await uploadVideo(data, {
-          onUploadProgress: (progressEvent) => {
-            if (progressEvent.total) {
-              const percentCompleted = Math.round(
-                (progressEvent.loaded * 100) / progressEvent.total
-              );
-              setUploadProgress(percentCompleted);
-              setUploadedBytes(progressEvent.loaded);
-              
-              // Calculate upload speed
-              const currentTime = Date.now();
-              const timeDiff = (currentTime - lastUpdateTime) / 1000; // seconds
-              
-              if (timeDiff >= 0.5) { // Update every 0.5 seconds
-                const bytesDiff = progressEvent.loaded - lastUploadedBytes;
-                const speedMBps = (bytesDiff / (1024 * 1024)) / timeDiff;
-                setUploadSpeed(speedMBps);
-                
-                // Calculate ETA
-                const remainingBytes = progressEvent.total - progressEvent.loaded;
-                const remainingSeconds = remainingBytes / (bytesDiff / timeDiff);
-                
-                if (remainingSeconds > 0 && isFinite(remainingSeconds)) {
-                  if (remainingSeconds < 60) {
-                    setUploadETA(`${Math.round(remainingSeconds)}s`);
-                  } else if (remainingSeconds < 3600) {
-                    setUploadETA(`${Math.round(remainingSeconds / 60)}m ${Math.round(remainingSeconds % 60)}s`);
-                  } else {
-                    const hours = Math.floor(remainingSeconds / 3600);
-                    const minutes = Math.floor((remainingSeconds % 3600) / 60);
-                    setUploadETA(`${hours}h ${minutes}m`);
-                  }
-                }
-                
-                setLastUpdateTime(currentTime);
-                setLastUploadedBytes(progressEvent.loaded);
-              }
-            }
-          }
-        });
-
-        setUploadProgress(100);
-        setUploadStatus('processing');
-        setProcessingProgress(50);
-
-        // Simulate processing progress
-        const processingInterval = setInterval(() => {
-          setProcessingProgress(prev => {
-            if (prev >= 90) {
-              clearInterval(processingInterval);
-              return 90;
-            }
-            return prev + 10;
-          });
-        }, 500);
-
-        // Wait a bit for processing
-        setTimeout(() => {
-          clearInterval(processingInterval);
-          setProcessingProgress(100);
-          setUploadStatus('completed');
-          const uploadedVideoId = res.data.data._id;
-          setVideoLink(`/watch/${uploadedVideoId}`);
-          
-          // Show success message and reset form for next upload
-          setTimeout(() => {
-            // Reset form for next upload
-            setUploadStatus('idle');
-            setUploadProgress(0);
-            setProcessingProgress(0);
-            setUploadSpeed(0);
-            setUploadETA('');
-            setUploadedBytes(0);
-            setLastUpdateTime(Date.now());
-            setLastUploadedBytes(0);
-            setVideoFile(null);
-            setThumbnailFile(null);
-            setVideoPreview(null);
-            setThumbnailPreview(null);
-            setFormData({
-              title: '',
-              description: ' ',
-              mainCategory: 'movies',
-              primaryGenre: 'action',
-              secondaryGenres: [],
-              subCategory: '',
-              tags: '',
-              visibility: 'public',
-              playlist: ''
-            });
-            setActiveTab('information');
-            if (fileInputRef.current) fileInputRef.current.value = '';
-            if (thumbnailInputRef.current) thumbnailInputRef.current.value = '';
-            
-            // Success - video is processing in background
-            console.log('✅ Video uploaded successfully:', uploadedVideoId);
-          }, 2000);
-        }, 3000);
-      } else {
-        // Presigned upload
-        setUploadStatus('uploading');
-      const presignRes = await presignPut(videoFile.name, videoFile.type || 'application/octet-stream');
+      // ALWAYS use presigned upload (direct to B2, bypasses EC2 storage)
+      // This prevents EC2 from storing large files and crashing
+      setUploadStatus('uploading');
+      
+      // Get presigned URL for direct B2 upload
+      const presignRes = await presignPut(
+        videoFile.name, 
+        videoFile.type || 'video/mp4',
+        videoFile.size
+      );
+      
       if (!presignRes.data?.url) {
-        throw new Error('Presign did not return a URL');
+        throw new Error('Failed to get presigned URL');
       }
+      
       const putUrl = presignRes.data.url;
       const publicUrl = presignRes.data.publicUrl;
+      const videoKey = presignRes.data.key;
 
-        // Upload with progress
+      // Upload directly to B2 with progress tracking
       await axios.put(putUrl, videoFile, {
-          headers: { 'Content-Type': videoFile.type || 'application/octet-stream' },
-          onUploadProgress: (progressEvent) => {
+        headers: { 
+          'Content-Type': videoFile.type || 'video/mp4',
+          'Content-Length': videoFile.size
+        },
+        timeout: 7200000, // 2 hours for large files
+        onUploadProgress: (progressEvent) => {
+          if (progressEvent.total) {
             const percentCompleted = Math.round(
               (progressEvent.loaded * 100) / progressEvent.total
             );
             setUploadProgress(percentCompleted);
+            setUploadedBytes(progressEvent.loaded);
+            
+            // Calculate upload speed
+            const currentTime = Date.now();
+            const timeDiff = (currentTime - lastUpdateTime) / 1000; // seconds
+            
+            if (timeDiff >= 0.5) { // Update every 0.5 seconds
+              const bytesDiff = progressEvent.loaded - lastUploadedBytes;
+              const speedMBps = (bytesDiff / (1024 * 1024)) / timeDiff;
+              setUploadSpeed(speedMBps);
+              
+              // Calculate ETA
+              const remainingBytes = progressEvent.total - progressEvent.loaded;
+              const remainingSeconds = remainingBytes / (bytesDiff / timeDiff);
+              
+              if (remainingSeconds > 0 && isFinite(remainingSeconds)) {
+                if (remainingSeconds < 60) {
+                  setUploadETA(`${Math.round(remainingSeconds)}s`);
+                } else if (remainingSeconds < 3600) {
+                  setUploadETA(`${Math.round(remainingSeconds / 60)}m ${Math.round(remainingSeconds % 60)}s`);
+                } else {
+                  const hours = Math.floor(remainingSeconds / 3600);
+                  const minutes = Math.floor((remainingSeconds % 3600) / 60);
+                  setUploadETA(`${hours}h ${minutes}m`);
+                }
+              }
+              
+              setLastUpdateTime(currentTime);
+              setLastUploadedBytes(progressEvent.loaded);
+            }
           }
+        }
       });
 
-        setUploadProgress(100);
-        setUploadStatus('processing');
-        setProcessingProgress(50);
+      setUploadProgress(100);
+      setUploadStatus('processing');
+      setProcessingProgress(50);
 
-      const createRes = await createVideoFromUrl({
+      // Create video record with metadata (NO video file sent to EC2)
+      const createRes = await createVideoFromB2({
         title,
-        description,
+        description: description || ' ',
         mainCategory,
         primaryGenre,
-        secondaryGenres,
-        subCategory,
+        secondaryGenres: JSON.stringify(secondaryGenres),
+        subCategory: subCategory || '',
         tags,
         visibility,
-        videoUrl: publicUrl
+        videoKey,
+        videoUrl: publicUrl,
+        originalName: videoFile.name,
+        fileSize: videoFile.size,
+        duration: 0 // Can be detected later if needed
       });
 
-        setProcessingProgress(100);
-        setUploadStatus('completed');
-        const uploadedVideoId = createRes.data.data._id;
-        setVideoLink(`/watch/${uploadedVideoId}`);
+      setProcessingProgress(100);
+      setUploadStatus('completed');
+      const uploadedVideoId = createRes.data.data._id;
+      setVideoLink(`/watch/${uploadedVideoId}`);
+      
+      setTimeout(() => {
+        // Reset form for next upload
+        setUploadStatus('idle');
+        setUploadProgress(0);
+        setProcessingProgress(0);
+        setUploadSpeed(0);
+        setUploadETA('');
+        setUploadedBytes(0);
+        setLastUpdateTime(Date.now());
+        setLastUploadedBytes(0);
+        setVideoFile(null);
+        setThumbnailFile(null);
+        setVideoPreview(null);
+        setThumbnailPreview(null);
+        setFormData({
+          title: '',
+          description: ' ',
+          mainCategory: 'movies',
+          primaryGenre: 'action',
+          secondaryGenres: [],
+          subCategory: '',
+          tags: '',
+          visibility: 'public',
+          playlist: ''
+        });
+        setActiveTab('information');
+        if (fileInputRef.current) fileInputRef.current.value = '';
+        if (thumbnailInputRef.current) thumbnailInputRef.current.value = '';
         
-        setTimeout(() => {
-          // Reset form for next upload
-          setUploadStatus('idle');
-          setUploadProgress(0);
-          setProcessingProgress(0);
-          setVideoFile(null);
-          setThumbnailFile(null);
-          setVideoPreview(null);
-          setThumbnailPreview(null);
-          setFormData({
-            title: '',
-            description: ' ',
-            mainCategory: 'movies',
-            primaryGenre: 'action',
-            secondaryGenres: [],
-            subCategory: '',
-            tags: '',
-            visibility: 'public',
-            playlist: ''
-          });
-          setActiveTab('information');
-          if (fileInputRef.current) fileInputRef.current.value = '';
-          if (thumbnailInputRef.current) thumbnailInputRef.current.value = '';
-          
-          // Success - video is processing in background
-          console.log('✅ Video uploaded successfully:', uploadedVideoId);
-        }, 2000);
-      }
+        console.log('✅ Video uploaded directly to B2 (no EC2 storage used):', uploadedVideoId);
+      }, 2000);
     } catch (err) {
       setError(err.response?.data?.message || err.message || 'Failed to upload video');
       setUploadStatus('error');

@@ -184,6 +184,7 @@ app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
 app.use('/api/health', health);
 app.use('/api/auth', auth);
 app.use('/api/videos', videos);
+app.use('/api/uploads', require('./routes/uploads'));
 app.use('/api/users', users);
 app.use('/api/comments', comments);
 app.use('/api/admin', admin);
