@@ -55,11 +55,13 @@ const Register = () => {
   };
 
   const handleGoogleLogin = () => {
-    window.location.href = '/api/auth/google';
+    const apiBase = process.env.REACT_APP_API_URL || (process.env.NODE_ENV === 'production' ? `${window.location.origin}/api` : 'http://localhost:5001/api');
+    window.location.href = `${apiBase}/auth/google`;
   };
 
   const handleMicrosoftLogin = () => {
-    window.location.href = '/api/auth/microsoft';
+    const apiBase = process.env.REACT_APP_API_URL || (process.env.NODE_ENV === 'production' ? `${window.location.origin}/api` : 'http://localhost:5001/api');
+    window.location.href = `${apiBase}/auth/microsoft`;
   };
 
   return (

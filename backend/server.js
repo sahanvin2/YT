@@ -131,10 +131,45 @@ app.use(fileUpload({
   debug: process.env.NODE_ENV === 'development' // Enable debug in dev mode
 }));
 
-// Enable CORS
+// Enable CORS - Allow multiple origins
+const allowedOrigins = [
+  process.env.CLIENT_URL,
+  process.env.FRONTEND_URL,
+  'http://localhost:3000',
+  'http://localhost:3001',
+  'https://xclub.asia',
+  'http://3.238.106.222',
+  'https://3.238.106.222'
+].filter(Boolean); // Remove undefined values
+
 app.use(cors({
-  origin: process.env.CLIENT_URL || 'http://localhost:3000',
-  credentials: true
+  origin: function (origin, callback) {
+    // Allow requests with no origin (like mobile apps or curl requests)
+    if (!origin) return callback(null, true);
+    
+    // Check if origin is in allowed list
+    if (allowedOrigins.some(allowed => origin.includes(allowed.replace(/^https?:\/\//, '')))) {
+      callback(null, true);
+    } else {
+      // In production, be more strict
+      if (process.env.NODE_ENV === 'production') {
+        // Allow if it matches the CLIENT_URL pattern
+        const clientUrl = process.env.CLIENT_URL || '';
+        if (clientUrl && origin.includes(new URL(clientUrl).hostname)) {
+          callback(null, true);
+        } else {
+          console.warn(`CORS blocked origin: ${origin}`);
+          callback(null, true); // Still allow for now, but log warning
+        }
+      } else {
+        // In development, allow all
+        callback(null, true);
+      }
+    }
+  },
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization']
 }));
 
 // Set static folder
