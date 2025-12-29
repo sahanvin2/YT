@@ -1,7 +1,7 @@
 import React, { useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { MAIN_CATEGORIES, GENRES } from '../../utils/categories';
-import { getCategoryImage } from '../../utils/categoryImages';
+import { getCategoryImagePath } from '../../utils/categoryImages';
 import './CategoryPage.css';
 
 const CategoryPage = () => {
@@ -28,17 +28,19 @@ const CategoryPage = () => {
                 <h2 className="section-title">Main Categories</h2>
                 <div className="category-grid">
                     {mainCategoriesDisplay.map((category) => {
-                        const categoryImg = getCategoryImage(category.id);
-                        const IconComponent = categoryImg.icon;
+                        const imagePath = getCategoryImagePath(category.id);
                         return (
                             <Link to={category.path} key={category.id} className="category-card main-category">
-                                <div
-                                    className="category-bg"
-                                    style={{ background: categoryImg.gradient }}
-                                ></div>
+                                <div className="category-bg">
+                                    <img 
+                                        src={imagePath} 
+                                        alt={category.label}
+                                        className="category-bg-image"
+                                        loading="lazy"
+                                    />
+                                </div>
                                 <div className="category-overlay"></div>
                                 <div className="category-content">
-                                    <IconComponent className="category-icon" />
                                     <span className="category-name">{category.label}</span>
                                 </div>
                             </Link>
@@ -52,17 +54,19 @@ const CategoryPage = () => {
                 <h2 className="section-title">All Genres</h2>
                 <div className="category-grid">
                     {displayCategories.map((category) => {
-                        const categoryImg = getCategoryImage(category.id);
-                        const IconComponent = categoryImg.icon;
+                        const imagePath = getCategoryImagePath(category.id);
                         return (
                             <Link to={category.path} key={category.id} className="category-card">
-                                <div
-                                    className="category-bg"
-                                    style={{ background: categoryImg.gradient }}
-                                ></div>
+                                <div className="category-bg">
+                                    <img 
+                                        src={imagePath} 
+                                        alt={category.label}
+                                        className="category-bg-image"
+                                        loading="lazy"
+                                    />
+                                </div>
                                 <div className="category-overlay"></div>
                                 <div className="category-content">
-                                    <IconComponent className="category-icon" />
                                     <span className="category-name">{category.label}</span>
                                 </div>
                             </Link>

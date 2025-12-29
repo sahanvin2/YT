@@ -3,7 +3,7 @@ import { useLocation, useParams, useNavigate, Link } from 'react-router-dom';
 import { FiPlay, FiPlus, FiZap, FiTarget, FiSmile, FiTv, FiCompass, FiFilm, FiVideo } from 'react-icons/fi';
 import { getVideos, getTrendingVideos, searchVideos, getTopCreators } from '../../utils/api';
 import { formatDuration } from '../../utils/helpers';
-import { getCategoryImage } from '../../utils/categoryImages';
+import { getCategoryImagePath } from '../../utils/categoryImages';
 import './Home.css';
 
 const Home = ({ mode }) => {
@@ -243,16 +243,21 @@ const Home = ({ mode }) => {
         <div className="top-categories-section">
           <div className="top-categories-container">
             {topCategories.map((category) => {
-              const categoryImg = getCategoryImage(category.id);
-              const IconComponent = categoryImg.icon;
+              const imagePath = getCategoryImagePath(category.id);
               return (
                 <Link
                   key={category.id}
                   to={`/category/${category.id}`}
                   className="category-circle"
                 >
-                  <div className="category-circle-icon" style={{ background: categoryImg.gradient }}>
-                    <IconComponent size={32} />
+                  <div className="category-circle-icon">
+                    <img 
+                      src={imagePath} 
+                      alt={category.label}
+                      className="category-image"
+                      loading="lazy"
+                    />
+                    <div className="category-overlay-gradient"></div>
                   </div>
                   <span className="category-label">{category.label}</span>
                 </Link>
