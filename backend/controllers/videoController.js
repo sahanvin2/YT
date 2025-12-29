@@ -442,51 +442,17 @@ exports.uploadVideo = async (req, res, next) => {
       thumbnailUrl = await uploadFilePath(tmpThumbPath, thumbKey, thumbCT);
       try { await fs.promises.unlink(tmpThumbPath); } catch { }
     } else {
-      // Auto-generate thumbnail
-      try {
-        const tmpThumbPath = path.join(tmpDir, `thumb_auto_${ts}.jpg`);
-
-        await new Promise((resolve, reject) => {
-          ffmpeg(tmpVideoPath)
-            .screenshots({
-              timestamps: ['1'], // Take screenshot at 1 second
-              filename: path.basename(tmpThumbPath),
-              folder: tmpDir,
-              size: '1280x720'
-            })
-            .on('end', resolve)
-            .on('error', reject);
-        });
-
-        const thumbKey = `thumbnails/${req.user.id}/${ts}_auto.jpg`;
-        thumbnailUrl = await uploadFilePath(tmpThumbPath, thumbKey, 'image/jpeg');
-        try { await fs.promises.unlink(tmpThumbPath); } catch { }
-      } catch (err) {
-        console.error('Error generating auto-thumbnail:', err);
-        // Continue without thumbnail if generation fails
-      }
+      // Skip auto-thumbnail generation to reduce CPU usage
+      // User can upload thumbnail manually or we'll use a default
+      console.log('ℹ️  Skipping auto-thumbnail generation to reduce CPU usage');
+      thumbnailUrl = ''; // No thumbnail - user can add one later
     }
 
-    // Duration and resolution probing
-    let duration = 0;
+    // Skip duration and resolution probing to reduce CPU usage
+    // Set defaults instead of processing
+    let duration = 0; // Will be detected on playback if needed
     let videoHeight = 720; // Default height
-    try {
-      const probeData = await new Promise((resolve, reject) => {
-        ffmpeg.ffprobe(tmpVideoPath, (err, data) => {
-          if (err) return reject(err);
-          resolve(data);
-        });
-      });
-
-      duration = Math.round(probeData.format.duration || 0);
-      const videoStream = probeData.streams.find(s => s.codec_type === 'video');
-      if (videoStream && videoStream.height) {
-        videoHeight = videoStream.height;
-      }
-    } catch (err) {
-      console.error('Error probing video:', err);
-      duration = 0;
-    }
+    console.log('ℹ️  Skipping video probing to reduce CPU usage');
 
     // Parse secondaryGenres safely
     let parsedSecondaryGenres = [];

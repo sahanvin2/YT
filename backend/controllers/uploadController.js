@@ -2,26 +2,42 @@ const Video = require('../models/Video');
 const User = require('../models/User');
 const path = require('path');
 const fs = require('fs');
-const ffmpeg = require('fluent-ffmpeg');
-const ffmpegPath = require('ffmpeg-static');
-const ffprobePath = require('ffprobe-static').path;
 const mime = require('mime-types');
 const crypto = require('crypto');
-const { uploadFile, deleteFile, presignPut, publicUrl } = require('../utils/b2');
-const { addToQueue } = require('../utils/videoQueue');
-const { addToHLSQueue } = require('../utils/hlsQueue');
+const { uploadFile, deleteFile, presignPut, publicUrl, uploadFilePath } = require('../utils/b2');
 const { notifyFollowersNewVideo } = require('./notificationController');
-
-
-ffmpeg.setFfmpegPath(ffmpegPath);
-ffmpeg.setFfprobePath(ffprobePath);
 
 function computeChecksum(filePath) {
   const fileBuffer = fs.readFileSync(filePath);
   return crypto.createHash('sha1').update(fileBuffer).digest('hex');
 }
 
-// Upload video + optional thumbnail
+// Get video duration using a simple method (optional, non-blocking)
+async function getVideoDuration(filePath) {
+  try {
+    // Use a lightweight method - just return 0 if we can't get it
+    // This avoids heavy processing on EC2
+    const { exec } = require('child_process');
+    return new Promise((resolve) => {
+      // Try to get duration quickly, but don't block if it fails
+      exec(`ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 "${filePath}"`, 
+        { timeout: 5000 }, 
+        (error, stdout) => {
+          if (error || !stdout) {
+            resolve(0); // Return 0 if we can't get duration
+          } else {
+            const duration = parseFloat(stdout.trim());
+            resolve(isNaN(duration) ? 0 : Math.round(duration));
+          }
+        }
+      );
+    });
+  } catch (error) {
+    return 0; // Return 0 if anything fails
+  }
+}
+
+// Upload video + optional thumbnail - DIRECT UPLOAD TO B2, NO PROCESSING
 exports.uploadVideo = async (req, res) => {
   try {
     const { 
@@ -50,7 +66,7 @@ exports.uploadVideo = async (req, res) => {
     const videoFile = req.files.video;
     const thumbnailFile = req.files.thumbnail;
     
-    // Use local tmp directory for processing
+    // Use local tmp directory temporarily
     const tmpDir = path.join(__dirname, '../../tmp/uploads');
     fs.mkdirSync(tmpDir, { recursive: true });
 
@@ -65,9 +81,19 @@ exports.uploadVideo = async (req, res) => {
     // Compute checksum
     const checksum = computeChecksum(tmpVideoPath);
 
-    // No need to upload original to B2 - we'll process to HLS locally
-    // The HLS processor will upload the HLS files directly
-    const videoUrl = null; // Will be set after HLS processing
+    // Upload video DIRECTLY to B2 - NO PROCESSING
+    const videoKey = `videos/${req.user.id}/${ts}_${videoFile.name}`;
+    const videoCT = mime.lookup(tmpVideoPath) || 'video/mp4';
+    console.log(`📤 Uploading video directly to B2: ${videoKey}`);
+    const videoUrl = await uploadFilePath(tmpVideoPath, videoKey, videoCT);
+    
+    // Clean up temp file immediately after upload
+    try {
+      fs.unlinkSync(tmpVideoPath);
+      console.log(`✅ Temp file cleaned up: ${tmpVideoPath}`);
+    } catch (err) {
+      console.warn('Could not delete temp file:', err);
+    }
 
     // Upload thumbnail
     let thumbnailUrl;
@@ -117,16 +143,8 @@ exports.uploadVideo = async (req, res) => {
       }
     }
 
-    // Get duration from source file
-    const duration = await new Promise((resolve, reject) => {
-      ffmpeg.ffprobe(tmpVideoPath, (err, data) => {
-        if (err) return resolve(0);
-        resolve(Math.round(data.format.duration || 0));
-      });
-    });
-
-    // Don't delete the tmpVideoPath yet - HLS processor needs it
-    // It will be deleted after HLS processing completes
+    // Get duration (non-blocking, optional)
+    const duration = await getVideoDuration(tmpVideoPath).catch(() => 0);
 
     // Parse secondary genres if it's a JSON string
     let parsedSecondaryGenres = [];
@@ -140,13 +158,12 @@ exports.uploadVideo = async (req, res) => {
       }
     }
 
-    // Create DB record with new category structure
-    // Note: videoUrl will be updated by HLS worker once processing completes
+    // Create DB record - VIDEO IS READY IMMEDIATELY
     const video = await Video.create({
       title,
       description,
-      videoUrl: videoUrl || 'processing', // Temporary placeholder
-      hlsUrl: null, // Will be set by HLS worker
+      videoUrl: videoUrl, // Direct video URL - ready immediately
+      hlsUrl: null, // Not using HLS
       thumbnailUrl,
       subtitles: subtitleTracks,
       duration,
@@ -160,23 +177,14 @@ exports.uploadVideo = async (req, res) => {
       user: req.user.id,
       originalName: videoFile.name,
       checksum,
-      processingStatus: 'queued' // Always queue for HLS processing
+      processingStatus: 'completed', // Ready immediately - no processing
+      isPublished: true // Publish immediately
     });
 
     await User.findByIdAndUpdate(req.user.id, { $push: { videos: video._id } });
 
-    // Add to HLS processing queue (local GPU processing)
-    try {
-      await addToHLSQueue(video._id.toString(), tmpVideoPath, req.user.id);
-      console.log(`✅ Video ${video._id} queued for HLS processing`);
-    } catch (queueError) {
-      console.error('Failed to queue video for HLS processing:', queueError);
-      // Update video status to failed
-      await Video.findByIdAndUpdate(video._id, {
-        processingStatus: 'failed',
-        processingError: 'Failed to queue for processing'
-      });
-    }
+    console.log(`✅ Video ${video._id} uploaded and ready for playback (no processing)`);
+
     // Notify followers of new video
     notifyFollowersNewVideo(req.user.id, {
       _id: video._id,
@@ -189,14 +197,14 @@ exports.uploadVideo = async (req, res) => {
     res.status(201).json({ 
       success: true, 
       data: video,
-      message: 'Video uploaded successfully! Processing to HLS format with GPU acceleration. This will take a few minutes depending on video length.'
+      message: 'Video uploaded successfully! Your video is ready for playback immediately.'
     });
   } catch (error) {
     console.error('Upload error:', error);
     
     // Clean up any temp files on error
     try {
-      const tmpDir = '/tmp/movia';
+      const tmpDir = path.join(__dirname, '../../tmp/uploads');
       if (fs.existsSync(tmpDir)) {
         const files = fs.readdirSync(tmpDir);
         files.forEach(file => {
