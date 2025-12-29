@@ -10,12 +10,13 @@ const mime = require('mime-types');
 const { uploadFilePath, deleteFile } = require('../utils/b2');
 const { generateVideoVariants, getVideoResolution } = require('../utils/videoTranscoder');
 const { cdnUrlFrom, extractKeyFromUrl } = require('../utils/cdn');
-const { addToHLSQueue } = require('../utils/hlsQueue');
+// HLS queue removed - using direct MP4 upload
+// const { addToHLSQueue } = require('../utils/hlsQueue');
 const { uploadHlsFolderToB2 } = require('../utils/uploadHlsFolder');
 
-// HLS-only mode: when enabled, the app serves only HLS (.m3u8) playback URLs.
+// HLS-only mode: DISABLED - using direct MP4 upload and playback
 // Non-HLS videos are treated as "processing" and can be auto-queued for HLS conversion.
-const HLS_ONLY = String(process.env.HLS_ONLY || 'true').toLowerCase() === 'true';
+const HLS_ONLY = false; // HLS processing removed - using direct MP4
 
 // Log CDN configuration on startup
 const CDN_BASE = process.env.CDN_BASE || process.env.CDN_URL;
@@ -66,38 +67,10 @@ async function downloadToLocalTmp(sourceUrl, videoId) {
   return localPath;
 }
 
+// HLS auto-queue disabled - using direct MP4 upload
 async function autoQueueHlsIfNeeded(videoDoc) {
-  if (!HLS_ONLY) return;
-  if (!videoDoc) return;
-  if (videoDoc.hlsUrl) return;
-  if (videoDoc.processingStatus === 'queued' || videoDoc.processingStatus === 'processing') return;
-
-  const sourceUrl = videoDoc.videoUrl || videoDoc.cdnUrl;
-  if (!isAbsoluteHttpUrl(sourceUrl) || isPlaceholderUrl(sourceUrl)) return;
-
-  const userId = (videoDoc.user && videoDoc.user._id ? videoDoc.user._id.toString() : String(videoDoc.user));
-
-  // Set status first to avoid double-queueing if multiple requests hit.
-  await Video.findByIdAndUpdate(videoDoc._id, {
-    processingStatus: 'queued',
-    processingError: null,
-    videoUrl: 'processing'
-  });
-
-  // Download + enqueue in background
-  (async () => {
-    try {
-      const localPath = await downloadToLocalTmp(sourceUrl, videoDoc._id.toString());
-      await addToHLSQueue(videoDoc._id.toString(), localPath, userId);
-      console.log(`✅ Auto-queued HLS processing for video ${videoDoc._id}`);
-    } catch (e) {
-      console.error(`❌ Auto-queue HLS failed for video ${videoDoc._id}:`, e.message);
-      await Video.findByIdAndUpdate(videoDoc._id, {
-        processingStatus: 'failed',
-        processingError: e.message
-      });
-    }
-  })();
+  // No-op: HLS processing removed
+  return;
 }
 
 // Configure ffmpeg/ffprobe paths (use static binaries)
@@ -528,14 +501,24 @@ exports.uploadVideo = async (req, res, next) => {
       }
     }
 
-    await videoFile.mv(tmpVideoPath);
+    // Upload video directly to B2 storage (no HLS processing)
+    const videoKey = `videos/${req.user.id}/${ts}_${videoFile.name}`;
+    const videoCT = mime.lookup(tmpVideoPath) || 'video/mp4';
+    const videoUrl = await uploadFilePath(tmpVideoPath, videoKey, videoCT);
+    
+    // Clean up temp file after upload
+    try {
+      await fs.promises.unlink(tmpVideoPath);
+    } catch (err) {
+      console.warn('Could not delete temp file:', err);
+    }
 
-    // Create video record with queued status
+    // Create video record - ready immediately
     const video = await Video.create({
       title,
       description,
-      videoUrl: 'processing', // Temporary placeholder
-      hlsUrl: null, // Will be set by HLS worker
+      videoUrl: videoUrl, // Direct MP4 URL - ready immediately
+      hlsUrl: null, // Not using HLS for new uploads
       thumbnailUrl,
       duration,
       mainCategory: mainCategory || 'movies',
@@ -548,35 +531,29 @@ exports.uploadVideo = async (req, res, next) => {
       originalName: videoFile.name,
       variants: [],
       sources: [],
-      processingStatus: 'queued' // Always queue for HLS processing
+      processingStatus: 'completed', // No processing needed - ready immediately
+      isPublished: true // Publish immediately
     });
 
     await User.findByIdAndUpdate(req.user.id, { $push: { videos: video._id } });
 
-    // Add to HLS processing queue (local GPU processing with NVENC)
-    try {
-      await addToHLSQueue(video._id.toString(), tmpVideoPath, req.user.id);
-      console.log(`✅ Video ${video._id} queued for HLS processing (GPU acceleration)`);
-    } catch (queueError) {
-      console.error('Failed to queue video for HLS processing:', queueError);
-      // Update video status to failed
-      await Video.findByIdAndUpdate(video._id, {
-        processingStatus: 'failed',
-        processingError: 'Failed to queue for processing'
-      });
-    }
+    console.log(`✅ Video ${video._id} uploaded and ready for playback`);
 
-    // Return immediately (HLS processing will happen in background with GPU)
+    // Return immediately - video is ready
     const videoObj = video.toObject();
     if (videoObj.thumbnailUrl) {
       videoObj.thumbnailUrl = cdnUrlFrom(videoObj.thumbnailUrl);
+    }
+    if (videoObj.videoUrl) {
+      videoObj.videoUrl = cdnUrlFrom(videoObj.videoUrl);
+      videoObj.cdnUrl = videoObj.videoUrl;
     }
 
     res.status(201).json({
       success: true,
       data: videoObj,
       video: videoObj,
-      message: 'Video uploaded successfully! Processing to HLS format with GPU acceleration (NVIDIA NVENC). This will take a few minutes.'
+      message: 'Video uploaded successfully! Your video is ready for playback.'
     });
   } catch (error) {
     console.error('❌ Video upload error:', error);

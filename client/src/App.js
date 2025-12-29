@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, Suspense, lazy } from 'react';
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import { AuthProvider } from './context/AuthContext';
 import { ThemeProvider } from './context/ThemeContext';
@@ -6,27 +6,33 @@ import { AdProvider } from './context/AdContext';
 import { SocketProvider } from './context/SocketContext';
 import Navbar from './components/Navbar/Navbar';
 import Sidebar from './components/Sidebar/Sidebar';
-import Home from './pages/Home/Home';
-import Watch from './pages/Watch/Watch';
-import Login from './pages/Auth/Login';
-import Register from './pages/Auth/Register';
-import AuthCallback from './pages/AuthCallback/AuthCallback';
-import VerifyEmail from './pages/Auth/VerifyEmail';
-import Upload from './pages/Upload/Upload';
-import UploadHLS from './pages/UploadHLS/UploadHLS';
-import CategoryPage from './pages/Category/CategoryPage';
-import Channel from './pages/Channel/Channel';
-import VideoManager from './pages/VideoManager/VideoManager';
-import Profile from './pages/Profile/Profile';
-import ProfileEdit from './pages/Profile/ProfileEdit';
-import History from './pages/Library/History';
-import Liked from './pages/Library/Liked';
-import Saved from './pages/Library/Saved';
-import Clips from './pages/Library/Clips';
-import Subscriptions from './pages/Library/Subscriptions';
-import AdminPanel from './pages/AdminPanel/AdminPanel';
-import Notifications from './pages/Notifications/Notifications';
+import LoadingAnimation from './components/LoadingAnimation/LoadingAnimation';
 import './App.css';
+
+// Lazy load pages for better performance
+const Home = lazy(() => import('./pages/Home/Home'));
+const Watch = lazy(() => import('./pages/Watch/Watch'));
+const Login = lazy(() => import('./pages/Auth/Login'));
+const Register = lazy(() => import('./pages/Auth/Register'));
+const AuthCallback = lazy(() => import('./pages/AuthCallback/AuthCallback'));
+const VerifyEmail = lazy(() => import('./pages/Auth/VerifyEmail'));
+const Upload = lazy(() => import('./pages/Upload/Upload'));
+const UploadHLS = lazy(() => import('./pages/UploadHLS/UploadHLS'));
+const CategoryPage = lazy(() => import('./pages/Category/CategoryPage'));
+const Channel = lazy(() => import('./pages/Channel/Channel'));
+const VideoManager = lazy(() => import('./pages/VideoManager/VideoManager'));
+const Profile = lazy(() => import('./pages/Profile/Profile'));
+const ProfileEdit = lazy(() => import('./pages/Profile/ProfileEdit'));
+const History = lazy(() => import('./pages/Library/History'));
+const Liked = lazy(() => import('./pages/Library/Liked'));
+const Saved = lazy(() => import('./pages/Library/Saved'));
+const Clips = lazy(() => import('./pages/Library/Clips'));
+const Subscriptions = lazy(() => import('./pages/Library/Subscriptions'));
+const AdminPanel = lazy(() => import('./pages/AdminPanel/AdminPanel'));
+const Notifications = lazy(() => import('./pages/Notifications/Notifications'));
+
+// Loading component for Suspense
+const PageLoader = () => <LoadingAnimation message="Loading amazing content" />;
 
 function App() {
   const [sidebarOpen, setSidebarOpen] = useState(true);
@@ -114,6 +120,7 @@ function App() {
                 <div className="app-content">
                   <Sidebar isOpen={sidebarOpen} />
                   <main className={`main-content ${sidebarOpen ? 'sidebar-open' : 'sidebar-closed'}`}>
+                  <Suspense fallback={<PageLoader />}>
                   <Routes>
                     <Route path="/" element={<Home />} />
                     <Route path="/watch/:id" element={<Watch />} />
@@ -139,6 +146,7 @@ function App() {
                     <Route path="/admin" element={<AdminPanel />} />
                     <Route path="/notifications" element={<Notifications />} />
                   </Routes>
+                  </Suspense>
                 </main>
               </div>
             </div>

@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import axios from 'axios';
+import api from '../config/api';
 
 const AuthContext = createContext();
 
@@ -18,7 +18,6 @@ export const AuthProvider = ({ children }) => {
 
   useEffect(() => {
     if (token) {
-      axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
       loadUser();
     } else {
       setLoading(false);
@@ -27,7 +26,7 @@ export const AuthProvider = ({ children }) => {
 
   const loadUser = async () => {
     try {
-      const res = await axios.get('/api/auth/me');
+      const res = await api.get('/auth/me');
       const raw = res.data.data;
       if (raw) {
         const normalized = { ...raw, id: raw.id || raw._id };
@@ -36,7 +35,6 @@ export const AuthProvider = ({ children }) => {
     } catch (error) {
       console.error('Error loading user:', error);
       localStorage.removeItem('token');
-      delete axios.defaults.headers.common['Authorization'];
       setToken(null);
     } finally {
       setLoading(false);
@@ -45,9 +43,8 @@ export const AuthProvider = ({ children }) => {
 
   const register = async (userData) => {
     try {
-      const res = await axios.post('/api/auth/register', userData);
+      const res = await api.post('/auth/register', userData);
       localStorage.setItem('token', res.data.token);
-      axios.defaults.headers.common['Authorization'] = `Bearer ${res.data.token}`;
       setToken(res.data.token);
       setUser({ ...res.data.user, id: res.data.user.id || res.data.user._id });
       return { success: true };
@@ -60,10 +57,14 @@ export const AuthProvider = ({ children }) => {
   };
 
   const login = async (credentials) => {
+    // If credentials is a string, treat it as a token (for OAuth)
+    if (typeof credentials === 'string') {
+      return loginWithToken(credentials);
+    }
+    
     try {
-      const res = await axios.post('/api/auth/login', credentials);
+      const res = await api.post('/auth/login', credentials);
       localStorage.setItem('token', res.data.token);
-      axios.defaults.headers.common['Authorization'] = `Bearer ${res.data.token}`;
       setToken(res.data.token);
       setUser({ ...res.data.user, id: res.data.user.id || res.data.user._id });
       return { success: true };
@@ -75,10 +76,36 @@ export const AuthProvider = ({ children }) => {
       };
     }
   };
+  
+  // Login with OAuth token
+  const loginWithToken = async (oauthToken) => {
+    try {
+      localStorage.setItem('token', oauthToken);
+      setToken(oauthToken);
+      
+      // Load user data with the new token
+      const res = await api.get('/auth/me');
+      const raw = res.data.data;
+      if (raw) {
+        const normalized = { ...raw, id: raw.id || raw._id };
+        setUser(normalized);
+        return { success: true };
+      }
+      
+      return { success: false, message: 'Failed to load user data' };
+    } catch (error) {
+      console.error('OAuth login error:', error);
+      localStorage.removeItem('token');
+      setToken(null);
+      return {
+        success: false,
+        message: error.response?.data?.message || 'OAuth login failed'
+      };
+    }
+  };
 
   const logout = () => {
     localStorage.removeItem('token');
-    delete axios.defaults.headers.common['Authorization'];
     setToken(null);
     setUser(null);
   };
@@ -88,6 +115,7 @@ export const AuthProvider = ({ children }) => {
     loading,
     register,
     login,
+    loginWithToken,
     logout,
     isAuthenticated: !!user,
     isUploadAdmin: user?.isUploadAdmin || false,

@@ -1,32 +1,43 @@
 const fs = require('fs');
+const path = require('path');
 const { S3Client, PutObjectCommand, DeleteObjectCommand } = require('@aws-sdk/client-s3');
 const { getSignedUrl } = require('@aws-sdk/s3-request-presigner');
 
-// Ensure env vars exist
+// Make B2 optional for local development
+const isLocalDev = process.env.NODE_ENV !== 'production' && !process.env.B2_BUCKET;
+
 function requiredEnv(name, value) {
-  if (!value) throw new Error(`Missing required env variable: ${name}`);
-  return value;
+  if (!value && !isLocalDev) {
+    throw new Error(`Missing required env variable: ${name}`);
+  }
+  return value || '';
 }
 
-const B2_BUCKET = requiredEnv('B2_BUCKET', process.env.B2_BUCKET);
-const B2_PUBLIC_BASE = requiredEnv('B2_PUBLIC_BASE', process.env.B2_PUBLIC_BASE);
-const B2_ENDPOINT = requiredEnv('B2_ENDPOINT', process.env.B2_ENDPOINT);
-const B2_ACCESS_KEY_ID = requiredEnv('B2_ACCESS_KEY_ID', process.env.B2_ACCESS_KEY_ID);
-const B2_SECRET_ACCESS_KEY = requiredEnv('B2_SECRET_ACCESS_KEY', process.env.B2_SECRET_ACCESS_KEY);
+const B2_BUCKET = process.env.B2_BUCKET || '';
+const B2_PUBLIC_BASE = process.env.B2_PUBLIC_BASE || 'http://localhost:5000/uploads';
+const B2_ENDPOINT = process.env.B2_ENDPOINT || '';
+const B2_ACCESS_KEY_ID = process.env.B2_ACCESS_KEY_ID || '';
+const B2_SECRET_ACCESS_KEY = process.env.B2_SECRET_ACCESS_KEY || '';
 
-const s3 = new S3Client({
-  region: 'auto',
-  endpoint: B2_ENDPOINT,
-  credentials: {
-    accessKeyId: B2_ACCESS_KEY_ID,
-    secretAccessKey: B2_SECRET_ACCESS_KEY,
-  },
-  requestHandler: {
-    requestTimeout: 300000, // 5 minutes timeout for large uploads
-    connectionTimeout: 60000, // 1 minute connection timeout
-  },
-  maxAttempts: 3,
-});
+// Only initialize S3 client if B2 is configured
+let s3 = null;
+if (!isLocalDev && B2_BUCKET && B2_ENDPOINT) {
+  s3 = new S3Client({
+    region: 'auto',
+    endpoint: B2_ENDPOINT,
+    credentials: {
+      accessKeyId: B2_ACCESS_KEY_ID,
+      secretAccessKey: B2_SECRET_ACCESS_KEY,
+    },
+    requestHandler: {
+      requestTimeout: 300000, // 5 minutes timeout for large uploads
+      connectionTimeout: 60000, // 1 minute connection timeout
+    },
+    maxAttempts: 3,
+  });
+} else if (isLocalDev) {
+  console.log('⚠️  B2 storage not configured - using local file storage for development');
+}
 
 /**
  * Uploads a file from a local path to B2
@@ -37,6 +48,20 @@ const s3 = new S3Client({
  */
 async function uploadFilePath(filePath, key, contentType = 'application/octet-stream') {
   if (!fs.existsSync(filePath)) throw new Error(`File does not exist: ${filePath}`);
+
+  // Local development: copy file to uploads directory
+  if (isLocalDev || !s3) {
+    const uploadsDir = path.join(__dirname, '../../uploads');
+    fs.mkdirSync(uploadsDir, { recursive: true });
+    
+    const localFilePath = path.join(uploadsDir, key);
+    const localDir = path.dirname(localFilePath);
+    fs.mkdirSync(localDir, { recursive: true });
+    
+    fs.copyFileSync(filePath, localFilePath);
+    console.log(`📁 Local dev: Copied file to ${localFilePath}`);
+    return publicUrl(key);
+  }
 
   const maxAttempts = 5; // Increased from 3 to 5 for HLS uploads
   const baseDelayMs = 1000; // Increased from 500ms to 1000ms
@@ -90,6 +115,15 @@ async function uploadFilePath(filePath, key, contentType = 'application/octet-st
  * @param {string} key
  */
 async function deleteFile(key) {
+  if (isLocalDev || !s3) {
+    const localFilePath = path.join(__dirname, '../../uploads', key);
+    if (fs.existsSync(localFilePath)) {
+      fs.unlinkSync(localFilePath);
+      console.log(`🗑️  Local dev: Deleted file ${localFilePath}`);
+    }
+    return;
+  }
+  
   await s3.send(new DeleteObjectCommand({
     Bucket: B2_BUCKET,
     Key: key,
@@ -103,6 +137,11 @@ async function deleteFile(key) {
  * @param {number} expires - seconds
  */
 async function presignPut(key, contentType, expires = 900) {
+  if (isLocalDev || !s3) {
+    // Return local URL for development
+    return publicUrl(key);
+  }
+  
   const cmd = new PutObjectCommand({
     Bucket: B2_BUCKET,
     Key: key,
@@ -132,6 +171,11 @@ const { GetObjectCommand } = require('@aws-sdk/client-s3');
  * @returns {Promise<string>} - signed URL
  */
 async function presignGet(key, expires = 900, options = {}) {
+  if (isLocalDev || !s3) {
+    // Return local URL for development
+    return publicUrl(key);
+  }
+  
   const params = {
     Bucket: B2_BUCKET,
     Key: key,

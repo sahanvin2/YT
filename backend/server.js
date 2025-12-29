@@ -47,6 +47,7 @@ const hlsProxy = require('./routes/hlsProxy');
 const adminMessages = require('./routes/adminMessages');
 const oauth = require('./routes/oauth');
 const systemNotifications = require('./routes/systemNotifications');
+const adminEmail = require('./routes/adminEmail');
 
 const app = express();
 const server = http.createServer(app);
@@ -156,6 +157,7 @@ app.use('/api/processing', processing);
 app.use('/api/admin', adminMessages); // Admin-to-admin messaging
 app.use('/api/auth', oauth); // OAuth routes (Google, Microsoft)
 app.use('/api/system-notifications', systemNotifications); // System-wide notifications
+app.use('/api/admin/email', adminEmail); // Admin email functionality
 app.use('/api', hlsProxy); // HLS proxy for CORS-free streaming
 
 // Error handler

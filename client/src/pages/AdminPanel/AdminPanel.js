@@ -30,6 +30,18 @@ const AdminPanel = () => {
   });
   const [allUsers, setAllUsers] = useState([]);
   const [sendingNotification, setSendingNotification] = useState(false);
+  
+  // Email state
+  const [emailForm, setEmailForm] = useState({
+    recipient: '',
+    recipients: 'single',
+    subject: '',
+    message: ''
+  });
+  const [emailUsers, setEmailUsers] = useState([]);
+  const [selectedEmailUsers, setSelectedEmailUsers] = useState([]);
+  const [sendingEmail, setSendingEmail] = useState(false);
+  const [emailHealth, setEmailHealth] = useState(null);
 
   // Check if user is admin
   useEffect(() => {
@@ -65,6 +77,16 @@ const AdminPanel = () => {
         // Fetch all users for notification sending
         const res = await axios.get('/api/system-notifications/users', config);
         setAllUsers(res.data.data.users);
+      } else if (activeTab === 'email') {
+        // Fetch email service health and users
+        try {
+          const healthRes = await axios.get('/api/admin/email/health', config);
+          setEmailHealth(healthRes.data.data);
+        } catch (err) {
+          setEmailHealth({ configured: false, working: false, message: 'Unable to check email health' });
+        }
+        const usersRes = await axios.get('/api/admin/email/users', config);
+        setEmailUsers(usersRes.data.data || []);
       }
     } catch (err) {
       setError(err.response?.data?.message || 'Failed to fetch data');
@@ -202,6 +224,76 @@ const AdminPanel = () => {
     }));
   };
 
+  // Email functions
+  const handleEmailChange = (field, value) => {
+    setEmailForm(prev => ({ ...prev, [field]: value }));
+  };
+
+  const toggleEmailUserSelection = (userId) => {
+    setSelectedEmailUsers(prev => 
+      prev.includes(userId)
+        ? prev.filter(id => id !== userId)
+        : [...prev, userId]
+    );
+  };
+
+  const sendEmailHandler = async (e) => {
+    e.preventDefault();
+    setSendingEmail(true);
+    setError('');
+    setSuccess('');
+
+    try {
+      const token = localStorage.getItem('token');
+      const config = { headers: { Authorization: `Bearer ${token}` } };
+
+      if (emailForm.recipients === 'single') {
+        // Send to single user
+        if (!emailForm.recipient) {
+          setError('Please enter a recipient email');
+          setSendingEmail(false);
+          return;
+        }
+        await axios.post('/api/admin/email/send', {
+          to: emailForm.recipient,
+          subject: emailForm.subject,
+          message: emailForm.message
+        }, config);
+        setSuccess('Email sent successfully!');
+      } else {
+        // Broadcast to multiple users
+        let recipients;
+        if (emailForm.recipients === 'selected') {
+          recipients = selectedEmailUsers;
+          if (recipients.length === 0) {
+            setError('Please select at least one user');
+            setSendingEmail(false);
+            return;
+          }
+        } else {
+          recipients = emailForm.recipients; // 'all', 'admins', 'verified'
+        }
+        
+        const res = await axios.post('/api/admin/email/broadcast', {
+          recipients,
+          subject: emailForm.subject,
+          message: emailForm.message
+        }, config);
+        setSuccess(`Email broadcast complete! Sent: ${res.data.data.sent}, Failed: ${res.data.data.failed}`);
+      }
+
+      // Reset form
+      setEmailForm({ recipient: '', recipients: 'single', subject: '', message: '' });
+      setSelectedEmailUsers([]);
+      setTimeout(() => setSuccess(''), 5000);
+    } catch (err) {
+      setError(err.response?.data?.message || 'Failed to send email');
+      setTimeout(() => setError(''), 5000);
+    } finally {
+      setSendingEmail(false);
+    }
+  };
+
   const filteredUsers = users.filter(u => 
     u.username?.toLowerCase().includes(searchQuery.toLowerCase()) ||
     u.email?.toLowerCase().includes(searchQuery.toLowerCase())
@@ -268,10 +360,10 @@ const AdminPanel = () => {
               <FiBell /> Send Notification
             </button>
             <button 
-              className={`admin-tab ${activeTab === 'messages' ? 'active' : ''}`}
-              onClick={() => setActiveTab('messages')}
+              className={`admin-tab ${activeTab === 'email' ? 'active' : ''}`}
+              onClick={() => setActiveTab('email')}
             >
-              <FiMail /> Messages
+              <FiMail /> Send Email
             </button>
           </>
         )}
@@ -599,20 +691,101 @@ const AdminPanel = () => {
             </div>
           )}
 
-          {activeTab === 'messages' && isMasterAdmin && (
-            <div className="messages-container">
-              <h2>Admin Messaging System</h2>
-              <p className="coming-soon">
-                📧 Full messaging system is ready on the backend!<br />
-                You can send emails via API endpoints or use the send-welcome-emails.js script.<br />
-                <br />
-                <strong>Quick Actions:</strong><br />
-                • Run <code>node send-welcome-emails.js</code> to send welcome emails to all users<br />
-                • Run <code>node send-verification-emails.js</code> to send verification emails<br />
-                • Use <code>node test-email.js your-email@example.com</code> to test email sending<br />
-                <br />
-                Full UI interface coming soon!
-              </p>
+          {activeTab === 'email' && isMasterAdmin && (
+            <div className="email-form-container">
+              <h2>📧 Send Email</h2>
+              
+              {/* Email Health Status */}
+              {emailHealth && (
+                <div className={`email-health ${emailHealth.working ? 'healthy' : 'unhealthy'}`}>
+                  {emailHealth.working ? (
+                    <>✅ Email service is ready</>
+                  ) : (
+                    <>⚠️ Email service: {emailHealth.message}</>
+                  )}
+                </div>
+              )}
+
+              <form onSubmit={sendEmailHandler} className="email-form">
+                <div className="form-group">
+                  <label>Send To</label>
+                  <select
+                    value={emailForm.recipients}
+                    onChange={(e) => handleEmailChange('recipients', e.target.value)}
+                  >
+                    <option value="single">Single User</option>
+                    <option value="selected">Selected Users</option>
+                    <option value="all">All Verified Users</option>
+                    <option value="admins">All Admins</option>
+                  </select>
+                </div>
+
+                {emailForm.recipients === 'single' && (
+                  <div className="form-group">
+                    <label>Recipient Email</label>
+                    <input
+                      type="email"
+                      value={emailForm.recipient}
+                      onChange={(e) => handleEmailChange('recipient', e.target.value)}
+                      placeholder="user@example.com"
+                      required
+                    />
+                  </div>
+                )}
+
+                {emailForm.recipients === 'selected' && (
+                  <div className="form-group">
+                    <label>Select Recipients ({selectedEmailUsers.length} selected)</label>
+                    <div className="user-selection-grid">
+                      {emailUsers.map(user => (
+                        <div key={user._id} className="user-checkbox">
+                          <input
+                            type="checkbox"
+                            id={`email-user-${user._id}`}
+                            checked={selectedEmailUsers.includes(user._id)}
+                            onChange={() => toggleEmailUserSelection(user._id)}
+                          />
+                          <label htmlFor={`email-user-${user._id}`}>
+                            <img src={user.avatar || '/avatars/default-avatar.png'} alt={user.username} />
+                            <span>{user.username}</span>
+                            <small>{user.email}</small>
+                          </label>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                <div className="form-group">
+                  <label>Subject *</label>
+                  <input
+                    type="text"
+                    value={emailForm.subject}
+                    onChange={(e) => handleEmailChange('subject', e.target.value)}
+                    placeholder="Email subject"
+                    required
+                  />
+                </div>
+
+                <div className="form-group">
+                  <label>Message *</label>
+                  <textarea
+                    value={emailForm.message}
+                    onChange={(e) => handleEmailChange('message', e.target.value)}
+                    placeholder="Write your message here..."
+                    rows="8"
+                    required
+                  />
+                </div>
+
+                <button 
+                  type="submit" 
+                  className="send-email-btn"
+                  disabled={sendingEmail || !emailHealth?.working}
+                >
+                  <FiSend /> {sendingEmail ? 'Sending...' : 'Send Email'}
+                </button>
+              </form>
             </div>
           )}
         </div>

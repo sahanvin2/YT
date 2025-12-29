@@ -1,7 +1,8 @@
 const mongoose = require('mongoose');
 
 const connectDB = async () => {
-  const uri = process.env.MONGO_URI;
+  // Use default local MongoDB if not set (for local development)
+  const uri = process.env.MONGO_URI || process.env.MONGODB_URI || 'mongodb://127.0.0.1:27017/movia';
   
   if (!uri) {
     throw new Error('❌ MONGO_URI is not defined in .env file');

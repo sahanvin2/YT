@@ -3,6 +3,7 @@ import { useLocation, useParams, useNavigate, Link } from 'react-router-dom';
 import { FiPlay, FiPlus, FiZap, FiTarget, FiSmile, FiTv, FiCompass, FiFilm, FiVideo } from 'react-icons/fi';
 import { getVideos, getTrendingVideos, searchVideos, getTopCreators } from '../../utils/api';
 import { formatDuration } from '../../utils/helpers';
+import { getCategoryImage } from '../../utils/categoryImages';
 import './Home.css';
 
 const Home = ({ mode }) => {
@@ -45,14 +46,14 @@ const Home = ({ mode }) => {
   };
 
   const topCategories = [
-    { id: 'movies', label: 'Movies', icon: FiFilm, color: 'linear-gradient(135deg, #FF6B35 0%, #F7931E 100%)' },
-    { id: 'series', label: 'Series', icon: FiTv, color: 'linear-gradient(135deg, #E94057 0%, #F27121 100%)' },
-    { id: 'documentaries', label: 'Documentaries', icon: FiVideo, color: 'linear-gradient(135deg, #8E2DE2 0%, #4A00E0 100%)' },
-    { id: 'animation', label: 'Animation', icon: FiSmile, color: 'linear-gradient(135deg, #ff0844 0%, #ffb199 100%)' },
-    { id: 'action', label: 'Action', icon: FiZap, color: 'linear-gradient(135deg, #fc6767 0%, #ec008c 100%)' },
-    { id: 'comedy', label: 'Comedy', icon: FiSmile, color: 'linear-gradient(135deg, #fdbb2d 0%, #22c1c3 100%)' },
-    { id: 'drama', label: 'Drama', icon: FiCompass, color: 'linear-gradient(135deg, #ff9a9e 0%, #fecfef 100%)' },
-    { id: 'horror', label: 'Horror', icon: FiTarget, color: 'linear-gradient(135deg, #fa8bff 0%, #2bff88 100%)' }
+    { id: 'movies', label: 'Movies' },
+    { id: 'series', label: 'Series' },
+    { id: 'documentaries', label: 'Documentaries' },
+    { id: 'animation', label: 'Animation' },
+    { id: 'action', label: 'Action' },
+    { id: 'comedy', label: 'Comedy' },
+    { id: 'drama', label: 'Drama' },
+    { id: 'horror', label: 'Horror' }
   ];
 
   useEffect(() => {
@@ -241,18 +242,22 @@ const Home = ({ mode }) => {
       {mode !== 'trending' && mode !== 'search' && mode !== 'category' && (
         <div className="top-categories-section">
           <div className="top-categories-container">
-            {topCategories.map((category) => (
-              <Link
-                key={category.id}
-                to={`/category/${category.id}`}
-                className="category-circle"
-              >
-                <div className="category-circle-icon" style={{ background: category.color }}>
-                  <category.icon size={32} />
-                </div>
-                <span className="category-label">{category.label}</span>
-              </Link>
-            ))}
+            {topCategories.map((category) => {
+              const categoryImg = getCategoryImage(category.id);
+              const IconComponent = categoryImg.icon;
+              return (
+                <Link
+                  key={category.id}
+                  to={`/category/${category.id}`}
+                  className="category-circle"
+                >
+                  <div className="category-circle-icon" style={{ background: categoryImg.gradient }}>
+                    <IconComponent size={32} />
+                  </div>
+                  <span className="category-label">{category.label}</span>
+                </Link>
+              );
+            })}
           </div>
         </div>
       )}

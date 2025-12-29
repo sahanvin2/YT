@@ -19,8 +19,10 @@ const Navbar = ({ toggleSidebar }) => {
   const [isLoadingSuggestions, setIsLoadingSuggestions] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
+  const [selectedSuggestionIndex, setSelectedSuggestionIndex] = useState(-1);
   const searchRef = useRef(null);
   const suggestionsRef = useRef(null);
+  const searchInputRef = useRef(null);
   const { user, isAuthenticated, logout, isUploadAdmin } = useAuth();
   const { theme, toggleTheme } = useTheme();
   const navigate = useNavigate();
@@ -118,6 +120,7 @@ const Navbar = ({ toggleSidebar }) => {
 
   const handleInputChange = (e) => {
     setSearchQuery(e.target.value);
+    setSelectedSuggestionIndex(-1); // Reset selection when typing
   };
 
   const handleInputFocus = () => {
@@ -125,6 +128,43 @@ const Navbar = ({ toggleSidebar }) => {
       setShowSuggestions(true);
     }
   };
+
+  // Keyboard navigation for search suggestions
+  const handleKeyDown = (e) => {
+    if (!showSuggestions || suggestions.length === 0) return;
+
+    switch (e.key) {
+      case 'ArrowDown':
+        e.preventDefault();
+        setSelectedSuggestionIndex(prev => 
+          prev < suggestions.length - 1 ? prev + 1 : 0
+        );
+        break;
+      case 'ArrowUp':
+        e.preventDefault();
+        setSelectedSuggestionIndex(prev => 
+          prev > 0 ? prev - 1 : suggestions.length - 1
+        );
+        break;
+      case 'Enter':
+        if (selectedSuggestionIndex >= 0 && suggestions[selectedSuggestionIndex]) {
+          e.preventDefault();
+          handleSuggestionClick(suggestions[selectedSuggestionIndex]);
+        }
+        break;
+      case 'Escape':
+        setShowSuggestions(false);
+        setSelectedSuggestionIndex(-1);
+        break;
+      default:
+        break;
+    }
+  };
+
+  // Reset selection when suggestions change
+  useEffect(() => {
+    setSelectedSuggestionIndex(-1);
+  }, [suggestions]);
 
   const handleLogout = () => {
     logout();
@@ -143,14 +183,16 @@ const Navbar = ({ toggleSidebar }) => {
         </Link>
       </div>
 
-      <div className="navbar-search-wrapper" ref={searchRef}>
+      <div className={`navbar-search-wrapper ${mobileSearchOpen ? 'open' : ''}`} ref={searchRef}>
         <form className={`navbar-search ${mobileSearchOpen ? 'open' : ''}`} onSubmit={handleSearch}>
           <input
+            ref={searchInputRef}
             type="text"
             placeholder="Search creators, vibes, or hashtags..."
             value={searchQuery}
             onChange={handleInputChange}
             onFocus={handleInputFocus}
+            onKeyDown={handleKeyDown}
             autoComplete="off"
           />
           <button type="button" className="search-mic-btn" title="Voice search">
@@ -180,11 +222,15 @@ const Navbar = ({ toggleSidebar }) => {
               suggestions.map((suggestion, index) => (
                 <div
                   key={suggestion.id || index}
-                  className="suggestion-item"
+                  className={`suggestion-item ${index === selectedSuggestionIndex ? 'selected' : ''}`}
                   onClick={() => handleSuggestionClick(suggestion)}
+                  onMouseEnter={() => setSelectedSuggestionIndex(index)}
                 >
                   <FiSearch size={16} className="suggestion-icon" />
                   <span className="suggestion-text">{suggestion.title}</span>
+                  {index === selectedSuggestionIndex && (
+                    <span className="suggestion-hint">↵ Enter</span>
+                  )}
                 </div>
               ))
             )}
@@ -213,18 +259,23 @@ const Navbar = ({ toggleSidebar }) => {
         <button
           className="search-toggle"
           onClick={() => {
-            setMobileSearchOpen(!mobileSearchOpen);
-            if (!mobileSearchOpen) {
+            const newState = !mobileSearchOpen;
+            setMobileSearchOpen(newState);
+            if (newState) {
               // Focus search input when opening on mobile
               setTimeout(() => {
-                const input = document.querySelector('.navbar-search input');
-                if (input) input.focus();
-              }, 100);
+                if (searchInputRef.current) {
+                  searchInputRef.current.focus();
+                }
+              }, 150);
+            } else {
+              setShowSuggestions(false);
+              setSelectedSuggestionIndex(-1);
             }
           }}
-          aria-label="Open search"
+          aria-label={mobileSearchOpen ? 'Close search' : 'Open search'}
         >
-          <FiSearch size={20} />
+          {mobileSearchOpen ? <FiX size={20} /> : <FiSearch size={20} />}
         </button>
         {isAuthenticated ? (
           <>

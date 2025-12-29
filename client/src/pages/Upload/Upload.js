@@ -32,6 +32,11 @@ const Upload = () => {
   const [processingProgress, setProcessingProgress] = useState(0);
   const [uploadStatus, setUploadStatus] = useState('idle'); // idle, uploading, processing, completed, error
   const [loading, setLoading] = useState(false);
+  const [uploadSpeed, setUploadSpeed] = useState(0); // MB/s
+  const [uploadETA, setUploadETA] = useState(''); // Estimated time remaining
+  const [uploadedBytes, setUploadedBytes] = useState(0);
+  const [lastUpdateTime, setLastUpdateTime] = useState(Date.now());
+  const [lastUploadedBytes, setLastUploadedBytes] = useState(0);
   const [usePresigned, setUsePresigned] = useState(false);
   const [error, setError] = useState('');
   const [videoLink, setVideoLink] = useState('');
@@ -142,23 +147,46 @@ const Upload = () => {
     const files = Array.from(e.target.files);
     if (!files || files.length === 0) return;
 
-    // Single video file (for now, disable multi-upload)
+    // Enable multiple file selection
+    if (files.length > 1) {
+      // Multi-upload mode
+      setIsMultiUpload(true);
+      const queueItems = files.map((file, index) => ({
+        id: `upload_${Date.now()}_${index}`,
+        file,
+        title: file.name.replace(/\.[^/.]+$/, '').replace(/-|_/g, ' '),
+        status: 'pending',
+        progress: 0
+      }));
+      setUploadQueue(queueItems);
+      setVideoFile(null);
+      setVideoPreview(null);
+    } else {
+      // Single file mode
     const file = files[0];
     setVideoFile(file);
     setVideoPreview(URL.createObjectURL(file));
-    setError('');
     setIsMultiUpload(false);
-    setUploadProgress(0);
-    setUploadStatus('idle');
+      setUploadQueue([]);
 
     // Auto-fill title from filename if empty
-    if (!formData.title) {
+      if (!formData.title && file) {
       const titleFromFile = file.name.replace(/\.[^/.]+$/, '').replace(/-|_/g, ' ');
-      setFormData({
-        ...formData,
+        setFormData(prev => ({
+          ...prev,
         title: titleFromFile
-      });
+        }));
     }
+    }
+    
+    setError('');
+    setUploadProgress(0);
+    setUploadStatus('idle');
+    setUploadSpeed(0);
+    setUploadETA('');
+    setUploadedBytes(0);
+    setLastUpdateTime(Date.now());
+    setLastUploadedBytes(0);
   };
 
   const onThumbnailChange = (e) => {
@@ -233,15 +261,42 @@ const Upload = () => {
         data.append('visibility', visibility);
         data.append('video', job.file);
 
+        const jobStartTime = Date.now();
+        let jobLastUpdateTime = Date.now();
+        let jobLastUploadedBytes = 0;
+
         const res = await uploadVideo(data, {
           onUploadProgress: (progressEvent) => {
             if (progressEvent.total) {
               const percentCompleted = Math.round(
                 (progressEvent.loaded * 100) / progressEvent.total
               );
+              
+              // Calculate speed for this job
+              const currentTime = Date.now();
+              const timeDiff = (currentTime - jobLastUpdateTime) / 1000;
+              
+              if (timeDiff >= 0.5) {
+                const bytesDiff = progressEvent.loaded - jobLastUploadedBytes;
+                const speedMBps = (bytesDiff / (1024 * 1024)) / timeDiff;
+                
+                setUploadQueue(prev => prev.map((item, idx) => 
+                  idx === jobIndex ? { 
+                    ...item, 
+                    progress: percentCompleted,
+                    speed: speedMBps,
+                    uploaded: progressEvent.loaded,
+                    total: progressEvent.total
+                  } : item
+                ));
+                
+                jobLastUpdateTime = currentTime;
+                jobLastUploadedBytes = progressEvent.loaded;
+              } else {
               setUploadQueue(prev => prev.map((item, idx) => 
                 idx === jobIndex ? { ...item, progress: percentCompleted } : item
               ));
+              }
             }
           }
         });
@@ -320,6 +375,11 @@ const Upload = () => {
       setLoading(true);
       setUploadStatus('uploading');
       setUploadProgress(0);
+      setUploadSpeed(0);
+      setUploadETA('');
+      setUploadedBytes(0);
+      setLastUpdateTime(Date.now());
+      setLastUploadedBytes(0);
 
       if (!usePresigned) {
         // Standard upload with progress tracking
@@ -346,6 +406,9 @@ const Upload = () => {
       });
     }
 
+        const startTime = Date.now();
+        const totalSize = videoFile.size;
+
         const res = await uploadVideo(data, {
           onUploadProgress: (progressEvent) => {
             if (progressEvent.total) {
@@ -353,6 +416,36 @@ const Upload = () => {
                 (progressEvent.loaded * 100) / progressEvent.total
               );
               setUploadProgress(percentCompleted);
+              setUploadedBytes(progressEvent.loaded);
+              
+              // Calculate upload speed
+              const currentTime = Date.now();
+              const timeDiff = (currentTime - lastUpdateTime) / 1000; // seconds
+              
+              if (timeDiff >= 0.5) { // Update every 0.5 seconds
+                const bytesDiff = progressEvent.loaded - lastUploadedBytes;
+                const speedMBps = (bytesDiff / (1024 * 1024)) / timeDiff;
+                setUploadSpeed(speedMBps);
+                
+                // Calculate ETA
+                const remainingBytes = progressEvent.total - progressEvent.loaded;
+                const remainingSeconds = remainingBytes / (bytesDiff / timeDiff);
+                
+                if (remainingSeconds > 0 && isFinite(remainingSeconds)) {
+                  if (remainingSeconds < 60) {
+                    setUploadETA(`${Math.round(remainingSeconds)}s`);
+                  } else if (remainingSeconds < 3600) {
+                    setUploadETA(`${Math.round(remainingSeconds / 60)}m ${Math.round(remainingSeconds % 60)}s`);
+                  } else {
+                    const hours = Math.floor(remainingSeconds / 3600);
+                    const minutes = Math.floor((remainingSeconds % 3600) / 60);
+                    setUploadETA(`${hours}h ${minutes}m`);
+                  }
+                }
+                
+                setLastUpdateTime(currentTime);
+                setLastUploadedBytes(progressEvent.loaded);
+              }
             }
           }
         });
@@ -386,6 +479,11 @@ const Upload = () => {
             setUploadStatus('idle');
             setUploadProgress(0);
             setProcessingProgress(0);
+            setUploadSpeed(0);
+            setUploadETA('');
+            setUploadedBytes(0);
+            setLastUpdateTime(Date.now());
+            setLastUploadedBytes(0);
             setVideoFile(null);
             setThumbnailFile(null);
             setVideoPreview(null);
@@ -494,6 +592,11 @@ const Upload = () => {
         setUploadStatus('idle');
         setUploadProgress(0);
         setProcessingProgress(0);
+        setUploadSpeed(0);
+        setUploadETA('');
+        setUploadedBytes(0);
+        setLastUpdateTime(Date.now());
+        setLastUploadedBytes(0);
         setLoading(false);
       }
     } else {
@@ -560,6 +663,12 @@ const Upload = () => {
                 ? `${uploadProgress}% uploaded` 
                 : `${processingProgress}% processed`}
             </span>
+            {uploadStatus === 'uploading' && uploadSpeed > 0 && (
+              <span className="progress-speed">
+                {uploadSpeed.toFixed(2)} MB/s
+                {uploadETA && ` • ${uploadETA} remaining`}
+              </span>
+            )}
             <button 
               className="progress-cancel" 
               onClick={handleCancel}
@@ -1003,7 +1112,14 @@ const Upload = () => {
                               style={{ width: `${job.progress}%` }}
                             />
                           </div>
+                          <div className="queue-progress-info">
                           <span className="queue-progress-text">{job.progress}%</span>
+                            {job.speed > 0 && (
+                              <span className="queue-progress-speed">
+                                {job.speed.toFixed(2)} MB/s
+                              </span>
+                            )}
+                          </div>
                         </div>
                       )}
                       {job.status === 'error' && job.error && (

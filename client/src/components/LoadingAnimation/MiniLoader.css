@@ -1,0 +1,125 @@
+/* ================================
+   MINI LOADER - For Inline Loading
+   ================================ */
+
+.mini-loader {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 20px;
+}
+
+/* Size Variants */
+.mini-loader-small .mini-loader-spinner {
+  width: 32px;
+  height: 32px;
+}
+
+.mini-loader-medium .mini-loader-spinner {
+  width: 48px;
+  height: 48px;
+}
+
+.mini-loader-large .mini-loader-spinner {
+  width: 64px;
+  height: 64px;
+}
+
+/* Spinner */
+.mini-loader-spinner {
+  position: relative;
+  width: 48px;
+  height: 48px;
+}
+
+.spinner-ring {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  border: 2px solid transparent;
+  border-top-color: currentColor;
+  animation: miniSpin 1.2s cubic-bezier(0.5, 0, 0.5, 1) infinite;
+}
+
+.ring-1 {
+  color: #FF6B35;
+  animation-delay: 0s;
+}
+
+.ring-2 {
+  color: #8B5CF6;
+  animation-delay: -0.4s;
+  animation-duration: 1.4s;
+}
+
+.ring-3 {
+  color: #06B6D4;
+  animation-delay: -0.8s;
+  animation-duration: 1.6s;
+}
+
+@keyframes miniSpin {
+  0% {
+    transform: rotate(0deg);
+    border-top-color: currentColor;
+    border-right-color: transparent;
+  }
+  50% {
+    border-top-color: transparent;
+    border-right-color: currentColor;
+  }
+  100% {
+    transform: rotate(360deg);
+    border-top-color: currentColor;
+    border-right-color: transparent;
+  }
+}
+
+.spinner-core {
+  position: absolute;
+  inset: 8px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, 
+    rgba(255, 107, 53, 0.2) 0%, 
+    rgba(139, 92, 246, 0.2) 50%, 
+    rgba(6, 182, 212, 0.2) 100%
+  );
+  animation: corePulse 2s ease-in-out infinite;
+}
+
+@keyframes corePulse {
+  0%, 100% { 
+    opacity: 0.5;
+    transform: scale(0.8);
+  }
+  50% { 
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+/* Loading Text */
+.mini-loader-text {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-secondary);
+  animation: textFade 1.5s ease-in-out infinite;
+}
+
+@keyframes textFade {
+  0%, 100% { opacity: 0.5; }
+  50% { opacity: 1; }
+}
+
+/* Small variant text */
+.mini-loader-small .mini-loader-text {
+  font-size: 11px;
+}
+
+/* Large variant text */
+.mini-loader-large .mini-loader-text {
+  font-size: 15px;
+}
+

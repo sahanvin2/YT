@@ -800,8 +800,8 @@ const Watch = () => {
     )
   );
 
-  // HLS-only UX: if video isn't ready as HLS, treat it as needing processing.
-  const needsHls = Boolean(video && !isHlsPlayback);
+  // Check if video needs processing (removed HLS-only requirement - MP4 videos are playable)
+  const needsHls = false; // No longer requiring HLS - MP4 videos work fine
 
   const hasPlayableUrl = typeof playbackUrl === 'string' && playbackUrl.trim().length > 0 && !isPlaceholderUrl(playbackUrl);
 

@@ -153,14 +153,30 @@ const sendVerificationEmail = async (email, name, verificationToken) => {
     `
   };
 
+  // Retry logic for better reliability
+  const maxRetries = 3;
+  let lastError;
+  
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
   try {
     const info = await transporter.sendMail(mailOptions);
     console.log('✅ Verification email sent:', info.messageId);
     return { success: true, messageId: info.messageId };
   } catch (error) {
-    console.error('❌ Error sending verification email:', error);
-    throw error;
+      lastError = error;
+      console.error(`❌ Error sending verification email (attempt ${attempt}/${maxRetries}):`, error.message);
+      
+      if (attempt < maxRetries) {
+        // Wait before retry (exponential backoff)
+        const delay = Math.pow(2, attempt) * 1000; // 2s, 4s, 8s
+        await new Promise(resolve => setTimeout(resolve, delay));
   }
+    }
+  }
+  
+  // All retries failed
+  console.error('❌ Failed to send verification email after', maxRetries, 'attempts');
+  return { success: false, error: lastError?.message || 'Email sending failed' };
 };
 
 /**
@@ -286,14 +302,28 @@ const sendPasswordResetEmail = async (email, name, resetToken) => {
     `
   };
 
+  // Retry logic for better reliability
+  const maxRetries = 3;
+  let lastError;
+  
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
   try {
     const info = await transporter.sendMail(mailOptions);
     console.log('✅ Password reset email sent:', info.messageId);
     return { success: true, messageId: info.messageId };
   } catch (error) {
-    console.error('❌ Error sending password reset email:', error);
-    throw error;
+      lastError = error;
+      console.error(`❌ Error sending password reset email (attempt ${attempt}/${maxRetries}):`, error.message);
+      
+      if (attempt < maxRetries) {
+        const delay = Math.pow(2, attempt) * 1000;
+        await new Promise(resolve => setTimeout(resolve, delay));
   }
+    }
+  }
+  
+  console.error('❌ Failed to send password reset email after', maxRetries, 'attempts');
+  return { success: false, error: lastError?.message || 'Email sending failed' };
 };
 
 /**
@@ -423,13 +453,203 @@ const sendWelcomeEmail = async (email, name) => {
     `
   };
 
+  // Retry logic for better reliability
+  const maxRetries = 3;
+  let lastError;
+  
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
   try {
     const info = await transporter.sendMail(mailOptions);
     console.log('✅ Welcome email sent:', info.messageId);
     return { success: true, messageId: info.messageId };
   } catch (error) {
-    console.error('❌ Error sending welcome email:', error);
-    throw error;
+      lastError = error;
+      console.error(`❌ Error sending welcome email (attempt ${attempt}/${maxRetries}):`, error.message);
+      
+      if (attempt < maxRetries) {
+        const delay = Math.pow(2, attempt) * 1000;
+        await new Promise(resolve => setTimeout(resolve, delay));
+      }
+    }
+  }
+  
+  console.error('❌ Failed to send welcome email after', maxRetries, 'attempts');
+  return { success: false, error: lastError?.message || 'Email sending failed' };
+};
+
+/**
+ * Generic send email function for admins
+ * @param {string} to - Recipient email
+ * @param {string} subject - Email subject
+ * @param {string} htmlBody - HTML email body
+ */
+const sendEmail = async (to, subject, htmlBody) => {
+  if (!transporter) {
+    console.warn('⚠️  Email not sent - transporter not configured');
+    return { success: false, message: 'Email service not configured' };
+  }
+
+  const mailOptions = {
+    from: `"${process.env.MAIL_FROM_NAME || 'Xclub'}" <${process.env.MAIL_FROM_ADDRESS || 'noreply@xclub.asia'}>`,
+    to,
+    subject,
+    html: htmlBody
+  };
+
+  // Retry logic
+  const maxRetries = 3;
+  let lastError;
+  
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      const info = await transporter.sendMail(mailOptions);
+      console.log('✅ Email sent:', info.messageId);
+      return { success: true, messageId: info.messageId };
+    } catch (error) {
+      lastError = error;
+      console.error(`❌ Error sending email (attempt ${attempt}/${maxRetries}):`, error.message);
+      
+      if (attempt < maxRetries) {
+        const delay = Math.pow(2, attempt) * 1000;
+        await new Promise(resolve => setTimeout(resolve, delay));
+      }
+    }
+  }
+  
+  console.error('❌ Failed to send email after', maxRetries, 'attempts');
+  return { success: false, error: lastError?.message || 'Email sending failed' };
+};
+
+/**
+ * Send broadcast email to multiple users (admin only)
+ * @param {Array} recipients - Array of {email, name}
+ * @param {string} subject - Email subject  
+ * @param {string} messageContent - Message content
+ * @param {string} adminName - Admin who is sending
+ */
+const sendBroadcastEmail = async (recipients, subject, messageContent, adminName = 'Admin') => {
+  if (!transporter) {
+    console.warn('⚠️  Email not sent - transporter not configured');
+    return { success: false, message: 'Email service not configured', sent: 0, failed: 0 };
+  }
+
+  let sent = 0;
+  let failed = 0;
+  const errors = [];
+
+  for (const recipient of recipients) {
+    const htmlBody = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>${subject}</title>
+        <style>
+          body {
+            font-family: Arial, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            max-width: 600px;
+            margin: 0 auto;
+            padding: 20px;
+          }
+          .container {
+            background: linear-gradient(135deg, #FF6B35 0%, #6C5CE7 100%);
+            border-radius: 10px;
+            padding: 40px;
+            color: white;
+          }
+          .logo {
+            font-size: 32px;
+            font-weight: bold;
+            text-align: center;
+            margin-bottom: 30px;
+          }
+          .content {
+            background: white;
+            color: #333;
+            padding: 30px;
+            border-radius: 8px;
+            margin: 20px 0;
+          }
+          .message {
+            white-space: pre-wrap;
+            line-height: 1.8;
+          }
+          .footer {
+            text-align: center;
+            font-size: 12px;
+            margin-top: 20px;
+            opacity: 0.8;
+          }
+          .admin-badge {
+            display: inline-block;
+            background: rgba(255,255,255,0.2);
+            padding: 4px 12px;
+            border-radius: 15px;
+            font-size: 12px;
+            margin-bottom: 15px;
+          }
+        </style>
+      </head>
+      <body>
+        <div class="container">
+          <div class="logo">🎬 Xclub</div>
+          
+          <div class="content">
+            <span class="admin-badge">📢 From: ${adminName}</span>
+            <h2>${subject}</h2>
+            <p>Hi ${recipient.name || 'there'},</p>
+            <div class="message">${messageContent}</div>
+            <br>
+            <p>Best regards,<br>The Xclub Team</p>
+          </div>
+          
+          <div class="footer">
+            <p>© ${new Date().getFullYear()} Xclub. All rights reserved.</p>
+            <p>You're receiving this because you're a member of Xclub.</p>
+          </div>
+        </div>
+      </body>
+      </html>
+    `;
+
+    try {
+      await transporter.sendMail({
+        from: `"${process.env.MAIL_FROM_NAME || 'Xclub'}" <${process.env.MAIL_FROM_ADDRESS || 'noreply@xclub.asia'}>`,
+        to: recipient.email,
+        subject: `[Xclub] ${subject}`,
+        html: htmlBody
+      });
+      sent++;
+    } catch (error) {
+      failed++;
+      errors.push({ email: recipient.email, error: error.message });
+      console.error(`Failed to send to ${recipient.email}:`, error.message);
+    }
+    
+    // Small delay between emails to avoid rate limiting
+    await new Promise(resolve => setTimeout(resolve, 100));
+  }
+
+  console.log(`📧 Broadcast complete: ${sent} sent, ${failed} failed`);
+  return { success: true, sent, failed, errors };
+};
+
+/**
+ * Check if email service is configured and working
+ */
+const checkEmailHealth = async () => {
+  if (!transporter) {
+    return { configured: false, working: false, message: 'Email service not configured' };
+  }
+  
+  try {
+    await transporter.verify();
+    return { configured: true, working: true, message: 'Email service is ready' };
+  } catch (error) {
+    return { configured: true, working: false, message: error.message };
   }
 };
 
@@ -437,5 +657,9 @@ module.exports = {
   sendVerificationEmail,
   sendPasswordResetEmail,
   sendWelcomeEmail,
-  transporter
+  sendEmail,
+  sendBroadcastEmail,
+  checkEmailHealth,
+  transporter,
+  isEmailConfigured
 };
