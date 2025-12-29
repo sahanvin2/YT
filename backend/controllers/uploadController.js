@@ -177,12 +177,15 @@ exports.streamUploadToB2 = async (req, res) => {
       fileStream = fs.createReadStream(tmpPath);
     }
     
-    console.log(`📤 Uploading to B2: ${videoKey}`);
+    console.log(`📤 Uploading to B2: ${videoKey} (${Math.round(videoFile.size / 1024 / 1024)}MB)`);
+    
+    // B2 requires ContentLength for stream uploads
     await s3.send(new PutObjectCommand({
       Bucket: B2_BUCKET,
       Key: videoKey,
       Body: fileStream,
       ContentType: videoCT,
+      ContentLength: videoFile.size, // Required for B2 stream uploads
     }));
     
     // Clean up temp file if we created one
@@ -222,6 +225,7 @@ exports.streamUploadToB2 = async (req, res) => {
         Key: thumbKey,
         Body: thumbStream,
         ContentType: thumbCT,
+        ContentLength: thumbnailFile.size, // Required for B2 stream uploads
       }));
       
       thumbnailUrl = publicUrl(thumbKey);
