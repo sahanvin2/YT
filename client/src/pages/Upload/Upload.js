@@ -412,40 +412,41 @@ const Upload = () => {
           maxContentLength: Infinity,
           maxBodyLength: Infinity,
           onUploadProgress: (progressEvent) => {
-          if (progressEvent.total) {
-            const percentCompleted = Math.round(
-              (progressEvent.loaded * 100) / progressEvent.total
-            );
-            setUploadProgress(percentCompleted);
-            setUploadedBytes(progressEvent.loaded);
-            
-            // Calculate upload speed
-            const currentTime = Date.now();
-            const timeDiff = (currentTime - lastUpdateTime) / 1000; // seconds
-            
-            if (timeDiff >= 0.5) { // Update every 0.5 seconds
-              const bytesDiff = progressEvent.loaded - lastUploadedBytes;
-              const speedMBps = (bytesDiff / (1024 * 1024)) / timeDiff;
-              setUploadSpeed(speedMBps);
+            if (progressEvent.total) {
+              const percentCompleted = Math.round(
+                (progressEvent.loaded * 100) / progressEvent.total
+              );
+              setUploadProgress(percentCompleted);
+              setUploadedBytes(progressEvent.loaded);
               
-              // Calculate ETA
-              const remainingBytes = progressEvent.total - progressEvent.loaded;
-              const remainingSeconds = remainingBytes / (bytesDiff / timeDiff);
+              // Calculate upload speed
+              const currentTime = Date.now();
+              const timeDiff = (currentTime - lastUpdateTime) / 1000; // seconds
               
-              if (remainingSeconds > 0 && isFinite(remainingSeconds)) {
-                if (remainingSeconds < 60) {
-                  setUploadETA(`${Math.round(remainingSeconds)}s`);
-                } else if (remainingSeconds < 3600) {
-                  setUploadETA(`${Math.round(remainingSeconds / 60)}m ${Math.round(remainingSeconds % 60)}s`);
-                } else {
-                  const hours = Math.floor(remainingSeconds / 3600);
-                  const minutes = Math.floor((remainingSeconds % 3600) / 60);
-                  setUploadETA(`${hours}h ${minutes}m`);
+              if (timeDiff >= 0.5) { // Update every 0.5 seconds
+                const bytesDiff = progressEvent.loaded - lastUploadedBytes;
+                const speedMBps = (bytesDiff / (1024 * 1024)) / timeDiff;
+                setUploadSpeed(speedMBps);
+                
+                // Calculate ETA
+                const remainingBytes = progressEvent.total - progressEvent.loaded;
+                const remainingSeconds = remainingBytes / (bytesDiff / timeDiff);
+                
+                if (remainingSeconds > 0 && isFinite(remainingSeconds)) {
+                  if (remainingSeconds < 60) {
+                    setUploadETA(`${Math.round(remainingSeconds)}s`);
+                  } else if (remainingSeconds < 3600) {
+                    setUploadETA(`${Math.round(remainingSeconds / 60)}m ${Math.round(remainingSeconds % 60)}s`);
+                  } else {
+                    const hours = Math.floor(remainingSeconds / 3600);
+                    const minutes = Math.floor((remainingSeconds % 3600) / 60);
+                    setUploadETA(`${hours}h ${minutes}m`);
+                  }
                 }
+                
+                setLastUpdateTime(currentTime);
+                setLastUploadedBytes(progressEvent.loaded);
               }
-              
-              setLastUpdateTime(currentTime);
-              setLastUploadedBytes(progressEvent.loaded);
             }
           }
         });
