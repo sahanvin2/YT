@@ -64,14 +64,36 @@ export const AuthProvider = ({ children }) => {
     
     try {
       const res = await api.post('/auth/login', credentials);
+      
+      // Check if response has token
+      if (!res.data || !res.data.token) {
+        return {
+          success: false,
+          message: 'Invalid response from server. Please try again.'
+        };
+      }
+      
       localStorage.setItem('token', res.data.token);
       setToken(res.data.token);
       setUser({ ...res.data.user, id: res.data.user.id || res.data.user._id });
       return { success: true };
     } catch (error) {
+      // Better error handling
+      let errorMessage = 'Login failed';
+      
+      if (error.isNetworkError) {
+        errorMessage = 'Network error. Please check your connection and try again.';
+      } else if (error.response?.data?.message) {
+        errorMessage = error.response.data.message;
+      } else if (error.message) {
+        errorMessage = error.message;
+      }
+      
+      console.error('Login error:', error);
+      
       return {
         success: false,
-        message: error.response?.data?.message || 'Login failed',
+        message: errorMessage,
         needsVerification: error.response?.data?.needsVerification || false
       };
     }

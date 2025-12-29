@@ -1,16 +1,21 @@
 import axios from 'axios';
 
-// API Configuration - Auto-detect environment
+// API Configuration - Auto-detect environment with better fallback
 const getApiBaseUrl = () => {
   // If explicitly set in environment, use it
   if (process.env.REACT_APP_API_URL) {
     return process.env.REACT_APP_API_URL;
   }
   
+  // Check if we're in production by checking hostname
+  const hostname = window.location.hostname;
+  const isProduction = hostname !== 'localhost' && hostname !== '127.0.0.1';
+  
   // In production (EC2), use the same origin
-  if (process.env.NODE_ENV === 'production') {
+  if (isProduction || process.env.NODE_ENV === 'production') {
     // Use current origin + /api
-    return `${window.location.origin}/api`;
+    const origin = window.location.origin;
+    return `${origin}/api`;
   }
   
   // Development fallback
@@ -18,6 +23,11 @@ const getApiBaseUrl = () => {
 };
 
 const API_BASE_URL = getApiBaseUrl();
+
+// Log API URL in development for debugging
+if (process.env.NODE_ENV === 'development') {
+  console.log('🔗 API Base URL:', API_BASE_URL);
+}
 
 // Create axios instance with proper base URL
 const api = axios.create({
@@ -47,13 +57,24 @@ api.interceptors.request.use(
 api.interceptors.response.use(
   (response) => response,
   (error) => {
-    // Log error for debugging
-    if (process.env.NODE_ENV === 'development') {
-      console.error('API Error:', {
-        url: error.config?.url,
-        status: error.response?.status,
-        message: error.message,
-        data: error.response?.data
+    // Better error logging
+    console.error('API Error:', {
+      url: error.config?.url,
+      baseURL: error.config?.baseURL,
+      fullURL: error.config?.baseURL + error.config?.url,
+      status: error.response?.status,
+      statusText: error.response?.statusText,
+      message: error.message,
+      data: error.response?.data
+    });
+    
+    // Network errors
+    if (error.code === 'ERR_NETWORK' || error.message === 'Network Error') {
+      console.error('Network Error - Check API URL:', API_BASE_URL);
+      return Promise.reject({
+        ...error,
+        message: 'Network error. Please check your connection and try again.',
+        isNetworkError: true
       });
     }
     
