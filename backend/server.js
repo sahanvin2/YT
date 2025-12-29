@@ -52,6 +52,11 @@ const adminEmail = require('./routes/adminEmail');
 const app = express();
 const server = http.createServer(app);
 
+// Set server timeouts for large file uploads (4GB+)
+server.timeout = 7200000; // 2 hours
+server.keepAliveTimeout = 7200000; // 2 hours
+server.headersTimeout = 7200000; // 2 hours
+
 // Initialize Socket.IO with CORS
 const io = new Server(server, {
   cors: {
@@ -123,11 +128,12 @@ const uploadsDir = path.join(__dirname, '../tmp/uploads');
 
 app.use(fileUpload({
   createParentPath: true,
-  useTempFiles: false, // Use memory instead of temp files
+  useTempFiles: true, // Use temp files for large uploads to avoid memory issues
+  tempFileDir: path.join(__dirname, '../tmp/uploads'),
   limits: { fileSize: maxSizeMb * 1024 * 1024 },
   abortOnLimit: false,
   responseOnLimit: `File size limit exceeded. Maximum allowed: ${maxSizeMb}MB (${Math.round(maxSizeMb/1024)}GB)`,
-  uploadTimeout: 1200000, // 20 minutes timeout for large HLS folders
+  uploadTimeout: 7200000, // 2 hours timeout for very large files (4GB+)
   debug: process.env.NODE_ENV === 'development' // Enable debug in dev mode
 }));
 

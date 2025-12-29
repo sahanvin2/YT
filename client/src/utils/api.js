@@ -8,14 +8,20 @@ export const getVideos = (params) => api.get(`${API_URL}/videos`, { params });
 export const getVideo = (id) => api.get(`${API_URL}/videos/${id}`);
 export const uploadVideo = (formData, config = {}) => {
   // Ensure we're using the correct API instance with proper base URL
+  // For large files (4GB+), we need very long timeouts
   return api.post(`${API_URL}/videos`, formData, {
     headers: {
       'Content-Type': 'multipart/form-data'
     },
     onUploadProgress: config.onUploadProgress,
-    timeout: 36000000, // 10 hours for large video uploads
+    timeout: 7200000, // 2 hours for very large video uploads (4GB+)
     maxContentLength: Infinity,
-    maxBodyLength: Infinity
+    maxBodyLength: Infinity,
+    // Increase timeout for slow connections
+    maxRedirects: 0,
+    validateStatus: function (status) {
+      return status < 500; // Don't throw on 4xx errors, let us handle them
+    }
   });
 };
 export const presignPut = (fileName, contentType) => api.post(`${API_URL}/uploads/presign`, { fileName, contentType });
