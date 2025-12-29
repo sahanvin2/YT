@@ -147,29 +147,28 @@ app.use(cors({
     // Allow requests with no origin (like mobile apps or curl requests)
     if (!origin) return callback(null, true);
     
-    // Check if origin is in allowed list
-    if (allowedOrigins.some(allowed => origin.includes(allowed.replace(/^https?:\/\//, '')))) {
+    // Always allow in production to prevent login issues
+    // Check if origin matches any allowed pattern
+    const originHostname = origin.replace(/^https?:\/\//, '').split('/')[0];
+    const isAllowed = allowedOrigins.some(allowed => {
+      if (!allowed) return false;
+      const allowedHostname = allowed.replace(/^https?:\/\//, '').split('/')[0];
+      return originHostname === allowedHostname || originHostname.includes(allowedHostname) || allowedHostname.includes(originHostname);
+    });
+    
+    if (isAllowed) {
       callback(null, true);
     } else {
-      // In production, be more strict
-      if (process.env.NODE_ENV === 'production') {
-        // Allow if it matches the CLIENT_URL pattern
-        const clientUrl = process.env.CLIENT_URL || '';
-        if (clientUrl && origin.includes(new URL(clientUrl).hostname)) {
-          callback(null, true);
-        } else {
-          console.warn(`CORS blocked origin: ${origin}`);
-          callback(null, true); // Still allow for now, but log warning
-        }
-      } else {
-        // In development, allow all
-        callback(null, true);
-      }
+      // In production, allow all origins to prevent login failures
+      // Log for monitoring but don't block
+      console.log(`CORS: Allowing origin: ${origin}`);
+      callback(null, true);
     }
   },
   credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization']
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
+  exposedHeaders: ['Authorization']
 }));
 
 // Set static folder
