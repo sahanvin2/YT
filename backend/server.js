@@ -11,8 +11,26 @@ const { Server } = require('socket.io');
 const connectDB = require('./config/db');
 const errorHandler = require('./middleware/error');
 
-// Load env vars
-dotenv.config();
+// Load env vars - Try multiple locations to ensure .env is found
+// Priority: 1) Project root, 2) Backend directory, 3) Parent directory
+const path = require('path');
+const envPath1 = path.join(__dirname, '../.env');
+const envPath2 = path.join(__dirname, '.env');
+const envPath3 = path.resolve(process.cwd(), '.env');
+
+if (require('fs').existsSync(envPath1)) {
+  dotenv.config({ path: envPath1 });
+  console.log(`✅ Loaded .env from: ${envPath1}`);
+} else if (require('fs').existsSync(envPath2)) {
+  dotenv.config({ path: envPath2 });
+  console.log(`✅ Loaded .env from: ${envPath2}`);
+} else if (require('fs').existsSync(envPath3)) {
+  dotenv.config({ path: envPath3 });
+  console.log(`✅ Loaded .env from: ${envPath3}`);
+} else {
+  dotenv.config(); // Default behavior
+  console.log(`⚠️  Using default .env loading (file may not exist)`);
+}
 
 // Initialize Passport for OAuth
 const passport = require('./config/passport');
