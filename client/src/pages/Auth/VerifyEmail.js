@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import axios from 'axios';
-import XclubLogo from '../../components/Logo/MoviaLogo';
+import MoviaLogo from '../../components/Logo/MoviaLogo';
 import './Auth.css';
 
 const VerifyEmail = () => {
@@ -36,7 +36,7 @@ const VerifyEmail = () => {
     <div className="auth-page">
       <div className="auth-container">
         <div className="auth-header">
-          <XclubLogo size={28} showText={true} />
+          <MoviaLogo size={28} showText={true} />
           <h1>Email Verification</h1>
         </div>
 

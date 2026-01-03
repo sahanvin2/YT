@@ -57,11 +57,12 @@ exports.presignUpload = async (req, res) => {
       return res.status(400).json({ success: false, message: 'fileName and contentType required' });
     }
     
-    // Check file size (5GB = 5368709120 bytes)
-    if (fileSize && fileSize > 5368709120) {
+    // Check file size (2GB = 2147483648 bytes)
+    const maxSizeBytes = 2147483648; // 2GB
+    if (fileSize && fileSize > maxSizeBytes) {
       return res.status(413).json({ 
         success: false, 
-        message: 'File too large. Maximum size is 5GB' 
+        message: `File too large. Maximum size is 2GB (${Math.round(maxSizeBytes / 1024 / 1024)}MB)` 
       });
     }
     
@@ -120,11 +121,12 @@ exports.streamUploadToB2 = async (req, res) => {
       visibility 
     } = req.body;
 
-    // Check file size (5GB = 5368709120 bytes)
-    if (videoFile.size > 5368709120) {
+    // Check file size (2GB = 2147483648 bytes)
+    const maxSizeBytes = 2147483648; // 2GB
+    if (videoFile.size > maxSizeBytes) {
       return res.status(413).json({ 
         success: false, 
-        message: 'File too large. Maximum size is 5GB' 
+        message: `File too large. Maximum size is 2GB (${Math.round(maxSizeBytes / 1024 / 1024)}MB)` 
       });
     }
 
@@ -136,8 +138,8 @@ exports.streamUploadToB2 = async (req, res) => {
     const B2_ACCESS_KEY_ID = process.env.B2_ACCESS_KEY_ID;
     const B2_SECRET_ACCESS_KEY = process.env.B2_SECRET_ACCESS_KEY;
 
-    if (!B2_BUCKET || !B2_ENDPOINT) {
-      throw new Error('B2 storage not configured');
+    if (!B2_BUCKET || !B2_ENDPOINT || !B2_ACCESS_KEY_ID || !B2_SECRET_ACCESS_KEY) {
+      throw new Error('B2 storage not configured (missing B2_BUCKET/B2_ENDPOINT/B2_ACCESS_KEY_ID/B2_SECRET_ACCESS_KEY)');
     }
 
     const s3 = new S3Client({
@@ -153,26 +155,32 @@ exports.streamUploadToB2 = async (req, res) => {
       },
     });
 
-    // Generate key
+    // Generate key - accept ANY file format
     const ts = Date.now();
-    const videoKey = `videos/${req.user.id}/${ts}_${videoFile.name}`;
-    const videoCT = mime.lookup(videoFile.name) || 'video/mp4';
+    // Preserve original filename and extension (supports any format: mp4, mkv, avi, mov, webm, etc.)
+    const sanitizedFileName = videoFile.name.replace(/[^a-zA-Z0-9._-]/g, '_');
+    const videoKey = `videos/${req.user.id}/${ts}_${sanitizedFileName}`;
+    // Detect content type from file extension or use generic binary
+    const videoCT = mime.lookup(videoFile.name) || 'application/octet-stream';
 
-    // Stream file directly to B2 (NO DISK STORAGE - files must be in memory)
-    // CRITICAL: Never write to EC2 disk - this causes crashes
+    // Stream file directly to B2.
+    // IMPORTANT: For stability we prefer streaming from tempFilePath (disk) instead of holding multi‑GB buffers in RAM.
     let fileStream;
-    if (videoFile.data) {
-      // File is in memory - use this (preferred)
-      fileStream = Readable.from(videoFile.data);
-      console.log(`📤 File in memory, streaming to B2: ${videoKey} (${Math.round(videoFile.size / 1024 / 1024)}MB)`);
-    } else if (videoFile.tempFilePath) {
-      // File was written to disk (shouldn't happen with useTempFiles: false)
-      // Read and immediately delete after streaming
-      console.warn(`⚠️ File on disk detected (should be in memory). Will delete after upload: ${videoFile.tempFilePath}`);
+    let contentLength = videoFile.size;
+    if (videoFile.tempFilePath && fs.existsSync(videoFile.tempFilePath)) {
       fileStream = fs.createReadStream(videoFile.tempFilePath);
+      try {
+        contentLength = fs.statSync(videoFile.tempFilePath).size;
+      } catch (e) {
+        // keep fallback to provided size
+      }
+      console.log(`📤 File on disk, streaming to B2: ${videoKey} (${Math.round(contentLength / 1024 / 1024)}MB)`);
+    } else if (videoFile.data) {
+      fileStream = Readable.from(videoFile.data);
+      contentLength = videoFile.data.length;
+      console.log(`📤 File in memory, streaming to B2: ${videoKey} (${Math.round(contentLength / 1024 / 1024)}MB)`);
     } else {
-      // No file data - this is an error
-      throw new Error('File data not available. File must be in memory (useTempFiles: false).');
+      throw new Error('File data not available. Upload must provide tempFilePath or data.');
     }
     
     // Upload to B2 with verification
@@ -185,7 +193,7 @@ exports.streamUploadToB2 = async (req, res) => {
         Key: videoKey,
         Body: fileStream,
         ContentType: videoCT,
-        ContentLength: videoFile.size, // Required for B2 stream uploads
+        ContentLength: contentLength, // Required for B2 stream uploads
       }));
       
       // Verify upload succeeded by checking if file exists in B2
@@ -227,13 +235,17 @@ exports.streamUploadToB2 = async (req, res) => {
       const thumbCT = mime.lookup(thumbnailFile.name) || 'image/jpeg';
       
       let thumbStream;
-      if (thumbnailFile.data) {
-        thumbStream = Readable.from(thumbnailFile.data);
-      } else if (thumbnailFile.tempFilePath) {
-        console.warn(`⚠️ Thumbnail on disk (should be in memory). Will delete after upload.`);
+      let thumbLength = thumbnailFile.size;
+      if (thumbnailFile.tempFilePath && fs.existsSync(thumbnailFile.tempFilePath)) {
         thumbStream = fs.createReadStream(thumbnailFile.tempFilePath);
+        try {
+          thumbLength = fs.statSync(thumbnailFile.tempFilePath).size;
+        } catch (e) {}
+      } else if (thumbnailFile.data) {
+        thumbStream = Readable.from(thumbnailFile.data);
+        thumbLength = thumbnailFile.data.length;
       } else {
-        throw new Error('Thumbnail data not available. Must be in memory.');
+        throw new Error('Thumbnail data not available. Upload must provide tempFilePath or data.');
       }
       
       try {
@@ -242,7 +254,7 @@ exports.streamUploadToB2 = async (req, res) => {
           Key: thumbKey,
           Body: thumbStream,
           ContentType: thumbCT,
-          ContentLength: thumbnailFile.size,
+          ContentLength: thumbLength,
         }));
         thumbnailUrl = publicUrl(thumbKey);
         console.log(`✅ Thumbnail uploaded to B2: ${thumbKey}`);
@@ -295,10 +307,15 @@ exports.streamUploadToB2 = async (req, res) => {
       throw new Error('Invalid B2 URL generated. Upload may have failed.');
     }
 
+    // Processing disabled: store original file on B2 and publish immediately.
+    // (No Redis queue, no HLS, no multi-quality variants.)
+    const processingStatus = 'completed';
+    const isPublished = true;
+
     const video = await Video.create({
       title,
       description: description || ' ',
-      videoUrl: videoUrl, // Direct B2 URL
+      videoUrl: videoUrl, // Direct B2 URL (fallback)
       hlsUrl: null,
       thumbnailUrl,
       subtitles: [],
@@ -313,15 +330,17 @@ exports.streamUploadToB2 = async (req, res) => {
       user: req.user.id,
       originalName: videoFile.name,
       checksum: videoKey,
-      processingStatus: 'completed',
-      isPublished: true
+      processingStatus: processingStatus,
+      isPublished: isPublished
     });
 
     await User.findByIdAndUpdate(req.user.id, { $push: { videos: video._id } });
 
     console.log(`✅ Video ${video._id} created - B2 URL: ${videoUrl}`);
     console.log(`   B2 Verified: ${b2Verified ? 'YES' : 'PENDING (eventual consistency)'}`);
-    console.log(`   EC2 Storage Used: NO (file streamed directly to B2)`);
+    console.log(`   Processing Status: ${processingStatus}`);
+    
+    // No queue / no worker / no HLS conversion.
 
     // Notify followers
     notifyFollowersNewVideo(req.user.id, {
@@ -335,9 +354,9 @@ exports.streamUploadToB2 = async (req, res) => {
     res.status(201).json({ 
       success: true, 
       data: video,
-      message: 'Video uploaded successfully! Your video is ready for playback immediately.'
+      message: 'Video uploaded successfully! Your video is ready for playback.'
     });
-  } catch (error) {
+    } catch (error) {
     console.error('❌ Stream upload error:', error);
     console.error('   Error stack:', error.stack);
     
@@ -357,14 +376,21 @@ exports.streamUploadToB2 = async (req, res) => {
     
     // Provide user-friendly error message
     let errorMessage = 'Failed to upload video to B2 storage.';
-    if (error.message.includes('B2 storage not configured')) {
-      errorMessage = 'B2 storage is not configured. Please contact support.';
-    } else if (error.message.includes('File data not available')) {
-      errorMessage = 'File upload error. Please try again with a smaller file.';
-    } else if (error.message.includes('Failed to upload to B2')) {
-      errorMessage = 'Could not upload to B2 storage. Please check your connection and try again.';
-    } else {
-      errorMessage = error.message || 'Upload failed. Please try again.';
+    const rawMsg = error?.message || '';
+    const awsCode = error?.name || error?.Code || error?.code;
+
+    if (rawMsg.includes('B2 storage not configured')) {
+      errorMessage = 'B2 storage is not configured on the server (missing env vars).';
+    } else if (rawMsg.includes('Failed to upload to B2')) {
+      errorMessage = `B2 upload failed (${awsCode || 'unknown'}). Check B2 credentials, bucket permissions, and server outbound internet.`;
+    } else if (rawMsg.includes('AccessDenied') || rawMsg.includes('InvalidAccessKeyId') || rawMsg.includes('SignatureDoesNotMatch')) {
+      errorMessage = `B2 credentials/permissions error (${awsCode || 'auth'}). Fix B2 keys and bucket access.`;
+    } else if (rawMsg.includes('timeout') || rawMsg.includes('ETIMEDOUT') || rawMsg.includes('ECONNRESET')) {
+      errorMessage = `Network timeout while uploading to B2 (${awsCode || 'network'}). Try again or check server network.`;
+    } else if (rawMsg.includes('File data not available')) {
+      errorMessage = 'File upload error. Please try again.';
+    } else if (rawMsg) {
+      errorMessage = rawMsg;
     }
     
     res.status(500).json({ 

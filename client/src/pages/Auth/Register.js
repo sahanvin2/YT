@@ -3,7 +3,8 @@ import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { FcGoogle } from 'react-icons/fc';
 import { SiMicrosoft } from 'react-icons/si';
-import XclubLogo from '../../components/Logo/MoviaLogo';
+import MoviaLogo from '../../components/Logo/MoviaLogo';
+import api from '../../config/api';
 import './Auth.css';
 
 const Register = () => {
@@ -15,6 +16,9 @@ const Register = () => {
   });
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [showVerificationMessage, setShowVerificationMessage] = useState(false);
+  const [resendSuccess, setResendSuccess] = useState('');
+  const [resendLoading, setResendLoading] = useState(false);
   const { register } = useAuth();
   const navigate = useNavigate();
 
@@ -47,7 +51,9 @@ const Register = () => {
     });
 
     if (result.success) {
-      navigate('/');
+      // Show verification message instead of navigating
+      setShowVerificationMessage(true);
+      setError('');
     } else {
       setError(result.message);
     }
@@ -68,14 +74,83 @@ const Register = () => {
     <div className="auth-page">
       <div className="auth-container">
         <div className="auth-header">
-          <XclubLogo size={28} showText={true} />
-          <h1>Join Xclub</h1>
+          <MoviaLogo size={28} showText={true} />
+          <h1>Join Movia</h1>
           <p>Create your account</p>
         </div>
 
         {error && <div className="error-message">{error}</div>}
 
-        <form onSubmit={onSubmit} className="auth-form">
+        {showVerificationMessage && (
+          <div className="success-message" style={{
+            backgroundColor: '#d4edda',
+            color: '#155724',
+            padding: '20px',
+            borderRadius: '8px',
+            marginBottom: '20px',
+            border: '1px solid #c3e6cb'
+          }}>
+            <h3 style={{ margin: '0 0 10px 0', fontSize: '18px' }}>✅ Registration Successful!</h3>
+            <p style={{ margin: '0 0 15px 0', fontSize: '14px' }}>
+              We've sent a verification email to <strong>{email}</strong>. Please check your inbox and click the verification link to activate your account.
+            </p>
+            <p style={{ margin: '0 0 15px 0', fontSize: '13px', color: '#856404' }}>
+              ⏰ The verification link will expire in 24 hours.
+            </p>
+            <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+              <button
+                type="button"
+                onClick={async () => {
+                  setResendLoading(true);
+                  setResendSuccess('');
+                  try {
+                    const response = await api.post('/auth/resend-verification', { email });
+                    setResendSuccess(response.data.message);
+                  } catch (err) {
+                    setError(err.response?.data?.message || 'Failed to resend verification email');
+                  } finally {
+                    setResendLoading(false);
+                  }
+                }}
+                disabled={resendLoading}
+                style={{
+                  backgroundColor: '#667eea',
+                  color: 'white',
+                  border: 'none',
+                  padding: '10px 20px',
+                  borderRadius: '5px',
+                  cursor: resendLoading ? 'not-allowed' : 'pointer',
+                  fontSize: '14px'
+                }}
+              >
+                {resendLoading ? 'Sending...' : 'Resend Verification Email'}
+              </button>
+              <Link
+                to="/login"
+                style={{
+                  backgroundColor: '#6c757d',
+                  color: 'white',
+                  border: 'none',
+                  padding: '10px 20px',
+                  borderRadius: '5px',
+                  textDecoration: 'none',
+                  fontSize: '14px',
+                  display: 'inline-block'
+                }}
+              >
+                Go to Login
+              </Link>
+            </div>
+            {resendSuccess && (
+              <div style={{ marginTop: '10px', color: '#155724', fontSize: '13px' }}>
+                ✅ {resendSuccess}
+              </div>
+            )}
+          </div>
+        )}
+
+        {!showVerificationMessage && (
+          <form onSubmit={onSubmit} className="auth-form">
           <div className="form-group">
             <label htmlFor="username">Username</label>
             <input
@@ -135,6 +210,7 @@ const Register = () => {
             {loading ? 'Creating Account...' : 'Sign Up'}
           </button>
         </form>
+        )}
 
         <div className="auth-divider">
           <span>OR</span>

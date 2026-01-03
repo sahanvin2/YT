@@ -6,14 +6,15 @@ const cookieParser = require('cookie-parser');
 const fileUpload = require('express-fileupload');
 const fs = require('fs');
 const path = require('path');
+const os = require('os');
 const http = require('http');
 const { Server } = require('socket.io');
+const mongoose = require('mongoose');
 const connectDB = require('./config/db');
 const errorHandler = require('./middleware/error');
 
 // Load env vars - Try multiple locations to ensure .env is found
 // Priority: 1) Project root, 2) Backend directory, 3) Parent directory
-const path = require('path');
 const envPath1 = path.join(__dirname, '../.env');
 const envPath2 = path.join(__dirname, '.env');
 const envPath3 = path.resolve(process.cwd(), '.env');
@@ -105,9 +106,9 @@ io.on('connection', (socket) => {
 // Avoid 304 responses for API calls (browser axios treats 304 as error)
 app.disable('etag');
 
-// Body parser - 12GB for HLS folder metadata
-app.use(express.json({ limit: "12000mb" }));
-app.use(express.urlencoded({ extended: true, limit: "12000mb" }));
+// Body parser - 2500MB for video uploads and metadata
+app.use(express.json({ limit: "2500mb" }));
+app.use(express.urlencoded({ extended: true, limit: "2500mb" }));
 
 // Cookie parser
 app.use(cookieParser());
@@ -132,21 +133,68 @@ if (process.env.NODE_ENV === 'development') {
   app.use(morgan('dev'));
 }
 
-// File uploading - CRITICAL: Keep files in memory, NEVER write to EC2 disk
-// This prevents EC2 disk from filling up and crashing the server
-const maxSizeMb = parseInt(process.env.MAX_VIDEO_SIZE_MB || '5120'); // 5GB max (reduced to prevent memory issues)
+// File uploading - CRITICAL: Keep files in memory, NEVER write to disk
+// IMPORTANT: Using in-memory uploads for large videos can OOM and crash the whole instance.
+// For stability, we use temp files (OS temp dir) and stream from disk.
+const maxSizeMb = parseInt(process.env.MAX_VIDEO_SIZE_MB || '2048'); // 2GB max
+
+const uploadTmpDir = process.env.UPLOAD_TMP_DIR || path.join(os.tmpdir(), 'movia-upload');
+try {
+  fs.mkdirSync(uploadTmpDir, { recursive: true });
+} catch (e) {
+  // Best-effort: if this fails, express-fileupload will still try its default tmp dir
+  console.warn(`⚠️ Could not create upload tmp dir: ${uploadTmpDir} (${e.message})`);
+}
+
+// Best-effort cleanup of abandoned temp upload files (e.g., crashes / aborted uploads)
+// Keeps disk from filling up over time.
+const UPLOAD_TMP_MAX_AGE_MS = parseInt(process.env.UPLOAD_TMP_MAX_AGE_MS || '', 10) || (6 * 60 * 60 * 1000); // 6 hours
+const UPLOAD_TMP_CLEANUP_INTERVAL_MS = parseInt(process.env.UPLOAD_TMP_CLEANUP_INTERVAL_MS || '', 10) || (60 * 60 * 1000); // 1 hour
+
+function cleanupUploadTmpDir() {
+  try {
+    if (!fs.existsSync(uploadTmpDir)) return;
+    const now = Date.now();
+    const entries = fs.readdirSync(uploadTmpDir);
+    let removed = 0;
+
+    for (const name of entries) {
+      const p = path.join(uploadTmpDir, name);
+      try {
+        const stat = fs.statSync(p);
+        if (!stat.isFile()) continue;
+        if (now - stat.mtimeMs > UPLOAD_TMP_MAX_AGE_MS) {
+          fs.unlinkSync(p);
+          removed++;
+        }
+      } catch (e) {
+        // Ignore per-file errors
+      }
+    }
+
+    if (removed > 0) {
+      console.log(`🧹 Temp upload cleanup: removed ${removed} old file(s) from ${uploadTmpDir}`);
+    }
+  } catch (e) {
+    console.warn(`⚠️ Temp upload cleanup failed: ${e.message}`);
+  }
+}
+
+cleanupUploadTmpDir();
+setInterval(cleanupUploadTmpDir, UPLOAD_TMP_CLEANUP_INTERVAL_MS).unref?.();
 
 app.use(fileUpload({
-  createParentPath: false, // Don't create directories (we don't use disk)
-  useTempFiles: false, // CRITICAL: Keep in memory - NEVER write to EC2 disk
+  createParentPath: false,
+  useTempFiles: true, // Stream large uploads to disk to avoid OOM
+  tempFileDir: uploadTmpDir,
   limits: { fileSize: maxSizeMb * 1024 * 1024 },
-  abortOnLimit: true, // Abort immediately if file too large
+  abortOnLimit: true,
   responseOnLimit: `File size limit exceeded. Maximum allowed: ${maxSizeMb}MB (${Math.round(maxSizeMb/1024)}GB)`,
-  uploadTimeout: 7200000, // 2 hours timeout for very large files (4GB+)
-  debug: false // Disable debug to reduce logging
+  uploadTimeout: 7200000, // 2 hours
+  debug: false
 }));
 
-console.log(`📦 File upload configured: In-memory only (max ${maxSizeMb}MB), NO disk storage`);
+console.log(`📦 File upload configured: temp files enabled (max ${maxSizeMb}MB), tmpDir=${uploadTmpDir}`);
 
 // Enable CORS - Allow multiple origins
 const allowedOrigins = [
@@ -215,15 +263,26 @@ app.use('/api', hlsProxy); // HLS proxy for CORS-free streaming
 // Error handler
 app.use(errorHandler);
 
-const PORT = process.env.PORT || 5000;
+// Keep dev port aligned with client proxy/setupProxy.js (5001),
+// while production remains 5000 (as used by nginx configs and PM2).
+const PORT =
+  process.env.PORT ||
+  (process.env.NODE_ENV === 'development' ? 5001 : 5000);
 
 // Connect to database and start server
+let isShuttingDown = false;
+
 const startListening = (attempt = 1) => {
   server.listen(PORT, () => {
     console.log(`✅ Server running in ${process.env.NODE_ENV} mode on port ${PORT}`);
     console.log(`✅ MongoDB connected successfully`);
     console.log(`🔗 Frontend URL: ${process.env.CLIENT_URL}`);
     console.log(`🔌 Socket.IO enabled for real-time notifications`);
+    
+    // Signal PM2 that server is ready
+    if (process.send) {
+      process.send('ready');
+    }
   });
 
   server.on('error', (err) => {
@@ -239,34 +298,107 @@ const startListening = (attempt = 1) => {
       return;
     }
     console.error('❌ Server error:', err);
+    // Don't exit on error - let PM2 handle restart
   });
 };
+
+// Health check endpoint that works even without MongoDB
+app.get('/api/health', (req, res) => {
+  res.json({ 
+    status: 'ok', 
+    timestamp: new Date().toISOString(),
+    mongodb: mongoose.connection.readyState === 1 ? 'connected' : 'disconnected'
+  });
+});
 
 (async () => {
   try {
     console.log('Attempting to connect to MongoDB...');
     console.log('MongoDB URI:', process.env.MONGO_URI ? 'Set (hidden for security)' : 'NOT SET!');
 
-    await connectDB();
+    // Try to connect to MongoDB, but don't crash if it fails
+    try {
+      await connectDB();
+    } catch (mongoErr) {
+      console.error('⚠️  MongoDB connection failed, but server will continue running');
+      console.error('   Error:', mongoErr.message);
+      console.error('   ⚠️  Some features may not work until MongoDB is configured');
+      console.error('   💡 Update MONGO_URI in .env file with your MongoDB connection string');
+    }
 
     console.log('Starting Express server...');
     startListening(1);
   } catch (err) {
     console.error('❌ Failed to start server:', err.message);
     console.error('Full error:', err);
+    // Don't exit - let PM2 handle it, or server might still be useful for static files
     process.exit(1);
   }
 })();
 
-// Handle unhandled promise rejections
+// Handle unhandled promise rejections - log but don't crash
 process.on('unhandledRejection', (err) => {
   console.error(`❌ Unhandled Rejection: ${err.message}`);
   console.error('Full error:', err);
   console.error('Stack:', err.stack);
-  // Don't exit immediately - log the error for debugging
-  // if (server) {
-  //   server.close(() => process.exit(1));
-  // } else {
-  //   process.exit(1);
-  // }
+  // Log error but don't exit - let PM2 handle crashes
+  // This prevents 502 errors from unhandled rejections
+});
+
+// Handle uncaught exceptions - log and exit gracefully
+process.on('uncaughtException', (err) => {
+  console.error(`❌ Uncaught Exception: ${err.message}`);
+  console.error('Full error:', err);
+  console.error('Stack:', err.stack);
+  // Exit gracefully - PM2 will restart
+  if (server && !isShuttingDown) {
+    isShuttingDown = true;
+    server.close(() => {
+      console.log('Server closed gracefully');
+      process.exit(1);
+    });
+    // Force exit after 10 seconds if graceful shutdown fails
+    setTimeout(() => {
+      console.error('Forced exit after timeout');
+      process.exit(1);
+    }, 10000);
+  } else {
+    process.exit(1);
+  }
+});
+
+// Graceful shutdown handlers
+const gracefulShutdown = (signal) => {
+  console.log(`\n${signal} received. Starting graceful shutdown...`);
+  isShuttingDown = true;
+  
+  server.close(() => {
+    console.log('HTTP server closed');
+    
+    // Close MongoDB connection
+    if (mongoose.connection.readyState === 1) {
+      mongoose.connection.close(false, () => {
+        console.log('MongoDB connection closed');
+        process.exit(0);
+      });
+    } else {
+      process.exit(0);
+    }
+  });
+  
+  // Force shutdown after 30 seconds
+  setTimeout(() => {
+    console.error('Forced shutdown after timeout');
+    process.exit(1);
+  }, 30000);
+};
+
+process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
+process.on('SIGINT', () => gracefulShutdown('SIGINT'));
+
+// PM2 graceful shutdown
+process.on('message', (msg) => {
+  if (msg === 'shutdown') {
+    gracefulShutdown('PM2 shutdown message');
+  }
 });

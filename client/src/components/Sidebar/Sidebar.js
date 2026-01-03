@@ -346,7 +346,7 @@ const Sidebar = ({ isOpen }) => {
       </div>
 
       <div className="sidebar-footer">
-        <p>&copy; 2025 Xclub Inc.</p>
+        <p>&copy; 2025 Movia Inc.</p>
         <p>The Future of Stream.</p>
       </div>
     </aside>

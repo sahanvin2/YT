@@ -5,7 +5,8 @@ import { useAuth } from '../../context/AuthContext';
 import { FiUpload, FiFolder, FiCheck, FiX, FiAlertCircle } from 'react-icons/fi';
 import './UploadHLS.css';
 
-const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000';
+// In local development, the backend is expected on 5001 (see client proxy + backend/dev default)
+const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:5001';
 
 const UploadHLS = () => {
   const { user, isUploadAdmin } = useAuth();

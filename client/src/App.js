@@ -7,15 +7,15 @@ import { SocketProvider } from './context/SocketContext';
 import Navbar from './components/Navbar/Navbar';
 import Sidebar from './components/Sidebar/Sidebar';
 import LoadingAnimation from './components/LoadingAnimation/LoadingAnimation';
+import Login from './pages/Auth/Login';
+import Register from './pages/Auth/Register';
+import VerifyEmail from './pages/Auth/VerifyEmail';
 import './App.css';
 
 // Lazy load pages for better performance
 const Home = lazy(() => import('./pages/Home/Home'));
 const Watch = lazy(() => import('./pages/Watch/Watch'));
-const Login = lazy(() => import('./pages/Auth/Login'));
-const Register = lazy(() => import('./pages/Auth/Register'));
 const AuthCallback = lazy(() => import('./pages/AuthCallback/AuthCallback'));
-const VerifyEmail = lazy(() => import('./pages/Auth/VerifyEmail'));
 const Upload = lazy(() => import('./pages/Upload/Upload'));
 const UploadHLS = lazy(() => import('./pages/UploadHLS/UploadHLS'));
 const CategoryPage = lazy(() => import('./pages/Category/CategoryPage'));

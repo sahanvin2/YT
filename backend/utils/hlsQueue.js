@@ -1,5 +1,6 @@
 const { Queue } = require('bullmq');
 const IORedis = require('ioredis');
+const { extractKeyFromUrl } = require('./cdn');
 
 // Check if Redis is enabled
 const REDIS_ENABLED = String(process.env.REDIS_ENABLED || 'false').toLowerCase() === 'true';
@@ -21,10 +22,23 @@ if (REDIS_ENABLED) {
 
   connection.on('error', (err) => {
     console.error('❌ Redis connection error:', err.message);
+    console.error('   Host:', process.env.REDIS_HOST || '127.0.0.1');
+    console.error('   Port:', process.env.REDIS_PORT || 6379);
+    // Don't exit - allow fallback to direct processing
   });
 
   connection.on('connect', () => {
     console.log('✅ Connected to Redis for HLS queue');
+    console.log('   Host:', process.env.REDIS_HOST || '127.0.0.1');
+    console.log('   Port:', process.env.REDIS_PORT || 6379);
+  });
+
+  // Test connection
+  connection.ping().then(() => {
+    console.log('✅ Redis ping successful');
+  }).catch((err) => {
+    console.error('❌ Redis ping failed:', err.message);
+    console.error('   Make sure Redis is running and accessible');
   });
 
   // Create HLS processing queue
@@ -56,8 +70,9 @@ if (REDIS_ENABLED) {
  */
 async function addToHLSQueue(videoId, localFilePath, userId) {
   if (!REDIS_ENABLED || !hlsQueue) {
-    console.log('⚠️  Redis disabled - Processing video directly without queue');
-    // Process video directly without queue for local development
+    console.log('⚠️  Redis disabled - Processing video directly on EC2 (fallback mode)');
+    console.log('   ⚠️  WARNING: This will use EC2 CPU. Set up worker droplet for better performance.');
+    // Process video directly without queue for local development/fallback
     try {
       const { processVideoToHLS } = require('./hlsProcessor');
       const Video = require('../models/Video');
@@ -117,14 +132,43 @@ async function addToHLSQueue(videoId, localFilePath, userId) {
   }
   
   try {
+    // Get video URL from database to pass to worker (B2 URL for download)
+    const Video = require('../models/Video');
+    let videoUrl = null;
+    try {
+      const video = await Video.findById(videoId);
+      if (video && video.videoUrl) {
+        videoUrl = video.videoUrl;
+        // Ensure it's a B2 URL (not HLS proxy URL)
+        if (videoUrl.includes('/api/hls/')) {
+          // Try to get original B2 URL from cdnUrl or construct it
+          videoUrl = video.cdnUrl || video.videoUrl;
+        }
+      }
+    } catch (e) {
+      console.warn('Could not fetch video URL from database:', e.message);
+    }
+    
+    // Accept B2 URLs *and* CDN URLs (Bunny). Worker will extract the storage key from either.
+    const key = extractKeyFromUrl(videoUrl);
+    if (!videoUrl || !key) {
+      throw new Error(`No valid source URL found for video ${videoId}. Worker needs a B2/CDN URL to download video.`);
+    }
+    
+    // Add job to queue - worker will download from B2, process, and upload back
     const job = await hlsQueue.add('process-video', {
       videoId,
-      localFilePath,
+      videoUrl, // B2 URL for worker to download
       userId,
       addedAt: new Date().toISOString()
     }, {
       jobId: `hls_${videoId}_${Date.now()}`,
-      priority: 1 // Higher priority for newer uploads
+      priority: 1, // Higher priority for newer uploads
+      attempts: 3,
+      backoff: {
+        type: 'exponential',
+        delay: 5000
+      }
     });
 
     console.log(`📋 Added video ${videoId} to HLS processing queue (Job: ${job.id})`);

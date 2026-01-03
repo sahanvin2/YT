@@ -1,3 +1,18 @@
+/**
+ * CPU MP4 variant worker (DEPRECATED)
+ *
+ * This worker uses libx264 (CPU) and can max out your machine.
+ * For RTX GPU processing, use the HLS NVENC worker instead:
+ *   `npm run worker:hls`  (runs backend/workers/videoWorker.js)
+ */
+console.warn('⚠️ backend/videoWorkerBullMQ.js is deprecated (CPU libx264). Use `npm run worker:hls` for GPU NVENC.');
+
+// Hard stop unless explicitly enabled to prevent accidental CPU overload.
+if (String(process.env.ENABLE_CPU_WORKER || 'false').toLowerCase() !== 'true') {
+  console.warn('⛔ CPU worker disabled. Set ENABLE_CPU_WORKER=true if you REALLY want to run it.');
+  process.exit(0);
+}
+
 const { Worker } = require('bullmq');
 const IORedis = require('ioredis');
 const ffmpeg = require('fluent-ffmpeg');

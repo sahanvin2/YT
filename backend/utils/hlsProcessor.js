@@ -1,6 +1,6 @@
 const ffmpeg = require('fluent-ffmpeg');
-const ffmpegPath = require('ffmpeg-static');
-const ffprobePath = require('ffprobe-static').path;
+const ffmpegStaticPath = require('ffmpeg-static');
+const ffprobeStaticPath = require('ffprobe-static').path;
 const path = require('path');
 const fs = require('fs');
 const { uploadFilePath } = require('./b2');
@@ -8,8 +8,19 @@ const UploadTracker = require('./uploadTracker');
 const { verifyHLSUpload } = require('./verifyUpload');
 
 // Configure FFmpeg paths
-ffmpeg.setFfmpegPath(ffmpegPath);
-ffmpeg.setFfprobePath(ffprobePath);
+// IMPORTANT: `ffmpeg-static` builds may not include NVENC on all platforms.
+// For RTX GPU encoding on your local machine, set:
+//   FFMPEG_PATH=C:\path\to\ffmpeg.exe   (must be an NVENC-enabled build)
+//   FFPROBE_PATH=C:\path\to\ffprobe.exe
+const configuredFfmpegPath = process.env.FFMPEG_PATH || process.env.FFMPEG_BINARY || ffmpegStaticPath;
+const configuredFfprobePath = process.env.FFPROBE_PATH || process.env.FFPROBE_BINARY || ffprobeStaticPath;
+if (configuredFfmpegPath) ffmpeg.setFfmpegPath(configuredFfmpegPath);
+if (configuredFfprobePath) ffmpeg.setFfprobePath(configuredFfprobePath);
+
+// Video encoder selection
+// Default: NVENC (GPU) for fast local processing on NVIDIA cards like RTX 2050.
+// Set VIDEO_ENCODER=libx264 to force CPU encoding.
+const VIDEO_ENCODER = process.env.VIDEO_ENCODER || 'h264_nvenc';
 
 /**
  * HLS Quality Presets for GPU encoding (NVIDIA RTX 2050)
@@ -152,28 +163,43 @@ function processQualityVariant(inputPath, outputDir, quality, onProgress) {
 
     console.log(`🎬 Processing ${quality} variant with GPU acceleration...`);
 
-    // GPU-accelerated encoding using NVENC (NVIDIA)
+    const isNvenc = String(VIDEO_ENCODER).toLowerCase().includes('nvenc');
+
+    const videoOptions = isNvenc
+      ? [
+          // NVENC-specific options
+          '-preset p2', // Fast encoding (p1=fastest, p7=slowest/best)
+          '-tune hq',
+          '-profile:v high',
+          '-level 4.1',
+          '-rc vbr',
+          '-cq 23',
+          '-b:v ' + preset.bitrate,
+          '-maxrate ' + preset.maxBitrate,
+          '-bufsize ' + preset.bufsize,
+          '-pix_fmt yuv420p',
+          '-g 48',
+          '-keyint_min 48',
+          '-sc_threshold 0',
+          `-vf scale=${preset.width}:${preset.height}:force_original_aspect_ratio=decrease,pad=${preset.width}:${preset.height}:(ow-iw)/2:(oh-ih)/2`
+        ]
+      : [
+          // CPU fallback options
+          '-preset veryfast',
+          '-crf 23',
+          '-profile:v high',
+          '-level 4.1',
+          '-pix_fmt yuv420p',
+          '-g 48',
+          '-keyint_min 48',
+          '-sc_threshold 0',
+          `-vf scale=${preset.width}:${preset.height}:force_original_aspect_ratio=decrease,pad=${preset.width}:${preset.height}:(ow-iw)/2:(oh-ih)/2`
+        ];
+
+    // Encode (GPU NVENC by default; CPU optional)
     const command = ffmpeg(inputPath)
-      // Video encoding with NVENC (H.264)
-      .videoCodec('h264_nvenc')
-      .outputOptions([
-        // NVENC-specific options
-        '-preset p2', // Fast encoding (p1=fastest, p7=slowest/best) - 2x faster!
-        '-tune hq', // High quality tuning
-        '-profile:v high', // H.264 High Profile
-        '-level 4.1',
-        '-rc vbr', // Variable bitrate
-        '-cq 23', // Constant quality (lower = better, 23 is good balance)
-        '-b:v ' + preset.bitrate,
-        '-maxrate ' + preset.maxBitrate,
-        '-bufsize ' + preset.bufsize,
-        '-pix_fmt yuv420p', // 8-bit color (RTX 2050 optimized)
-        '-g 48', // GOP size (keyframe interval)
-        '-keyint_min 48',
-        '-sc_threshold 0',
-        // Scale video with GPU-compatible filter
-        `-vf scale=${preset.width}:${preset.height}:force_original_aspect_ratio=decrease,pad=${preset.width}:${preset.height}:(ow-iw)/2:(oh-ih)/2`
-      ])
+      .videoCodec(VIDEO_ENCODER)
+      .outputOptions(videoOptions)
       // Audio encoding
       .audioCodec('aac')
       .audioBitrate(preset.audioBitrate)
@@ -521,10 +547,12 @@ async function processVideoToHLS(inputPath, videoId, userId, onProgress) {
     const outputDir = path.join(tmpDir, `hls_${videoId}`);
     fs.mkdirSync(outputDir, { recursive: true });
     
-    // Process quality variants in parallel for faster encoding
-    // Encode 2 qualities at once (GPU can handle it!)
+    // Process quality variants in parallel for faster encoding.
+    // IMPORTANT: Even with NVENC, some steps (demux/scale/audio) can be CPU-heavy on Windows.
+    // Default to 1 to keep machines stable; override with HLS_PARALLEL_ENCODE=2 if you want.
     const variants = [];
-    const PARALLEL_ENCODE = 2; // Encode 2 qualities simultaneously
+    const PARALLEL_ENCODE = parseInt(process.env.HLS_PARALLEL_ENCODE || '1', 10) || 1;
+    console.log(`⚙️  HLS_PARALLEL_ENCODE=${PARALLEL_ENCODE}`);
     
     for (let i = 0; i < qualities.length; i += PARALLEL_ENCODE) {
       const batch = qualities.slice(i, i + PARALLEL_ENCODE);

@@ -2,6 +2,9 @@
   "name": "xclub-client",
   "version": "0.1.0",
   "private": true,
+  "overrides": {
+    "@types/node": "24.10.1"
+  },
   "dependencies": {
     "axios": "^1.5.0",
     "date-fns": "^2.30.0",

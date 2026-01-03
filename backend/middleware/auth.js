@@ -25,6 +25,17 @@ exports.protect = async (req, res, next) => {
       return res.status(401).json({ success: false, message: 'User not found' });
     }
     
+    // Check if email is verified - REQUIRED for all protected routes
+    if (!req.user.isEmailVerified) {
+      console.log('Access denied: Email not verified for user:', req.user.email);
+      return res.status(403).json({ 
+        success: false, 
+        message: 'Please verify your email address before accessing this feature. Check your inbox for the verification link.',
+        needsVerification: true,
+        userId: req.user._id
+      });
+    }
+    
     next();
   } catch (err) {
     console.error('Auth middleware error:', err.message);

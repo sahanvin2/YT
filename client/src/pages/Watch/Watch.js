@@ -690,82 +690,31 @@ const Watch = () => {
   };
 
   const pickPlaybackUrl = () => {
-    if (!video) return undefined;
+    if (!video || !id) return undefined;
 
-    // Support direct uploaded videos (MP4, MKV, WebM, etc.)
+    // Prefer HLS if it exists (backwards compatibility for older HLS videos),
+    // otherwise play the original file via our backend stream endpoint.
     const baseCandidates = [video.hlsUrl, video.videoUrl, video.cdnUrl];
-
     const candidates = selectedSource
-      ? [
-          selectedSource.videoUrl,
-          selectedSource.url,
-          selectedSource.cdnUrl,
-          ...baseCandidates,
-        ]
+      ? [selectedSource.videoUrl, selectedSource.url, selectedSource.cdnUrl, ...baseCandidates]
       : baseCandidates;
 
-    const isHlsUrl = (u) => typeof u === 'string' && (u.includes('/api/hls/') || u.includes('.m3u8'));
-    const isDirectVideo = (u) => typeof u === 'string' && (
-      u.endsWith('.mp4') || u.endsWith('.mkv') || u.endsWith('.webm') || 
-      u.endsWith('.avi') || u.endsWith('.mov') || u.endsWith('.flv')
-    );
-    const isLocalhostUrl = (u) => typeof u === 'string' && (u.includes('localhost') || u.includes('127.0.0.1'));
-    const isCdnUrl = (u) => typeof u === 'string' && u.includes('b-cdn.net');
+    const cleaned = candidates
+      .filter((u) => typeof u === 'string')
+      .map((u) => u.trim())
+      .filter((u) => u.length > 0 && !isPlaceholderUrl(u));
 
-    // Support localhost URLs for local development/testing
-    const localhostCandidate = candidates.find(
-      (u) => isLocalhostUrl(u) && u.trim().length > 0 && !isPlaceholderUrl(u)
-    );
-    if (localhostCandidate) {
-      console.log('🏠 Using localhost URL:', localhostCandidate);
-      return localhostCandidate; // Don't normalize localhost URLs
+    const hlsCandidate = cleaned.find((u) => u.includes('/api/hls/') || u.includes('.m3u8'));
+    if (hlsCandidate) {
+      console.log('✅ Using HLS URL:', hlsCandidate);
+      return normalizePlaybackUrl(hlsCandidate);
     }
 
-    // If CDN failed, convert to proxy URL
-    if (useCdnFallback) {
-      const cdnCandidate = candidates.find((u) => isCdnUrl(u) && isHlsUrl(u));
-      if (cdnCandidate) {
-        // Convert CDN URL to proxy URL
-        const match = cdnCandidate.match(/\/videos\/([^\/]+)\/([^\/]+)\/(.+)/);
-        if (match) {
-          const [, userId, videoId, file] = match;
-          const proxyUrl = `/api/hls/${userId}/${videoId}/${file}`;
-          console.log('🔄 Using proxy fallback:', proxyUrl);
-          return normalizePlaybackUrl(proxyUrl);
-        }
-      }
-    }
-
-    // 1. Prefer direct video files (MP4, MKV, etc.) from CDN
-    const directVideoCdn = candidates.find(
-      (u) => isCdnUrl(u) && isDirectVideo(u) && u.trim().length > 0 && !isPlaceholderUrl(u)
-    );
-    if (directVideoCdn) {
-      console.log('🎥 Using direct video from CDN:', directVideoCdn);
-      return directVideoCdn;
-    }
-
-    // 2. Prefer CDN URLs for HLS
-    const cdnCandidate = candidates.find(
-      (u) => isCdnUrl(u) && isHlsUrl(u) && u.trim().length > 0 && !isPlaceholderUrl(u)
-    );
-    
-    // 3. Fallback to proxy URLs for HLS
-    const proxyCandidate = candidates.find(
-      (u) => isHlsUrl(u) && u.includes('/api/hls/') && u.trim().length > 0 && !isPlaceholderUrl(u)
-    );
-    
-    // 4. Any HLS URL
-    const firstHlsCandidate = candidates.find(
-      (u) => isHlsUrl(u) && u.trim().length > 0 && !isPlaceholderUrl(u)
-    );
-
-    // 5. Any direct video file
-    const directVideoFallback = candidates.find(
-      (u) => isDirectVideo(u) && u.trim().length > 0 && !isPlaceholderUrl(u)
-    );
-
-    return normalizePlaybackUrl(cdnCandidate || proxyCandidate || firstHlsCandidate || directVideoFallback);
+    // No processing/HLS required: stream the original via backend to avoid CORS and support range requests.
+    const baseUrl = window.location.hostname === 'localhost' ? 'http://localhost:5001' : window.location.origin;
+    const streamUrl = `${baseUrl}/api/videos/${id}/stream`;
+    console.log('✅ Using direct stream URL:', streamUrl);
+    return streamUrl;
   };
 
   const playbackUrl = pickPlaybackUrl();
@@ -795,8 +744,8 @@ const Watch = () => {
     )
   );
 
-  // Check if video needs processing (removed HLS-only requirement - MP4 videos are playable)
-  const needsHls = false; // No longer requiring HLS - MP4 videos work fine
+  // No HLS requirement: we stream the original when no HLS URL exists.
+  const needsHls = false;
 
   const hasPlayableUrl = typeof playbackUrl === 'string' && playbackUrl.trim().length > 0 && !isPlaceholderUrl(playbackUrl);
 
@@ -865,7 +814,7 @@ const Watch = () => {
             className="video-player" 
             ref={videoContainerRef}
             onMouseMove={() => {
-              if (hasPlayableUrl && !isProcessing && !needsHls) {
+              if (hasPlayableUrl && !isProcessing) {
                 setShowControls(true);
                 if (controlsTimeoutRef.current) {
                   clearTimeout(controlsTimeoutRef.current);
@@ -876,13 +825,13 @@ const Watch = () => {
               }
             }}
             onMouseLeave={() => {
-              if (playing && hasPlayableUrl && !isProcessing && !needsHls) {
+              if (playing && hasPlayableUrl && !isProcessing) {
                 setShowControls(false);
               }
             }}
             onTouchStart={(e) => {
               // Mobile: Show controls on touch
-              if (hasPlayableUrl && !isProcessing && !needsHls) {
+              if (hasPlayableUrl && !isProcessing) {
                 setShowControls(true);
                 if (controlsTimeoutRef.current) {
                   clearTimeout(controlsTimeoutRef.current);
@@ -897,19 +846,17 @@ const Watch = () => {
               if (e.target.closest('.video-controls-overlay, .controls-bottom-section, .video-control-btn')) {
                 return;
               }
-              if (hasPlayableUrl && !isProcessing && !needsHls) {
+              if (hasPlayableUrl && !isProcessing) {
                 setPlaying(!playing);
               }
             }}
           >
-            {(!hasPlayableUrl || isProcessing || needsHls) ? (
+            {(!hasPlayableUrl || isProcessing) ? (
               <div className="error-container">
                 <p className="error-message">
                   {video?.processingStatus === 'failed'
-                    ? (video?.processingError || 'Video processing failed')
-                    : needsHls
-                      ? 'Converting video to HLS… Please wait…'
-                      : 'Video is still processing. Please wait…'}
+                    ? (video?.processingError || 'Video processing failed. Please try uploading again.')
+                    : 'Video is still processing. Please wait…'}
                 </p>
               </div>
             ) : (
@@ -978,8 +925,18 @@ const Watch = () => {
                         backBufferLength: 90,
                         maxBufferLength: 30,
                         maxMaxBufferLength: 600,
-                        startLevel: -1, // Auto quality
+                        startLevel: -1, // Auto quality - adapts to internet speed
                         debug: process.env.NODE_ENV === 'development',
+                        // Automatic adaptive bitrate based on network speed
+                        abrEwmaDefaultEstimate: 500000, // 500kbps initial estimate
+                        abrEwmaSlowVoD: 3.0, // Slower adaptation for VoD
+                        abrEwmaFastVoD: 9.0, // Faster adaptation for VoD
+                        abrBandWidthFactor: 0.95, // Conservative bandwidth factor
+                        abrBandWidthUpFactor: 0.7, // Slower upgrade to prevent buffering
+                        abrMaxWithRealBitrate: true, // Use real bitrate for decisions
+                        maxStarvationDelay: 4, // Max delay before quality drop
+                        maxLoadingDelay: 4, // Max loading delay
+                        minAutoBitrate: 0, // No minimum - allow lowest quality
                         // Ensure audio track is enabled
                         audioTrackSwitchingMode: 'immediate'
                       },
@@ -1014,13 +971,14 @@ const Watch = () => {
                       return;
                     }
                     
-                    let errorMsg = 'Failed to play video. ';
+                    let errorMsg = 'Failed to play this video in the browser. ';
                     if (!playbackUrl) {
                       errorMsg += 'Video URL is missing. ';
                     } else if (video?.processingStatus !== 'completed') {
                       errorMsg += 'Video is still processing. ';
                     } else {
-                      errorMsg += 'Please try refreshing the page.';
+                      // Many containers (like .mkv) are not supported by browsers without transcoding.
+                      errorMsg += 'If this is an MKV/AVI file, most browsers cannot play it. Upload MP4 (H.264/AAC) or WebM, or download the file.';
                     }
                     
                     setError(errorMsg);

@@ -119,13 +119,13 @@ exports.getVideos = async (req, res, next) => {
       }
     }
     
-    // Only show videos that are ready (not still processing or failed)
+    // Show videos that have a real video URL (original file on B2/CDN).
+    // We do NOT require HLS.
     if (HLS_ONLY) {
       query.hlsUrl = { $exists: true, $ne: null };
       query.processingStatus = { $in: ['completed', undefined, null] };
     } else {
-      query.processingStatus = { $in: ['completed', undefined, null] };
-      query.videoUrl = { $ne: 'processing' }; // Exclude videos with placeholder URL
+      query.videoUrl = { $exists: true, $ne: 'processing', $ne: '' };
     }
     
     // Filter for clips (videos under 2 minutes / less than 120 seconds)
@@ -281,11 +281,17 @@ exports.getVideo = async (req, res, next) => {
       });
     }
 
-    // Check if video is published (hide unpublished videos from non-admins)
+    // Check if video is published (historically used for HLS processing gating).
+    // If we have a real, playable URL, allow access even if isPublished was left false by older flows.
     const isAdmin = req.user?.isAdmin || req.user?.isUploadAdmin;
     const isOwner = req.user?.id?.toString() === (video.user._id?.toString() || video.user.toString());
     
-    if (!video.isPublished && !isAdmin && !isOwner) {
+    const hasPlayableUrl =
+      typeof video.videoUrl === 'string' &&
+      video.videoUrl.trim().length > 0 &&
+      video.videoUrl.trim().toLowerCase() !== 'processing';
+
+    if (!video.isPublished && !isAdmin && !isOwner && !hasPlayableUrl) {
       return res.status(404).json({
         success: false,
         message: 'Video not found or still processing'
@@ -409,7 +415,7 @@ exports.uploadVideo = async (req, res, next) => {
     const videoFile = req.files.video;
     const thumbnailFile = req.files.thumbnail;
 
-    const maxSizeBytes = parseInt(process.env.MAX_VIDEO_SIZE_MB || '5120') * 1024 * 1024;
+    const maxSizeBytes = parseInt(process.env.MAX_VIDEO_SIZE_MB || '2048') * 1024 * 1024;
     if (videoFile.size > maxSizeBytes) {
       return res.status(400).json({
         success: false,
@@ -1365,6 +1371,7 @@ exports.streamVideo = async (req, res) => {
       try {
         const videoSizeReq = await axios.head(fileUrl);
         const videoSize = Number(videoSizeReq.headers['content-length']);
+        const contentType = videoSizeReq.headers['content-type'] || 'application/octet-stream';
 
         const CHUNK_SIZE = 5 * 1024 * 1024; // 5MB
         const start = Number(range.replace(/\D/g, ""));
@@ -1377,7 +1384,7 @@ exports.streamVideo = async (req, res) => {
           "Content-Range": `bytes ${start}-${end}/${videoSize}`,
           "Accept-Ranges": "bytes",
           "Content-Length": contentLength,
-          "Content-Type": "video/mp4"
+          "Content-Type": contentType
         };
 
         res.writeHead(206, headers);
@@ -1401,6 +1408,7 @@ exports.streamVideo = async (req, res) => {
       // For non-CDN URLs (direct B2/R2), use existing logic
       const videoSizeReq = await axios.head(fileUrl);
       const videoSize = Number(videoSizeReq.headers['content-length']);
+      const contentType = videoSizeReq.headers['content-type'] || 'application/octet-stream';
 
       const CHUNK_SIZE = 5 * 1024 * 1024; // 5MB
       const start = Number(range.replace(/\D/g, ""));
@@ -1412,7 +1420,7 @@ exports.streamVideo = async (req, res) => {
         "Content-Range": `bytes ${start}-${end}/${videoSize}`,
         "Accept-Ranges": "bytes",
         "Content-Length": contentLength,
-        "Content-Type": "video/mp4"
+        "Content-Type": contentType
       };
 
       res.writeHead(206, headers);

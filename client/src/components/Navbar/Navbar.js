@@ -4,7 +4,7 @@ import { FiSearch, FiMenu, FiVideo, FiUser, FiLogOut, FiX, FiSun, FiMoon, FiPlus
 import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../context/ThemeContext';
 import { getSearchSuggestions } from '../../utils/api';
-import XclubLogo from '../Logo/MoviaLogo';
+import MoviaLogo from '../Logo/MoviaLogo';
 import NotificationPanel from '../NotificationPanel/NotificationPanel';
 import NotificationBell from '../NotificationBell/NotificationBell';
 import axios from 'axios';
@@ -179,7 +179,7 @@ const Navbar = ({ toggleSidebar }) => {
           <FiMenu size={24} />
         </button>
         <Link to="/" className="logo">
-          <XclubLogo size={28} showText={true} />
+          <MoviaLogo size={28} showText={true} />
         </Link>
       </div>
 

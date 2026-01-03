@@ -382,28 +382,68 @@ const Upload = () => {
       setLastUpdateTime(Date.now());
       setLastUploadedBytes(0);
 
-      // Use streaming upload through server (bypasses CORS, streams directly to B2)
-      // This prevents EC2 from storing files on disk while avoiding CORS issues
-      setUploadStatus('uploading');
-      
-      // Prepare form data
-      const uploadFormData = new FormData();
-      uploadFormData.append('video', videoFile);
-      uploadFormData.append('title', title);
-      uploadFormData.append('description', description || ' ');
-      uploadFormData.append('mainCategory', mainCategory);
-      uploadFormData.append('primaryGenre', primaryGenre);
-      uploadFormData.append('secondaryGenres', JSON.stringify(secondaryGenres));
-      if (subCategory) uploadFormData.append('subCategory', subCategory);
-      uploadFormData.append('tags', tags);
-      uploadFormData.append('visibility', visibility);
-      
-      if (thumbnailFile) {
-        uploadFormData.append('thumbnail', thumbnailFile);
-      }
+      const handleProgress = (progressEvent, totalOverride) => {
+        const total = progressEvent.total || totalOverride;
+        if (!total) return;
 
-      // Upload through server (streams to B2, no disk storage)
-      try {
+        const percentCompleted = Math.round((progressEvent.loaded * 100) / total);
+        setUploadProgress(percentCompleted);
+        setUploadedBytes(progressEvent.loaded);
+
+        // Calculate upload speed
+        const currentTime = Date.now();
+        const timeDiff = (currentTime - lastUpdateTime) / 1000; // seconds
+
+        if (timeDiff >= 0.5) { // Update every 0.5 seconds
+          const bytesDiff = progressEvent.loaded - lastUploadedBytes;
+          if (bytesDiff > 0) {
+            const speedMBps = (bytesDiff / (1024 * 1024)) / timeDiff;
+            setUploadSpeed(speedMBps);
+
+            // Calculate ETA
+            const remainingBytes = total - progressEvent.loaded;
+            const remainingSeconds = remainingBytes / (bytesDiff / timeDiff);
+
+            if (remainingSeconds > 0 && isFinite(remainingSeconds)) {
+              if (remainingSeconds < 60) {
+                setUploadETA(`${Math.round(remainingSeconds)}s`);
+              } else if (remainingSeconds < 3600) {
+                setUploadETA(`${Math.round(remainingSeconds / 60)}m ${Math.round(remainingSeconds % 60)}s`);
+              } else {
+                const hours = Math.floor(remainingSeconds / 3600);
+                const minutes = Math.floor((remainingSeconds % 3600) / 60);
+                setUploadETA(`${hours}h ${minutes}m`);
+              }
+            }
+          }
+
+          setLastUpdateTime(currentTime);
+          setLastUploadedBytes(progressEvent.loaded);
+        }
+      };
+
+      let uploadedVideoId = null;
+
+      const uploadViaServerStream = async () => {
+        // Fallback: upload through server (streams to B2). Use if direct upload is blocked by storage CORS.
+        setUploadStatus('uploading');
+
+        // Prepare form data
+        const uploadFormData = new FormData();
+        uploadFormData.append('video', videoFile);
+        uploadFormData.append('title', title);
+        uploadFormData.append('description', description || ' ');
+        uploadFormData.append('mainCategory', mainCategory);
+        uploadFormData.append('primaryGenre', primaryGenre);
+        uploadFormData.append('secondaryGenres', JSON.stringify(secondaryGenres));
+        if (subCategory) uploadFormData.append('subCategory', subCategory);
+        uploadFormData.append('tags', tags);
+        uploadFormData.append('visibility', visibility);
+
+        if (thumbnailFile) {
+          uploadFormData.append('thumbnail', thumbnailFile);
+        }
+
         const uploadRes = await api.post('/uploads/stream', uploadFormData, {
           headers: {
             'Content-Type': 'multipart/form-data'
@@ -411,50 +451,114 @@ const Upload = () => {
           timeout: 7200000, // 2 hours for large files
           maxContentLength: Infinity,
           maxBodyLength: Infinity,
-          onUploadProgress: (progressEvent) => {
-            if (progressEvent.total) {
-              const percentCompleted = Math.round(
-                (progressEvent.loaded * 100) / progressEvent.total
-              );
-              setUploadProgress(percentCompleted);
-              setUploadedBytes(progressEvent.loaded);
-              
-              // Calculate upload speed
-              const currentTime = Date.now();
-              const timeDiff = (currentTime - lastUpdateTime) / 1000; // seconds
-              
-              if (timeDiff >= 0.5) { // Update every 0.5 seconds
-                const bytesDiff = progressEvent.loaded - lastUploadedBytes;
-                const speedMBps = (bytesDiff / (1024 * 1024)) / timeDiff;
-                setUploadSpeed(speedMBps);
-                
-                // Calculate ETA
-                const remainingBytes = progressEvent.total - progressEvent.loaded;
-                const remainingSeconds = remainingBytes / (bytesDiff / timeDiff);
-                
-                if (remainingSeconds > 0 && isFinite(remainingSeconds)) {
-                  if (remainingSeconds < 60) {
-                    setUploadETA(`${Math.round(remainingSeconds)}s`);
-                  } else if (remainingSeconds < 3600) {
-                    setUploadETA(`${Math.round(remainingSeconds / 60)}m ${Math.round(remainingSeconds % 60)}s`);
-                  } else {
-                    const hours = Math.floor(remainingSeconds / 3600);
-                    const minutes = Math.floor((remainingSeconds % 3600) / 60);
-                    setUploadETA(`${hours}h ${minutes}m`);
-                  }
-                }
-                
-                setLastUpdateTime(currentTime);
-                setLastUploadedBytes(progressEvent.loaded);
-              }
-            }
-          }
+          onUploadProgress: (progressEvent) => handleProgress(progressEvent)
         });
-        
+
         setUploadProgress(100);
         setUploadStatus('completed');
-        const uploadedVideoId = uploadRes.data.data._id;
+        uploadedVideoId = uploadRes.data.data._id;
         setVideoLink(`/watch/${uploadedVideoId}`);
+      };
+
+      if (usePresigned) {
+        // Preferred: direct browser upload to B2 via presigned URL (no EC2 RAM/disk usage)
+        setUploadStatus('uploading');
+
+        const videoContentType = videoFile.type || 'application/octet-stream';
+        const presignRes = await presignPut(videoFile.name, videoContentType, videoFile.size);
+        if (!presignRes?.data?.url || !presignRes?.data?.key || !presignRes?.data?.publicUrl) {
+          throw new Error(presignRes?.data?.message || 'Failed to get upload URL from server.');
+        }
+        const { url: putUrl, key: videoKey, publicUrl: videoUrl } = presignRes.data;
+
+        // Upload video directly to B2
+        // NOTE: If B2 CORS is not configured for your domain/origin, the browser will throw a "Network Error".
+        // In that case we automatically fall back to server streaming upload (no CORS issues).
+        try {
+          await axios.put(putUrl, videoFile, {
+            headers: { 'Content-Type': videoContentType },
+            timeout: 7200000,
+            onUploadProgress: (progressEvent) => handleProgress(progressEvent, videoFile.size)
+          });
+        } catch (putErr) {
+          const msg = putErr?.message || '';
+          const isCorsLike =
+            putErr?.code === 'ERR_NETWORK' ||
+            msg === 'Network Error' ||
+            String(msg).toLowerCase().includes('network') ||
+            // Some browsers surface CORS as failed fetch without response.
+            (!!putErr?.request && !putErr?.response);
+
+          if (isCorsLike) {
+            console.warn('Direct B2 upload failed (likely CORS). Falling back to server streaming upload...', putErr);
+            // Reset progress so user sees a fresh upload run
+            setUploadProgress(0);
+            setUploadETA('');
+            setUploadSpeed(0);
+            // Fallback path
+            await uploadViaServerStream();
+          } else {
+            throw putErr;
+          }
+        }
+
+        // If we already fell back and completed via server, stop here.
+        if (uploadedVideoId) {
+          // no-op; server response already created the DB record
+        } else {
+        // Upload thumbnail (optional) directly to B2
+        let thumbnailKey = '';
+        let thumbnailUrl = '';
+        if (thumbnailFile) {
+          const thumbContentType = thumbnailFile.type || 'image/jpeg';
+          const thumbPresignRes = await presignPut(thumbnailFile.name, thumbContentType, thumbnailFile.size);
+          if (!thumbPresignRes?.data?.url || !thumbPresignRes?.data?.key || !thumbPresignRes?.data?.publicUrl) {
+            throw new Error(thumbPresignRes?.data?.message || 'Failed to get thumbnail upload URL from server.');
+          }
+          thumbnailKey = thumbPresignRes.data.key;
+          thumbnailUrl = thumbPresignRes.data.publicUrl;
+
+          try {
+            await axios.put(thumbPresignRes.data.url, thumbnailFile, {
+              headers: { 'Content-Type': thumbContentType },
+              timeout: 600000,
+            });
+          } catch (thumbPutErr) {
+            // Thumbnail failure should not break the entire upload; keep going
+            console.warn('Thumbnail direct upload failed; continuing without thumbnail.', thumbPutErr);
+            thumbnailKey = '';
+            thumbnailUrl = '';
+          }
+        }
+
+        setUploadProgress(100);
+        setUploadStatus('processing');
+
+        // Create DB record (metadata only)
+        const createRes = await createVideoFromB2({
+          title,
+          description: description || ' ',
+          mainCategory,
+          primaryGenre,
+          secondaryGenres: JSON.stringify(secondaryGenres),
+          subCategory: subCategory || null,
+          tags,
+          visibility,
+          videoKey,
+          videoUrl,
+          thumbnailKey: thumbnailKey || undefined,
+          thumbnailUrl: thumbnailUrl || undefined,
+          fileSize: videoFile.size,
+          originalName: videoFile.name
+        });
+
+        setUploadStatus('completed');
+        uploadedVideoId = createRes.data.data._id;
+        setVideoLink(`/watch/${uploadedVideoId}`);
+        }
+      } else {
+        await uploadViaServerStream();
+      }
       
       setTimeout(() => {
         // Reset form for next upload
@@ -485,42 +589,33 @@ const Upload = () => {
         if (fileInputRef.current) fileInputRef.current.value = '';
         if (thumbnailInputRef.current) thumbnailInputRef.current.value = '';
         
-        console.log('✅ Video uploaded via streaming (no EC2 disk storage):', uploadedVideoId);
+        console.log('✅ Video uploaded:', uploadedVideoId);
       }, 2000);
-      } catch (uploadErr) {
-        console.error('Upload error:', uploadErr);
-        console.error('Error details:', {
-          message: uploadErr.message,
-          code: uploadErr.code,
-          response: uploadErr.response?.data,
-          status: uploadErr.response?.status,
-          statusText: uploadErr.response?.statusText
-        });
-        
-        if (uploadErr.code === 'ECONNABORTED' || uploadErr.message.includes('timeout')) {
-          throw new Error('Upload timeout: The file is too large or connection is too slow. Please try again with a smaller file or better connection.');
-        } else if (uploadErr.response) {
-          const status = uploadErr.response.status;
-          const statusText = uploadErr.response.statusText;
-          const errorMsg = uploadErr.response.data?.message || uploadErr.response.data?.error || statusText;
-          
-          if (status === 413) {
-            throw new Error('File too large. Maximum size is 5GB.');
-          } else if (status === 400) {
-            throw new Error(`Invalid request: ${errorMsg}`);
-          } else if (status >= 500) {
-            throw new Error(`Server error (${status}): ${errorMsg || 'Please try again later.'}`);
-          } else {
-            throw new Error(`Upload failed (${status}): ${errorMsg || statusText}`);
-          }
-        } else if (uploadErr.request) {
-          throw new Error('Network error: Could not connect to server. Please check your internet connection and try again.');
-        } else {
-          throw new Error(`Upload error: ${uploadErr.message || 'Unknown error occurred'}`);
-        }
-      }
     } catch (err) {
-      setError(err.message || 'Failed to upload video');
+      // Friendlier error messages for Axios + network failures
+      let msg = err?.message || 'Failed to upload video';
+
+      if (err?.code === 'ECONNABORTED' || String(msg).toLowerCase().includes('timeout')) {
+        msg = 'Upload timeout: the file is too large or your connection is too slow. Please try again or use a smaller file.';
+      } else if (err?.response) {
+        const status = err.response.status;
+        const statusText = err.response.statusText;
+        const errorMsg = err.response.data?.message || err.response.data?.error || statusText;
+
+        if (status === 413) {
+          msg = 'File too large. Please upload a smaller file.';
+        } else if (status === 400) {
+          msg = `Invalid request: ${errorMsg}`;
+        } else if (status >= 500) {
+          msg = `Server error (${status}): ${errorMsg || 'Please try again later.'}`;
+        } else {
+          msg = `Upload failed (${status}): ${errorMsg || statusText}`;
+        }
+      } else if (err?.request) {
+        msg = 'Network error: could not connect to the server. Please check your connection and try again.';
+      }
+
+      setError(msg);
       setUploadStatus('error');
       console.error('Upload error:', err);
     } finally {
@@ -1184,7 +1279,7 @@ const Upload = () => {
                     ref={fileInputRef}
                     type="file"
                     id="video"
-                    accept="video/*"
+                    accept="video/*,audio/*,.mp4,.mkv,.avi,.mov,.webm,.flv,.wmv,.m4v,.3gp,.mpg,.mpeg"
                     onChange={onVideoChange}
                     multiple
                     style={{ display: 'none' }}
@@ -1193,7 +1288,7 @@ const Upload = () => {
                     <FiUpload size={18} />
                     <span>Select Videos (Multiple)</span>
                   </label>
-                  <small className="upload-hint">Select one or multiple videos - Max 12GB each</small>
+                  <small className="upload-hint">Select one or multiple videos - Max 2GB each, any format (MP4, MKV, AVI, MOV, WebM, etc.)</small>
                 </div>
               </div>
             )}

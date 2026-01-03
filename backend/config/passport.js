@@ -2,6 +2,7 @@ const passport = require('passport');
 const GoogleStrategy = require('passport-google-oauth20').Strategy;
 const MicrosoftStrategy = require('passport-microsoft').Strategy;
 const User = require('../models/User');
+const crypto = require('crypto');
 
 // Serialize user for session
 passport.serializeUser((user, done) => {
@@ -46,13 +47,18 @@ if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {
             return done(null, user);
           }
 
-          // Create new user
+          // Assign random profile avatar
+          const avatars = ['mr.J.jpg', 'mr.p.jpg', 'mr.s.jpg', 'mr.X.jpg', 'ms.C.jpg', 'ms.K.jpg', 'ms.O.jpg', 'ms.Y.jpg'];
+          const randomAvatar = `/avatars/${avatars[Math.floor(Math.random() * avatars.length)]}`;
+          
+          // Create new user - Email verified by Google OAuth
           user = await User.create({
-            username: profile.emails[0].value.split('@')[0] + '_' + Date.now(),
+            name: profile.displayName || profile.emails[0].value.split('@')[0],
             email: profile.emails[0].value,
             googleId: profile.id,
-            profilePicture: profile.photos[0]?.value || '',
-            isVerified: true, // Email verified by Google
+            avatar: profile.photos[0]?.value || randomAvatar,
+            isEmailVerified: true, // Email verified by Google OAuth
+            password: crypto.randomBytes(32).toString('hex') // Random password (not used for OAuth)
           });
 
           done(null, user);
@@ -94,13 +100,18 @@ if (process.env.MICROSOFT_CLIENT_ID && process.env.MICROSOFT_CLIENT_SECRET) {
             return done(null, user);
           }
 
-          // Create new user
+          // Assign random profile avatar
+          const avatars = ['mr.J.jpg', 'mr.p.jpg', 'mr.s.jpg', 'mr.X.jpg', 'ms.C.jpg', 'ms.K.jpg', 'ms.O.jpg', 'ms.Y.jpg'];
+          const randomAvatar = `/avatars/${avatars[Math.floor(Math.random() * avatars.length)]}`;
+          
+          // Create new user - Email verified by Microsoft OAuth
           user = await User.create({
-            username: (email || 'user').split('@')[0] + '_' + Date.now(),
+            name: profile.displayName || (email || 'user').split('@')[0],
             email: email,
             microsoftId: profile.id,
-            profilePicture: profile.photos?.[0]?.value || '',
-            isVerified: true, // Email verified by Microsoft
+            avatar: profile.photos?.[0]?.value || randomAvatar,
+            isEmailVerified: true, // Email verified by Microsoft OAuth
+            password: crypto.randomBytes(32).toString('hex') // Random password (not used for OAuth)
           });
 
           done(null, user);

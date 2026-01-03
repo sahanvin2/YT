@@ -2,14 +2,23 @@ const mongoose = require('mongoose');
 const User = require('../models/User');
 
 // MongoDB connection
-const MONGO_URI = process.env.MONGO_URI || 'mongodb+srv://MoviaAdmin:bbfX196Wv8dm7LlJ@movia.ytwtfrc.mongodb.net/movia?retryWrites=true&w=majority&appName=movia';
+const MONGO_URI = process.env.MONGO_URI;
+if (!MONGO_URI) {
+  console.error('❌ Missing MONGO_URI in environment (.env).');
+  process.exit(1);
+}
 
 // Admin emails who can upload videos
-const UPLOAD_ADMIN_EMAILS = [
-  'sahannawarathne2004@gmail.com',
-  'snawarathne60@gmail.com',
-  'snawarathne33@gmail.com'
-];
+// Provide as comma-separated list: UPLOAD_ADMIN_EMAILS=a@b.com,c@d.com
+const UPLOAD_ADMIN_EMAILS = (process.env.UPLOAD_ADMIN_EMAILS || '')
+  .split(',')
+  .map((s) => s.trim())
+  .filter(Boolean);
+
+if (UPLOAD_ADMIN_EMAILS.length === 0) {
+  console.error('❌ Missing UPLOAD_ADMIN_EMAILS (comma-separated list) in environment.');
+  process.exit(1);
+}
 
 async function setUploadAdmins() {
   try {
