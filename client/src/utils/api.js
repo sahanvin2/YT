@@ -27,7 +27,14 @@ export const uploadVideo = (formData, config = {}) => {
 export const presignPut = (fileName, contentType, fileSize) => api.post(`${API_URL}/uploads/presign`, { fileName, contentType, fileSize });
 export const createVideoFromB2 = (data) => api.post(`${API_URL}/uploads/create-from-b2`, data);
 export const createVideoFromUrl = (data) => api.post(`${API_URL}/videos/create`, data); // Legacy, keep for compatibility
-export const updateVideo = (id, data) => api.put(`${API_URL}/videos/${id}`, data);
+export const updateVideo = (id, data) => {
+  // Check if data is FormData (contains file upload)
+  const isFormData = data instanceof FormData;
+  return api.put(`${API_URL}/videos/${id}`, data, {
+    headers: isFormData ? { 'Content-Type': 'multipart/form-data' } : {},
+    timeout: 300000, // 5 minutes for thumbnail uploads
+  });
+};
 export const deleteVideo = (id) => api.delete(`${API_URL}/videos/${id}`);
 export const likeVideo = (id) => api.put(`${API_URL}/videos/${id}/like`);
 export const dislikeVideo = (id) => api.put(`${API_URL}/videos/${id}/dislike`);

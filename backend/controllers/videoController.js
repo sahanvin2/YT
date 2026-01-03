@@ -869,8 +869,13 @@ exports.updateVideo = async (req, res, next) => {
     }
 
     // Handle thumbnail update
+    console.log(`📝 Update video ${req.params.id} - checking for thumbnail...`);
+    console.log(`   req.files:`, req.files ? Object.keys(req.files) : 'none');
+    
     if (req.files && req.files.thumbnail) {
       const thumbnailFile = req.files.thumbnail;
+      console.log(`   ✅ Thumbnail file received: ${thumbnailFile.name} (${thumbnailFile.size} bytes)`);
+      
       const tmpDir = path.join(__dirname, '../../tmp');
       try { fs.mkdirSync(tmpDir, { recursive: true }); } catch { }
 
@@ -902,8 +907,11 @@ exports.updateVideo = async (req, res, next) => {
 
       const newThumbnailUrl = await uploadFilePath(tmpThumbPath, thumbKey, thumbCT);
       req.body.thumbnailUrl = newThumbnailUrl;
+      console.log(`   ✅ New thumbnail uploaded: ${newThumbnailUrl}`);
 
       try { await fs.promises.unlink(tmpThumbPath); } catch { }
+    } else {
+      console.log(`   ℹ️ No new thumbnail file in request`);
     }
 
     // Handle tags - can be string (comma-separated) or JSON string
