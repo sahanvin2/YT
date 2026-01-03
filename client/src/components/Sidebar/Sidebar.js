@@ -93,7 +93,7 @@ const Sidebar = ({ isOpen }) => {
   };
 
   const handleSuggestionClick = (suggestion) => {
-    navigate(`/search?q=${suggestion.title}`);
+    navigate(`/search?q=${encodeURIComponent((suggestion?.title || '').trim())}`);
     setSearchQuery('');
     setShowSuggestions(false);
   };

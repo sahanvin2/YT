@@ -1193,10 +1193,15 @@ exports.searchVideos = async (req, res, next) => {
         { tags: { $in: [regexQuery] } }
       ]
     };
-    
-    // Hide unpublished videos from non-admins
-    if (!req.user || (!req.user.isAdmin && !req.user.isUploadAdmin)) {
-      query.isPublished = true;
+
+    // Keep search behavior consistent with GET /api/videos:
+    // - Do NOT require HLS
+    // - Only return videos that have a playable URL (original file on B2/CDN, or HLS if HLS_ONLY)
+    if (HLS_ONLY) {
+      query.hlsUrl = { $exists: true, $ne: null };
+      query.processingStatus = { $in: ['completed', undefined, null] };
+    } else {
+      query.videoUrl = { $exists: true, $ne: 'processing', $ne: '' };
     }
 
     let videos = await Video.find(query)
@@ -1252,13 +1257,23 @@ exports.getSearchSuggestions = async (req, res, next) => {
     const regexQuery = new RegExp(searchQuery, 'i');
 
     // Get matching video titles and descriptions for suggestions
-    const videos = await Video.find({
+    const suggestionQuery = {
       visibility: 'public',
       $or: [
         { title: regexQuery },
         { description: regexQuery }
       ]
-    })
+    };
+
+    // Keep suggestions consistent with search results (only suggest playable videos)
+    if (HLS_ONLY) {
+      suggestionQuery.hlsUrl = { $exists: true, $ne: null };
+      suggestionQuery.processingStatus = { $in: ['completed', undefined, null] };
+    } else {
+      suggestionQuery.videoUrl = { $exists: true, $ne: 'processing', $ne: '' };
+    }
+
+    const videos = await Video.find(suggestionQuery)
       .select('title _id thumbnailUrl')
       .limit(parseInt(limit))
       .sort({ views: -1 })

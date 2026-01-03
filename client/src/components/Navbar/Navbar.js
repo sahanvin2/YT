@@ -109,7 +109,7 @@ const Navbar = ({ toggleSidebar }) => {
   };
 
   const handleSuggestionClick = (suggestion) => {
-    navigate(`/search?q=${suggestion.title}`);
+    navigate(`/search?q=${encodeURIComponent((suggestion?.title || '').trim())}`);
     setSearchQuery('');
     setShowSuggestions(false);
     // Close mobile search on mobile devices
