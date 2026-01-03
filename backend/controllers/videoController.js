@@ -125,7 +125,8 @@ exports.getVideos = async (req, res, next) => {
       query.hlsUrl = { $exists: true, $ne: null };
       query.processingStatus = { $in: ['completed', undefined, null] };
     } else {
-      query.videoUrl = { $exists: true, $ne: 'processing', $ne: '' };
+      // Must have a real videoUrl (not empty, not null, not 'processing')
+      query.videoUrl = { $exists: true, $nin: [null, '', 'processing'] };
     }
     
     // Filter for clips (videos under 2 minutes / less than 120 seconds)
@@ -1201,7 +1202,8 @@ exports.searchVideos = async (req, res, next) => {
       query.hlsUrl = { $exists: true, $ne: null };
       query.processingStatus = { $in: ['completed', undefined, null] };
     } else {
-      query.videoUrl = { $exists: true, $ne: 'processing', $ne: '' };
+      // Must have a real videoUrl (not empty, not null, not 'processing')
+      query.videoUrl = { $exists: true, $nin: [null, '', 'processing'] };
     }
 
     let videos = await Video.find(query)
@@ -1270,7 +1272,8 @@ exports.getSearchSuggestions = async (req, res, next) => {
       suggestionQuery.hlsUrl = { $exists: true, $ne: null };
       suggestionQuery.processingStatus = { $in: ['completed', undefined, null] };
     } else {
-      suggestionQuery.videoUrl = { $exists: true, $ne: 'processing', $ne: '' };
+      // Must have a real videoUrl (not empty, not null, not 'processing')
+      suggestionQuery.videoUrl = { $exists: true, $nin: [null, '', 'processing'] };
     }
 
     const videos = await Video.find(suggestionQuery)
