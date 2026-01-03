@@ -57,19 +57,19 @@ exports.presignUpload = async (req, res) => {
       return res.status(400).json({ success: false, message: 'fileName and contentType required' });
     }
     
-    // Check file size (2GB = 2147483648 bytes)
-    const maxSizeBytes = 2147483648; // 2GB
+    // Check file size (5GB max for presigned uploads)
+    const maxSizeBytes = 5 * 1024 * 1024 * 1024; // 5GB
     if (fileSize && fileSize > maxSizeBytes) {
       return res.status(413).json({ 
         success: false, 
-        message: `File too large. Maximum size is 2GB (${Math.round(maxSizeBytes / 1024 / 1024)}MB)` 
+        message: `File too large. Maximum size is 5GB (${Math.round(maxSizeBytes / 1024 / 1024)}MB)` 
       });
     }
     
     const ts = Date.now();
     const key = `videos/${req.user.id}/${ts}_${fileName}`;
-    // Extended expiration for large files (2 hours = 7200 seconds)
-    const expiresIn = 7200;
+    // Extended expiration for large files (4 hours = 14400 seconds for very large uploads)
+    const expiresIn = 14400;
     
     console.log(`📝 Generating presigned URL for: ${fileName} (${Math.round((fileSize || 0) / 1024 / 1024)}MB)`);
     console.log(`   Key: ${key}`);
@@ -121,12 +121,12 @@ exports.streamUploadToB2 = async (req, res) => {
       visibility 
     } = req.body;
 
-    // Check file size (2GB = 2147483648 bytes)
-    const maxSizeBytes = 2147483648; // 2GB
+    // Check file size (5GB max)
+    const maxSizeBytes = 5 * 1024 * 1024 * 1024; // 5GB
     if (videoFile.size > maxSizeBytes) {
       return res.status(413).json({ 
         success: false, 
-        message: `File too large. Maximum size is 2GB (${Math.round(maxSizeBytes / 1024 / 1024)}MB)` 
+        message: `File too large. Maximum size is 5GB (${Math.round(maxSizeBytes / 1024 / 1024)}MB)` 
       });
     }
 

@@ -32,11 +32,13 @@ if (process.env.NODE_ENV === 'development') {
 // Create axios instance with proper base URL
 const api = axios.create({
   baseURL: API_BASE_URL,
-  timeout: 30000,
+  timeout: 7200000, // 2 hours - needed for large video uploads
   headers: {
     'Content-Type': 'application/json'
   },
-  withCredentials: true // Important for CORS with credentials
+  withCredentials: true, // Important for CORS with credentials
+  maxContentLength: Infinity,
+  maxBodyLength: Infinity
 });
 
 // Request interceptor to add auth token
@@ -73,8 +75,18 @@ api.interceptors.response.use(
       console.error('Network Error - Check API URL:', API_BASE_URL);
       return Promise.reject({
         ...error,
-        message: 'Network error. Please check your connection and try again.',
+        message: 'Network error: could not connect to the server. Please check your connection and try again.',
         isNetworkError: true
+      });
+    }
+    
+    // Timeout errors (large uploads)
+    if (error.code === 'ECONNABORTED' || error.message?.includes('timeout')) {
+      console.error('Request timeout - file may be too large or connection too slow');
+      return Promise.reject({
+        ...error,
+        message: 'Upload timeout: the server took too long to respond. Try a smaller file or check your connection.',
+        isTimeoutError: true
       });
     }
     

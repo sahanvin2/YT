@@ -136,7 +136,7 @@ if (process.env.NODE_ENV === 'development') {
 // File uploading - CRITICAL: Keep files in memory, NEVER write to disk
 // IMPORTANT: Using in-memory uploads for large videos can OOM and crash the whole instance.
 // For stability, we use temp files (OS temp dir) and stream from disk.
-const maxSizeMb = parseInt(process.env.MAX_VIDEO_SIZE_MB || '2048'); // 2GB max
+const maxSizeMb = parseInt(process.env.MAX_VIDEO_SIZE_MB || '5120'); // 5GB max by default
 
 const uploadTmpDir = process.env.UPLOAD_TMP_DIR || path.join(os.tmpdir(), 'movia-upload');
 try {
