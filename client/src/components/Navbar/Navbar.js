@@ -4,10 +4,10 @@ import { FiSearch, FiMenu, FiVideo, FiUser, FiLogOut, FiX, FiSun, FiMoon, FiPlus
 import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../context/ThemeContext';
 import { getSearchSuggestions } from '../../utils/api';
+import api from '../../config/api';
 import MoviaLogo from '../Logo/MoviaLogo';
 import NotificationPanel from '../NotificationPanel/NotificationPanel';
 import NotificationBell from '../NotificationBell/NotificationBell';
-import axios from 'axios';
 import './Navbar.css';
 
 const Navbar = ({ toggleSidebar }) => {
@@ -70,14 +70,13 @@ const Navbar = ({ toggleSidebar }) => {
 
   const fetchUnreadCount = async () => {
     try {
-      const token = localStorage.getItem('token');
-      const response = await axios.get(
-        '/api/notifications/unread-count',
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
+      const response = await api.get('/notifications/unread-count');
       setUnreadCount(response.data.unreadCount || 0);
     } catch (error) {
-      console.error('Error fetching unread count:', error);
+      // Silently ignore - notifications are optional
+      if (error.response?.status !== 404) {
+        console.error('Error fetching unread count:', error);
+      }
     }
   };
 

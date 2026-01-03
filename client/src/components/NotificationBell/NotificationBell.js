@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { FiBell } from 'react-icons/fi';
 import { useNavigate } from 'react-router-dom';
 import { useSocket } from '../../context/SocketContext';
-import axios from 'axios';
+import api from '../../config/api';
 import './NotificationBell.css';
 
 const NotificationBell = () => {
@@ -94,23 +94,21 @@ const NotificationBell = () => {
       const token = localStorage.getItem('token');
       if (!token) return;
       
-      const res = await axios.get('/api/system-notifications/unread-count', {
-        headers: { Authorization: `Bearer ${token}` }
-      });
+      const res = await api.get('/system-notifications/unread-count');
       setUnreadCount(res.data.count || 0);
     } catch (err) {
-      console.error('Failed to fetch unread count:', err);
+      // Silently ignore 404s - notifications are optional
+      if (err.response?.status !== 404) {
+        console.error('Failed to fetch unread count:', err);
+      }
     }
   };
 
   const fetchNotifications = async () => {
     setLoading(true);
     try {
-      const token = localStorage.getItem('token');
-      const res = await axios.get('/api/system-notifications?limit=5', {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      setNotifications(res.data.data.notifications);
+      const res = await api.get('/system-notifications?limit=5');
+      setNotifications(res.data.data?.notifications || []);
     } catch (err) {
       console.error('Failed to fetch notifications:', err);
     } finally {
@@ -120,10 +118,7 @@ const NotificationBell = () => {
 
   const markAsRead = async (notificationId) => {
     try {
-      const token = localStorage.getItem('token');
-      await axios.patch(`/api/system-notifications/${notificationId}/read`, {}, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
+      await api.patch(`/system-notifications/${notificationId}/read`);
       fetchUnreadCount();
       fetchNotifications();
     } catch (err) {

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import axios from 'axios';
+import api from '../../config/api';
 import { Link } from 'react-router-dom';
 import './NotificationPanel.css';
 
@@ -35,12 +35,9 @@ const NotificationPanel = ({ isOpen, onClose }) => {
   const fetchNotifications = async () => {
     setLoading(true);
     try {
-      const token = localStorage.getItem('token');
-      const response = await axios.get(`${process.env.REACT_APP_API_URL}/api/notifications`, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      setNotifications(response.data.notifications);
-      setUnreadCount(response.data.unreadCount);
+      const response = await api.get('/notifications');
+      setNotifications(response.data.notifications || []);
+      setUnreadCount(response.data.unreadCount || 0);
     } catch (error) {
       console.error('Error fetching notifications:', error);
     } finally {
@@ -50,12 +47,7 @@ const NotificationPanel = ({ isOpen, onClose }) => {
 
   const markAsRead = async (notificationId) => {
     try {
-      const token = localStorage.getItem('token');
-      await axios.patch(
-        `${process.env.REACT_APP_API_URL}/api/notifications/${notificationId}/read`,
-        {},
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
+      await api.patch(`/notifications/${notificationId}/read`);
       
       setNotifications(prev => 
         prev.map(notif => 
@@ -70,12 +62,7 @@ const NotificationPanel = ({ isOpen, onClose }) => {
 
   const markAllAsRead = async () => {
     try {
-      const token = localStorage.getItem('token');
-      await axios.patch(
-        `${process.env.REACT_APP_API_URL}/api/notifications/mark-all-read`,
-        {},
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
+      await api.patch('/notifications/mark-all-read');
       
       setNotifications(prev => prev.map(notif => ({ ...notif, read: true })));
       setUnreadCount(0);
@@ -89,11 +76,7 @@ const NotificationPanel = ({ isOpen, onClose }) => {
     e.stopPropagation();
     
     try {
-      const token = localStorage.getItem('token');
-      await axios.delete(
-        `${process.env.REACT_APP_API_URL}/api/notifications/${notificationId}`,
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
+      await api.delete(`/notifications/${notificationId}`);
       
       setNotifications(prev => prev.filter(notif => notif._id !== notificationId));
     } catch (error) {
