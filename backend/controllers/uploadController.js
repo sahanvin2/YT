@@ -7,6 +7,7 @@ const crypto = require('crypto');
 const { uploadFile, deleteFile, presignPut, publicUrl, uploadFilePath } = require('../utils/b2');
 const { notifyFollowersNewVideo } = require('./notificationController');
 const { S3Client, PutObjectCommand } = require('@aws-sdk/client-s3');
+const { Upload } = require('@aws-sdk/lib-storage');
 const { Readable } = require('stream');
 
 function computeChecksum(filePath) {
@@ -192,17 +193,48 @@ exports.streamUploadToB2 = async (req, res) => {
     }
     
     // Upload to B2 with verification
-    console.log(`📤 Uploading to B2: ${videoKey} (${Math.round(videoFile.size / 1024 / 1024)}MB)`);
+    // Use multipart upload for large files (>100MB) to avoid timeout issues
+    const fileSizeMB = Math.round(contentLength / 1024 / 1024);
+    console.log(`📤 Uploading to B2: ${videoKey} (${fileSizeMB}MB) - using ${fileSizeMB > 100 ? 'MULTIPART' : 'single PUT'}`);
     
     try {
-      // B2 requires ContentLength for stream uploads
-      await s3.send(new PutObjectCommand({
-        Bucket: B2_BUCKET,
-        Key: videoKey,
-        Body: fileStream,
-        ContentType: videoCT,
-        ContentLength: contentLength, // Required for B2 stream uploads
-      }));
+      if (contentLength > 100 * 1024 * 1024) {
+        // Use multipart upload for files > 100MB
+        const upload = new Upload({
+          client: s3,
+          params: {
+            Bucket: B2_BUCKET,
+            Key: videoKey,
+            Body: fileStream,
+            ContentType: videoCT,
+          },
+          // 100MB part size for large files
+          partSize: 100 * 1024 * 1024,
+          // Maximum concurrent uploads
+          queueSize: 4,
+          // Leave parts on error (for debugging)
+          leavePartsOnError: false,
+        });
+        
+        // Track progress
+        upload.on('httpUploadProgress', (progress) => {
+          const percent = Math.round((progress.loaded / progress.total) * 100);
+          console.log(`   📊 Upload progress: ${percent}% (${Math.round(progress.loaded / 1024 / 1024)}MB / ${Math.round(progress.total / 1024 / 1024)}MB)`);
+        });
+        
+        await upload.done();
+        console.log(`✅ Multipart upload completed: ${videoKey}`);
+      } else {
+        // Use simple PUT for small files (<100MB)
+        await s3.send(new PutObjectCommand({
+          Bucket: B2_BUCKET,
+          Key: videoKey,
+          Body: fileStream,
+          ContentType: videoCT,
+          ContentLength: contentLength,
+        }));
+        console.log(`✅ Single PUT upload completed: ${videoKey}`);
+      }
       
       // Verify upload succeeded by checking if file exists in B2
       const { HeadObjectCommand } = require('@aws-sdk/client-s3');
