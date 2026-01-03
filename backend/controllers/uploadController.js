@@ -139,8 +139,16 @@ exports.streamUploadToB2 = async (req, res) => {
     const B2_SECRET_ACCESS_KEY = process.env.B2_SECRET_ACCESS_KEY;
 
     if (!B2_BUCKET || !B2_ENDPOINT || !B2_ACCESS_KEY_ID || !B2_SECRET_ACCESS_KEY) {
-      throw new Error('B2 storage not configured (missing B2_BUCKET/B2_ENDPOINT/B2_ACCESS_KEY_ID/B2_SECRET_ACCESS_KEY)');
+      const missing = [];
+      if (!B2_BUCKET) missing.push('B2_BUCKET');
+      if (!B2_ENDPOINT) missing.push('B2_ENDPOINT');
+      if (!B2_ACCESS_KEY_ID) missing.push('B2_ACCESS_KEY_ID');
+      if (!B2_SECRET_ACCESS_KEY) missing.push('B2_SECRET_ACCESS_KEY');
+      console.error(`❌ B2 NOT CONFIGURED. Missing: ${missing.join(', ')}`);
+      throw new Error(`B2 storage not configured. Missing: ${missing.join(', ')}. Add these to your .env file.`);
     }
+    
+    console.log(`🔌 B2 Config: bucket=${B2_BUCKET}, endpoint=${B2_ENDPOINT.substring(0, 30)}...`);
 
     const s3 = new S3Client({
       region: 'auto',
@@ -209,8 +217,31 @@ exports.streamUploadToB2 = async (req, res) => {
         // Don't throw - file might still be there, just not immediately available
       }
     } catch (uploadErr) {
-      console.error(`❌ B2 upload failed:`, uploadErr);
-      throw new Error(`Failed to upload to B2: ${uploadErr.message}`);
+      console.error(`❌ B2 upload failed:`);
+      console.error(`   Error: ${uploadErr.message}`);
+      console.error(`   Code: ${uploadErr.code || uploadErr.$metadata?.httpStatusCode || 'unknown'}`);
+      console.error(`   Name: ${uploadErr.name || 'unknown'}`);
+      if (uploadErr.$metadata) {
+        console.error(`   HTTP Status: ${uploadErr.$metadata.httpStatusCode}`);
+      }
+      
+      // Provide specific error messages
+      let errorDetail = uploadErr.message;
+      if (uploadErr.code === 'InvalidAccessKeyId' || uploadErr.message.includes('InvalidAccessKeyId')) {
+        errorDetail = 'Invalid B2 Access Key ID. Check your B2_ACCESS_KEY_ID in .env';
+      } else if (uploadErr.code === 'SignatureDoesNotMatch' || uploadErr.message.includes('SignatureDoesNotMatch')) {
+        errorDetail = 'Invalid B2 Secret Key. Check your B2_SECRET_ACCESS_KEY in .env';
+      } else if (uploadErr.code === 'NoSuchBucket' || uploadErr.message.includes('NoSuchBucket')) {
+        errorDetail = `Bucket "${B2_BUCKET}" not found. Check your B2_BUCKET in .env`;
+      } else if (uploadErr.code === 'AccessDenied' || uploadErr.message.includes('Access Denied')) {
+        errorDetail = 'Access denied to B2 bucket. Check bucket permissions and key capabilities';
+      } else if (uploadErr.code === 'ENOTFOUND' || uploadErr.code === 'ECONNREFUSED') {
+        errorDetail = 'Cannot connect to B2. Check B2_ENDPOINT and your internet connection';
+      } else if (uploadErr.code === 'ETIMEDOUT') {
+        errorDetail = 'Connection to B2 timed out. Try again or check your network';
+      }
+      
+      throw new Error(`B2 upload failed: ${errorDetail}`);
     }
     
     // IMMEDIATELY delete temp file if it exists (shouldn't happen, but safety check)
@@ -375,22 +406,23 @@ exports.streamUploadToB2 = async (req, res) => {
     }
     
     // Provide user-friendly error message
-    let errorMessage = 'Failed to upload video to B2 storage.';
     const rawMsg = error?.message || '';
     const awsCode = error?.name || error?.Code || error?.code;
+    let errorMessage = rawMsg || 'Failed to upload video to B2 storage.';
 
-    if (rawMsg.includes('B2 storage not configured')) {
-      errorMessage = 'B2 storage is not configured on the server (missing env vars).';
-    } else if (rawMsg.includes('Failed to upload to B2')) {
-      errorMessage = `B2 upload failed (${awsCode || 'unknown'}). Check B2 credentials, bucket permissions, and server outbound internet.`;
+    // Make error messages more user-friendly
+    if (rawMsg.includes('B2 storage not configured') || rawMsg.includes('Missing:')) {
+      errorMessage = rawMsg; // Already user-friendly
+    } else if (rawMsg.includes('B2 upload failed')) {
+      errorMessage = rawMsg; // Already has specific details
     } else if (rawMsg.includes('AccessDenied') || rawMsg.includes('InvalidAccessKeyId') || rawMsg.includes('SignatureDoesNotMatch')) {
-      errorMessage = `B2 credentials/permissions error (${awsCode || 'auth'}). Fix B2 keys and bucket access.`;
+      errorMessage = `B2 credentials error: ${rawMsg}`;
     } else if (rawMsg.includes('timeout') || rawMsg.includes('ETIMEDOUT') || rawMsg.includes('ECONNRESET')) {
-      errorMessage = `Network timeout while uploading to B2 (${awsCode || 'network'}). Try again or check server network.`;
+      errorMessage = `Network timeout uploading to B2. Try again or check your connection.`;
     } else if (rawMsg.includes('File data not available')) {
       errorMessage = 'File upload error. Please try again.';
-    } else if (rawMsg) {
-      errorMessage = rawMsg;
+    } else if (!rawMsg) {
+      errorMessage = 'Unknown upload error. Please check server logs.';
     }
     
     res.status(500).json({ 
