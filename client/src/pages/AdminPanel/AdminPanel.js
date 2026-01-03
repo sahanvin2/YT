@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { FiUsers, FiShield, FiVideo, FiEdit, FiTrash2, FiUserPlus, FiUserMinus, FiSearch, FiAlertCircle, FiBell, FiMail, FiSend } from 'react-icons/fi';
 import { useAuth } from '../../context/AuthContext';
-import axios from 'axios';
+import api from '../../config/api';
 import './AdminPanel.css';
 
 const AdminPanel = () => {
@@ -61,31 +61,28 @@ const AdminPanel = () => {
     setLoading(true);
     setError('');
     try {
-      const token = localStorage.getItem('token');
-      const config = { headers: { Authorization: `Bearer ${token}` } };
-
       if (activeTab === 'users') {
-        const res = await axios.get('/api/admin/users', config);
-        setUsers(res.data.data.filter(u => !u.isUploadAdmin && u.role !== 'admin'));
+        const res = await api.get('/admin/users');
+        setUsers((res.data.data || []).filter(u => !u.isUploadAdmin && u.role !== 'admin'));
       } else if (activeTab === 'admins') {
-        const res = await axios.get('/api/admin/users', config);
-        setAdmins(res.data.data.filter(u => u.isUploadAdmin || u.role === 'admin'));
+        const res = await api.get('/admin/users');
+        setAdmins((res.data.data || []).filter(u => u.isUploadAdmin || u.role === 'admin'));
       } else if (activeTab === 'videos') {
-        const res = await axios.get('/api/admin/videos', config);
-        setVideos(res.data.data);
+        const res = await api.get('/admin/videos');
+        setVideos(res.data.data || []);
       } else if (activeTab === 'notifications') {
         // Fetch all users for notification sending
-        const res = await axios.get('/api/system-notifications/users', config);
-        setAllUsers(res.data.data.users);
+        const res = await api.get('/system-notifications/users');
+        setAllUsers(res.data.data?.users || []);
       } else if (activeTab === 'email') {
         // Fetch email service health and users
         try {
-          const healthRes = await axios.get('/api/admin/email/health', config);
+          const healthRes = await api.get('/admin/email/health');
           setEmailHealth(healthRes.data.data);
         } catch (err) {
           setEmailHealth({ configured: false, working: false, message: 'Unable to check email health' });
         }
-        const usersRes = await axios.get('/api/admin/email/users', config);
+        const usersRes = await api.get('/admin/email/users');
         setEmailUsers(usersRes.data.data || []);
       }
     } catch (err) {
@@ -100,10 +97,7 @@ const AdminPanel = () => {
   const promoteToAdmin = async (userId) => {
     if (!window.confirm('Promote this user to admin?')) return;
     try {
-      const token = localStorage.getItem('token');
-      await axios.put(`/api/admin/users/${userId}/promote`, {}, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
+      await api.put(`/admin/users/${userId}/promote`);
       setSuccess('User promoted to admin successfully');
       fetchData();
       setTimeout(() => setSuccess(''), 3000);
@@ -121,10 +115,7 @@ const AdminPanel = () => {
     }
     if (!window.confirm('Demote this admin to regular user?')) return;
     try {
-      const token = localStorage.getItem('token');
-      await axios.put(`/api/admin/users/${userId}/demote`, {}, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
+      await api.put(`/admin/users/${userId}/demote`);
       setSuccess('Admin demoted to user successfully');
       fetchData();
       setTimeout(() => setSuccess(''), 3000);
@@ -142,10 +133,7 @@ const AdminPanel = () => {
     }
     if (!window.confirm('Permanently delete this user? This action cannot be undone.')) return;
     try {
-      const token = localStorage.getItem('token');
-      await axios.delete(`/api/admin/users/${userId}`, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
+      await api.delete(`/admin/users/${userId}`);
       setSuccess('User deleted successfully');
       fetchData();
       setTimeout(() => setSuccess(''), 3000);
@@ -158,10 +146,7 @@ const AdminPanel = () => {
   const deleteVideo = async (videoId) => {
     if (!window.confirm('Delete this video? This action cannot be undone.')) return;
     try {
-      const token = localStorage.getItem('token');
-      await axios.delete(`/api/videos/${videoId}`, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
+      await api.delete(`/videos/${videoId}`);
       setSuccess('Video deleted successfully');
       fetchData();
       setTimeout(() => setSuccess(''), 3000);
@@ -187,10 +172,7 @@ const AdminPanel = () => {
 
     setSendingNotification(true);
     try {
-      const token = localStorage.getItem('token');
-      await axios.post('/api/system-notifications', notificationForm, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
+      await api.post('/system-notifications', notificationForm);
       setSuccess('Notification sent successfully!');
       setNotificationForm({
         title: '',
@@ -244,9 +226,6 @@ const AdminPanel = () => {
     setSuccess('');
 
     try {
-      const token = localStorage.getItem('token');
-      const config = { headers: { Authorization: `Bearer ${token}` } };
-
       if (emailForm.recipients === 'single') {
         // Send to single user
         if (!emailForm.recipient) {
@@ -254,11 +233,11 @@ const AdminPanel = () => {
           setSendingEmail(false);
           return;
         }
-        await axios.post('/api/admin/email/send', {
+        await api.post('/admin/email/send', {
           to: emailForm.recipient,
           subject: emailForm.subject,
           message: emailForm.message
-        }, config);
+        });
         setSuccess('Email sent successfully!');
       } else {
         // Broadcast to multiple users
@@ -274,11 +253,11 @@ const AdminPanel = () => {
           recipients = emailForm.recipients; // 'all', 'admins', 'verified'
         }
         
-        const res = await axios.post('/api/admin/email/broadcast', {
+        const res = await api.post('/admin/email/broadcast', {
           recipients,
           subject: emailForm.subject,
           message: emailForm.message
-        }, config);
+        });
         setSuccess(`Email broadcast complete! Sent: ${res.data.data.sent}, Failed: ${res.data.data.failed}`);
       }
 
