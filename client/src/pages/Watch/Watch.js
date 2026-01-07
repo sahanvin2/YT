@@ -7,9 +7,6 @@ import { formatViews, formatDate, formatDuration } from '../../utils/helpers';
 import { useAuth } from '../../context/AuthContext';
 import CommentSection from '../../components/CommentSection/CommentSection';
 import SubscribeButton from '../../components/SubscribeButton/SubscribeButton';
-// TEMPORARILY DISABLED FOR HIGH TRAFFIC
-// import { useSmartlinkAd } from '../../components/Ads/SmartlinkAd';
-// import { useAds } from '../../context/AdContext';
 import ShareModal from '../../components/ShareModal/ShareModal';
 import VideoCard from '../../components/VideoCard/VideoCard';
 import './Watch.css';
@@ -75,20 +72,26 @@ const Watch = () => {
   const [currentAdIndex, setCurrentAdIndex] = useState(0);
   const [firstAdShown, setFirstAdShown] = useState(false);
   
-  // TEMPORARILY DISABLED FOR HIGH TRAFFIC - Ads commented out to prevent crashes
-  // Sequential ad URLs - shown one by one every 20 minutes
-  /* const adUrls = [
-    'https://ferntravelleddeduct.com/gtrc1veb7i?key=b0b98b004d66f73292231e7413bd2b3d',
-    'https://ferntravelleddeduct.com/ngw7f9w7ar?key=1d03ce84598475a5c0ae7b0e970be386',
-    'https://ferntravelleddeduct.com/tnku73k6e8?key=447538fcc223d88734b4f7f5f5be2b54',
-    'https://ferntravelleddeduct.com/idfx3p15i3?key=9d603a856f9d9a37ec5ef196269b06e7',
-    'https://ferntravelleddeduct.com/bgusytk8f?key=9c413adfc9220ea82965cd0da534ce6e',
-    'https://ferntravelleddeduct.com/j23e4fkk?key=523fef688a467d6f64fdd802524115f9',
-    'https://ferntravelleddeduct.com/dcymz8b5?key=3c409df2cb253703547b6069590d19dd',
-    'https://ferntravelleddeduct.com/skrjybktk?key=5c9a385ddc45f9ed2cbe812d9b5d8df3',
-    'https://ferntravelleddeduct.com/b467swwk68?key=83daee009e4befaeaba7c9dea1c856e8',
-    'https://ferntravelleddeduct.com/drfzz5nfc?key=a65ddcb5be118c6be68e516713aea33b'
-  ]; */
+  // Ad URLs for monetization
+  // Ad 1: On play button click
+  // Ad 2: After 15 minutes (900 seconds)
+  // Ad 3: After 25 minutes (1500 seconds) - before video end
+  const AD_CONFIG = {
+    onPlayAd: 'https://otieu.com/4/10262525',
+    timedAds: [
+      { time: 900, url: 'https://ferntravelleddeduct.com/gtrc1veb7i?key=b0b98b004d66f73292231e7413bd2b3d', shown: false }, // 15 minutes
+      { time: 1500, url: 'https://ferntravelleddeduct.com/ngw7f9w7ar?key=1d03ce84598475a5c0ae7b0e970be386', shown: false }, // 25 minutes
+    ]
+  };
+  const [timedAdsShown, setTimedAdsShown] = useState([false, false]);
+  const [playAdShown, setPlayAdShown] = useState(false);
+  
+  // Double-tap skip functionality for mobile
+  const [doubleTapSide, setDoubleTapSide] = useState(null); // 'left' | 'right' | null
+  const [skipAmount, setSkipAmount] = useState(0);
+  const doubleTapTimeoutRef = useRef(null);
+  const lastTapRef = useRef(0);
+  const tapCountRef = useRef(0);
   const [videoDuration, setVideoDuration] = useState(0);
   const [playbackRate, setPlaybackRate] = useState(1);
   const [pipEnabled, setPipEnabled] = useState(false);
@@ -118,6 +121,9 @@ const Watch = () => {
     setWaitingForAdPlay(false);
     setCurrentAdIndex(0);
     setFirstAdShown(false);
+    // Reset ad states for new video
+    setTimedAdsShown([false, false]);
+    setPlayAdShown(false);
     
     // Clear sessionStorage for this video ID
     if (id) {
@@ -224,6 +230,15 @@ const Watch = () => {
   }, [video, id]);
 
   // Timed ads are now handled in handleProgress based on actual video playback time
+
+  // Cleanup double-tap timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (doubleTapTimeoutRef.current) {
+        clearTimeout(doubleTapTimeoutRef.current);
+      }
+    };
+  }, []);
 
   // Close download menu and speed menu when clicking outside
   useEffect(() => {
@@ -544,34 +559,108 @@ const Watch = () => {
       }
     }
 
-    // TEMPORARILY DISABLED ADS FOR HIGH TRAFFIC
-    /* Show ad every 5 minutes (300 seconds)
-    if (playedSeconds > 300 && !waitingForAdPlay && currentAdIndex < adUrls.length) {
-      const currentMinuteMark = Math.floor(playedSeconds / 300);
-      const lastAdMinuteMark = Math.floor(lastAdTime / 300);
-      
-      if (currentMinuteMark > lastAdMinuteMark && currentMinuteMark > 0) {
-        console.log(`Opening ad ${currentAdIndex + 1} at ${Math.floor(playedSeconds / 60)}:${Math.floor(playedSeconds % 60).toString().padStart(2, '0')}...`);
+    // Show timed ads at 15 minutes and 25 minutes
+    AD_CONFIG.timedAds.forEach((ad, index) => {
+      if (playedSeconds >= ad.time && !timedAdsShown[index]) {
+        console.log(`📺 Opening timed ad ${index + 1} at ${Math.floor(playedSeconds / 60)}:${Math.floor(playedSeconds % 60).toString().padStart(2, '0')}...`);
         
-        const adUrl = adUrls[currentAdIndex];
-        if (adUrl) {
-          try {
-            const win = window.open(adUrl, '_blank', 'noopener,noreferrer');
-            if (win) {
-              console.log('✅ Ad opened successfully');
-              setCurrentAdIndex(prev => prev + 1);
-              setLastAdTime(playedSeconds);
-            } else {
-              console.warn('⚠️ Ad popup blocked');
-            }
-          } catch (error) {
-            console.error('❌ Error opening ad:', error);
+        try {
+          const win = window.open(ad.url, '_blank', 'noopener,noreferrer');
+          if (win) {
+            console.log('✅ Timed ad opened successfully');
+            setTimedAdsShown(prev => {
+              const newState = [...prev];
+              newState[index] = true;
+              return newState;
+            });
+          } else {
+            console.warn('⚠️ Ad popup blocked - trying alternate method');
+            // Try iframe approach as fallback
+            const iframe = document.createElement('iframe');
+            iframe.style.display = 'none';
+            iframe.src = ad.url;
+            document.body.appendChild(iframe);
+            setTimeout(() => iframe.remove(), 5000);
+            setTimedAdsShown(prev => {
+              const newState = [...prev];
+              newState[index] = true;
+              return newState;
+            });
           }
+        } catch (error) {
+          console.error('❌ Error opening timed ad:', error);
         }
-        
-        setWaitingForAdPlay(false);
       }
-    } */
+    });
+  };
+  
+  // Function to open ad on play
+  const openPlayAd = () => {
+    if (playAdShown) return true; // Ad already shown, allow play
+    
+    try {
+      console.log('📺 Opening play ad...');
+      const win = window.open(AD_CONFIG.onPlayAd, '_blank', 'noopener,noreferrer');
+      if (win) {
+        console.log('✅ Play ad opened successfully');
+      } else {
+        // Popup blocked - try alternate method
+        const iframe = document.createElement('iframe');
+        iframe.style.display = 'none';
+        iframe.src = AD_CONFIG.onPlayAd;
+        document.body.appendChild(iframe);
+        setTimeout(() => iframe.remove(), 5000);
+      }
+      setPlayAdShown(true);
+      return true;
+    } catch (error) {
+      console.error('❌ Error opening play ad:', error);
+      setPlayAdShown(true);
+      return true;
+    }
+  };
+  
+  // Handle double tap for skip functionality (mobile)
+  const handleDoubleTap = (e, side) => {
+    const currentTime = Date.now();
+    const tapGap = currentTime - lastTapRef.current;
+    
+    if (tapGap < 300) {
+      // Double tap detected
+      tapCountRef.current += 1;
+      
+      // Clear previous timeout
+      if (doubleTapTimeoutRef.current) {
+        clearTimeout(doubleTapTimeoutRef.current);
+      }
+      
+      // Calculate skip amount (10 seconds per double tap)
+      const newSkipAmount = tapCountRef.current * 10;
+      setSkipAmount(newSkipAmount);
+      setDoubleTapSide(side);
+      
+      // Perform the skip
+      if (playerRef.current) {
+        const currentPos = playerRef.current.getCurrentTime();
+        if (side === 'left') {
+          playerRef.current.seekTo(Math.max(0, currentPos - 10));
+        } else {
+          playerRef.current.seekTo(currentPos + 10);
+        }
+      }
+      
+      // Reset after animation
+      doubleTapTimeoutRef.current = setTimeout(() => {
+        setDoubleTapSide(null);
+        setSkipAmount(0);
+        tapCountRef.current = 0;
+      }, 800);
+    } else {
+      // First tap - reset counter
+      tapCountRef.current = 1;
+    }
+    
+    lastTapRef.current = currentTime;
   };
 
   const addVideoToHistory = async () => {
@@ -842,11 +931,15 @@ const Watch = () => {
               }
             }}
             onClick={(e) => {
-              // Don't toggle play if clicking on controls
-              if (e.target.closest('.video-controls-overlay, .controls-bottom-section, .video-control-btn')) {
+              // Don't toggle play if clicking on controls or double-tap zones
+              if (e.target.closest('.video-controls-overlay, .controls-bottom-section, .video-control-btn, .double-tap-zone')) {
                 return;
               }
               if (hasPlayableUrl && !isProcessing) {
+                // Open ad when starting to play (first time only)
+                if (!playing && !playAdShown) {
+                  openPlayAd();
+                }
                 setPlaying(!playing);
               }
             }}
@@ -985,12 +1078,46 @@ const Watch = () => {
                   }}
                 />
 
+                {/* Double Tap Zones for Mobile Skip */}
+                <div className="double-tap-zones">
+                  <div 
+                    className={`double-tap-zone left ${doubleTapSide === 'left' ? 'active' : ''}`}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleDoubleTap(e, 'left');
+                    }}
+                  >
+                    {doubleTapSide === 'left' && (
+                      <div className="skip-indicator">
+                        <FiSkipBack size={32} />
+                        <span>{skipAmount}s</span>
+                      </div>
+                    )}
+                  </div>
+                  <div 
+                    className={`double-tap-zone right ${doubleTapSide === 'right' ? 'active' : ''}`}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleDoubleTap(e, 'right');
+                    }}
+                  >
+                    {doubleTapSide === 'right' && (
+                      <div className="skip-indicator">
+                        <FiSkipForward size={32} />
+                        <span>{skipAmount}s</span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
                 {/* YouTube-Style Overlay Controls */}
                 <div className={`video-controls-overlay ${showControls ? 'visible' : ''}`}>
                   {/* Big Center Play Button */}
                   {!playing && (
                     <div className="center-play-button" onClick={(e) => {
                       e.stopPropagation();
+                      // Open ad when play button is clicked (first time only)
+                      openPlayAd();
                       setPlaying(true);
                     }}>
                       <FiPlay size={60} />

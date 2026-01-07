@@ -37,11 +37,18 @@ export const AdProvider = ({ children }) => {
     
     // VAST In-Stream Video Ad settings
     smartlinkEnabled: true,
-    smartlinkUrl: 'https://otieu.com/4/10271171',
+    smartlinkUrl: 'https://otieu.com/4/10262525',
     smartlinkFrequency: 'once-per-video',
     timedAdEnabled: true,
-    timedAdInterval: 180000, // 3 minutes in milliseconds
-    timedAdUrl: 'https://otieu.com/4/10271171',
+    timedAdInterval: 900000, // 15 minutes in milliseconds
+    timedAdUrl: 'https://ferntravelleddeduct.com/gtrc1veb7i?key=b0b98b004d66f73292231e7413bd2b3d',
+    // Additional timed ads
+    timedAds: [
+      { time: 900000, url: 'https://ferntravelleddeduct.com/gtrc1veb7i?key=b0b98b004d66f73292231e7413bd2b3d' }, // 15 minutes
+      { time: 1500000, url: 'https://ferntravelleddeduct.com/ngw7f9w7ar?key=1d03ce84598475a5c0ae7b0e970be386' }, // 25 minutes
+    ],
+    // Play button ad (shown when user clicks play)
+    playAdUrl: 'https://otieu.com/4/10262525',
     
     // Custom ad codes (for custom ad networks)
     // 728x90 Banner Ad Key: f3d1a518f166a74bea90e44208c34ab0

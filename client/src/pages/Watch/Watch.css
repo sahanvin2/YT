@@ -1810,3 +1810,377 @@
   font-weight: 400;
   color: rgba(255, 255, 255, 0.7);
 }
+
+/* ===== DOUBLE TAP TO SKIP (MOBILE) ===== */
+.double-tap-zones {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  z-index: 5;
+  pointer-events: none;
+}
+
+.double-tap-zone {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: auto;
+  transition: background-color 0.2s ease;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.double-tap-zone.left {
+  justify-content: flex-start;
+  padding-left: 20%;
+  border-radius: 50% 0 0 50%;
+}
+
+.double-tap-zone.right {
+  justify-content: flex-end;
+  padding-right: 20%;
+  border-radius: 0 50% 50% 0;
+}
+
+.double-tap-zone.active {
+  background: radial-gradient(circle at center, rgba(255, 255, 255, 0.2) 0%, transparent 70%);
+}
+
+.double-tap-zone.active.left {
+  background: radial-gradient(circle at 30% 50%, rgba(255, 255, 255, 0.25) 0%, transparent 60%);
+  animation: ripple-left 0.4s ease-out;
+}
+
+.double-tap-zone.active.right {
+  background: radial-gradient(circle at 70% 50%, rgba(255, 255, 255, 0.25) 0%, transparent 60%);
+  animation: ripple-right 0.4s ease-out;
+}
+
+@keyframes ripple-left {
+  0% {
+    background: radial-gradient(circle at 30% 50%, rgba(255, 255, 255, 0.4) 0%, transparent 30%);
+  }
+  100% {
+    background: radial-gradient(circle at 30% 50%, rgba(255, 255, 255, 0.1) 0%, transparent 70%);
+  }
+}
+
+@keyframes ripple-right {
+  0% {
+    background: radial-gradient(circle at 70% 50%, rgba(255, 255, 255, 0.4) 0%, transparent 30%);
+  }
+  100% {
+    background: radial-gradient(circle at 70% 50%, rgba(255, 255, 255, 0.1) 0%, transparent 70%);
+  }
+}
+
+.skip-indicator {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  color: white;
+  animation: skip-bounce 0.3s ease-out;
+  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.8);
+}
+
+.skip-indicator svg {
+  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.5));
+}
+
+.skip-indicator span {
+  font-size: 16px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+}
+
+@keyframes skip-bounce {
+  0% {
+    transform: scale(0.5);
+    opacity: 0;
+  }
+  50% {
+    transform: scale(1.2);
+  }
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+/* Hide double-tap zones on desktop by default, show on mobile/touch devices */
+@media (hover: hover) and (pointer: fine) {
+  .double-tap-zones {
+    display: none;
+  }
+}
+
+@media (hover: none) and (pointer: coarse) {
+  .double-tap-zones {
+    display: flex;
+  }
+}
+
+/* ===== ENHANCED MOBILE RESPONSIVENESS ===== */
+@media (max-width: 768px) {
+  .watch-page {
+    padding: 0;
+  }
+  
+  .video-player {
+    border-radius: 0;
+    aspect-ratio: 16 / 9;
+    max-height: 40vh;
+  }
+  
+  /* Better fullscreen on mobile */
+  .video-player:fullscreen {
+    max-height: 100vh;
+    border-radius: 0;
+  }
+  
+  .video-info-section {
+    padding: 12px 16px;
+  }
+  
+  .video-title {
+    font-size: 16px;
+    line-height: 1.4;
+    margin-bottom: 8px;
+  }
+  
+  .video-meta-row {
+    gap: 12px;
+    padding-bottom: 12px;
+  }
+  
+  .channel-info-section {
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+  
+  .channel-avatar-wrapper {
+    width: 40px;
+    height: 40px;
+  }
+  
+  .channel-name-large {
+    font-size: 14px;
+  }
+  
+  .subscriber-count-large {
+    font-size: 11px;
+  }
+  
+  .video-actions-toolbar {
+    gap: 6px;
+    justify-content: flex-start;
+    overflow-x: auto;
+    padding-bottom: 8px;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+  }
+  
+  .video-actions-toolbar::-webkit-scrollbar {
+    display: none;
+  }
+  
+  .action-btn {
+    padding: 6px 12px;
+    font-size: 12px;
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
+  
+  .like-dislike-group .action-btn {
+    padding: 6px 10px;
+  }
+  
+  .video-description-box {
+    padding: 12px;
+    margin-top: 12px;
+  }
+  
+  .video-description-stats {
+    font-size: 13px;
+  }
+  
+  .video-description-text {
+    font-size: 13px;
+  }
+  
+  /* Better controls visibility on mobile */
+  .center-play-button {
+    width: 60px;
+    height: 60px;
+  }
+  
+  .center-play-button svg {
+    width: 28px;
+    height: 28px;
+  }
+  
+  /* Larger touch targets for mobile controls */
+  .controls-bottom-section {
+    padding: 8px 10px 10px 10px;
+  }
+  
+  .controls-bottom-row {
+    gap: 4px;
+  }
+  
+  .controls-left-group {
+    gap: 2px;
+  }
+  
+  .controls-right-group {
+    gap: 2px;
+  }
+  
+  .video-control-btn {
+    padding: 10px;
+    min-width: 40px;
+    min-height: 40px;
+  }
+  
+  .time-display-overlay {
+    font-size: 11px;
+  }
+  
+  .volume-control-group {
+    display: none; /* Hide volume on mobile - use device controls */
+  }
+  
+  /* Suggested videos grid on mobile */
+  .suggested-videos {
+    padding: 0 12px;
+    margin-top: 16px;
+  }
+  
+  .suggested-videos-header {
+    padding: 0;
+  }
+  
+  .suggested-filter-btn {
+    padding: 6px 10px;
+    font-size: 12px;
+  }
+}
+
+@media (max-width: 480px) {
+  .video-player {
+    max-height: 35vh;
+  }
+  
+  .video-info-section {
+    padding: 10px 12px;
+  }
+  
+  .video-title {
+    font-size: 15px;
+  }
+  
+  .channel-avatar-wrapper {
+    width: 36px;
+    height: 36px;
+  }
+  
+  .action-btn {
+    padding: 5px 10px;
+    font-size: 11px;
+  }
+  
+  .action-btn span {
+    display: none; /* Hide text, show only icons on very small screens */
+  }
+  
+  .like-dislike-group .action-btn span {
+    display: inline; /* Keep like count visible */
+  }
+  
+  .controls-bottom-row {
+    flex-wrap: nowrap;
+    justify-content: space-between;
+  }
+  
+  .video-control-btn {
+    padding: 8px;
+    min-width: 36px;
+    min-height: 36px;
+  }
+  
+  .speed-control {
+    display: none; /* Hide speed on very small screens */
+  }
+  
+  .time-display-overlay {
+    font-size: 10px;
+  }
+  
+  /* Skip indicator smaller on small screens */
+  .skip-indicator svg {
+    width: 24px;
+    height: 24px;
+  }
+  
+  .skip-indicator span {
+    font-size: 13px;
+  }
+}
+
+/* Landscape mode optimizations */
+@media (max-width: 968px) and (orientation: landscape) {
+  .video-player {
+    max-height: 80vh;
+    aspect-ratio: auto;
+    height: 80vh;
+  }
+  
+  .watch-content {
+    grid-template-columns: 1fr;
+  }
+  
+  .video-info-section {
+    display: none; /* Hide info in landscape to maximize video */
+  }
+  
+  .suggested-videos {
+    display: none;
+  }
+}
+
+/* Full screen video in landscape */
+@media (max-width: 968px) and (orientation: landscape) {
+  .video-player:fullscreen,
+  .video-player:-webkit-full-screen {
+    width: 100vw;
+    height: 100vh;
+    max-height: 100vh;
+  }
+}
+
+/* Touch-friendly progress bar */
+@media (hover: none) and (pointer: coarse) {
+  .video-progress-bar {
+    height: 8px;
+    cursor: pointer;
+  }
+  
+  .video-progress-bar::-webkit-slider-thumb {
+    width: 20px;
+    height: 20px;
+  }
+  
+  .video-progress-bar::-moz-range-thumb {
+    width: 20px;
+    height: 20px;
+  }
+  
+  /* Keep controls visible longer on touch devices */
+  .video-controls-overlay.visible {
+    opacity: 1 !important;
+  }
+}
