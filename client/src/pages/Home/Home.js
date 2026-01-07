@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useLocation, useParams, useNavigate, Link } from 'react-router-dom';
 import { FiPlay, FiPlus, FiZap, FiTarget, FiSmile, FiTv, FiCompass, FiFilm, FiVideo } from 'react-icons/fi';
-import { getVideos, getTrendingVideos, searchVideos, getTopCreators } from '../../utils/api';
+import { getVideos, getTrendingVideos, searchVideos, getTopCreators, getBannerVideo } from '../../utils/api';
 import { formatDuration } from '../../utils/helpers';
 import { getCategoryImagePath } from '../../utils/categoryImages';
 import './Home.css';
@@ -119,13 +119,32 @@ const Home = ({ mode }) => {
 
   const fetchFeaturedVideo = async () => {
     try {
-      const res = await withRetry(() => getTrendingVideos());
-      const trending = res.data.data || res.data;
+      // First try to get admin-selected banner video
+      const res = await withRetry(() => getBannerVideo());
+      const bannerVideo = res.data.data;
+      if (bannerVideo) {
+        setFeaturedVideo(bannerVideo);
+        return;
+      }
+      
+      // Fallback to trending videos
+      const trendingRes = await withRetry(() => getTrendingVideos());
+      const trending = trendingRes.data.data || trendingRes.data;
       if (trending && trending.length > 0) {
         setFeaturedVideo(trending[0]);
       }
     } catch (err) {
       console.error('Error fetching featured video:', err);
+      // Fallback to trending if banner API fails
+      try {
+        const trendingRes = await withRetry(() => getTrendingVideos());
+        const trending = trendingRes.data.data || trendingRes.data;
+        if (trending && trending.length > 0) {
+          setFeaturedVideo(trending[0]);
+        }
+      } catch (fallbackErr) {
+        console.error('Fallback also failed:', fallbackErr);
+      }
     }
   };
 

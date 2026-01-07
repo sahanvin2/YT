@@ -1,0 +1,38 @@
+{
+  "nvenc": {
+    "enabled": true,
+    "maxConcurrentStreams": 2,
+    "presets": {
+      "1440p": "p6",
+      "1080p": "p4",
+      "720p": "p3",
+      "480p": "p2",
+      "360p": "p1"
+    },
+    "crf": {
+      "1440p": 20,
+      "1080p": 22,
+      "720p": 23,
+      "480p": 24,
+      "360p": 25
+    },
+    "pixelFormat": "yuv420p",
+    "profile": "high",
+    "level": "4.1",
+    "rateControl": "vbr",
+    "spatialAQ": true,
+    "temporalAQ": true,
+    "twoPass": false
+  },
+  "hls": {
+    "segmentDuration": 4,
+    "segmentType": "mpegts",
+    "audioSampleRate": 48000,
+    "audioChannels": 2
+  },
+  "processing": {
+    "parallelEncoding": true,
+    "maxParallelStreams": 2,
+    "fallbackToCPU": true
+  }
+}

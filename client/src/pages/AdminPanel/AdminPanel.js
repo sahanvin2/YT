@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { FiUsers, FiShield, FiVideo, FiEdit, FiTrash2, FiUserPlus, FiUserMinus, FiSearch, FiAlertCircle, FiBell, FiMail, FiSend } from 'react-icons/fi';
+import { FiUsers, FiShield, FiVideo, FiEdit, FiTrash2, FiUserPlus, FiUserMinus, FiSearch, FiAlertCircle, FiBell, FiMail, FiSend, FiSettings, FiStar, FiImage } from 'react-icons/fi';
 import { useAuth } from '../../context/AuthContext';
 import api from '../../config/api';
 import './AdminPanel.css';
@@ -42,6 +42,13 @@ const AdminPanel = () => {
   const [selectedEmailUsers, setSelectedEmailUsers] = useState([]);
   const [sendingEmail, setSendingEmail] = useState(false);
   const [emailHealth, setEmailHealth] = useState(null);
+  
+  // Settings state
+  const [bannerVideo, setBannerVideo] = useState(null);
+  const [bannerVideoSearch, setBannerVideoSearch] = useState('');
+  const [bannerSearchResults, setBannerSearchResults] = useState([]);
+  const [searchingVideos, setSearchingVideos] = useState(false);
+  const [savingBanner, setSavingBanner] = useState(false);
 
   // Check if user is admin
   useEffect(() => {
@@ -84,6 +91,16 @@ const AdminPanel = () => {
         }
         const usersRes = await api.get('/admin/email/users');
         setEmailUsers(usersRes.data.data || []);
+      } else if (activeTab === 'settings') {
+        // Fetch current banner video setting
+        try {
+          const bannerRes = await api.get('/videos/banner');
+          if (bannerRes.data.success && bannerRes.data.data) {
+            setBannerVideo(bannerRes.data.data);
+          }
+        } catch (err) {
+          console.error('Error fetching banner video:', err);
+        }
       }
     } catch (err) {
       setError(err.response?.data?.message || 'Failed to fetch data');
@@ -332,6 +349,12 @@ const AdminPanel = () => {
         </button>
         {isMasterAdmin && (
           <>
+            <button 
+              className={`admin-tab ${activeTab === 'settings' ? 'active' : ''}`}
+              onClick={() => setActiveTab('settings')}
+            >
+              <FiSettings /> Site Settings
+            </button>
             <button 
               className={`admin-tab ${activeTab === 'notifications' ? 'active' : ''}`}
               onClick={() => setActiveTab('notifications')}
@@ -667,6 +690,143 @@ const AdminPanel = () => {
                   <FiSend /> {sendingNotification ? 'Sending...' : 'Send Notification'}
                 </button>
               </form>
+            </div>
+          )}
+
+          {activeTab === 'settings' && isMasterAdmin && (
+            <div className="settings-form-container">
+              <h2><FiImage /> Banner Video Settings</h2>
+              <p className="settings-description">
+                Select a video to feature as the banner on the homepage
+              </p>
+
+              {/* Current Banner Video */}
+              {bannerVideo && (
+                <div className="current-banner-video">
+                  <h3>Current Banner Video</h3>
+                  <div className="banner-preview">
+                    <img 
+                      src={bannerVideo.thumbnailUrl || bannerVideo.thumbnail} 
+                      alt={bannerVideo.title}
+                      className="banner-preview-thumbnail"
+                    />
+                    <div className="banner-preview-info">
+                      <h4>{bannerVideo.title}</h4>
+                      <p>{bannerVideo.views?.toLocaleString() || 0} views</p>
+                      <button 
+                        className="clear-banner-btn"
+                        onClick={async () => {
+                          if (!window.confirm('Clear banner video? Homepage will show trending video instead.')) return;
+                          setSavingBanner(true);
+                          try {
+                            await api.delete('/admin/settings/banner-video');
+                            setBannerVideo(null);
+                            setSuccess('Banner video cleared');
+                            setTimeout(() => setSuccess(''), 3000);
+                          } catch (err) {
+                            setError(err.response?.data?.message || 'Failed to clear banner');
+                            setTimeout(() => setError(''), 3000);
+                          } finally {
+                            setSavingBanner(false);
+                          }
+                        }}
+                        disabled={savingBanner}
+                      >
+                        <FiTrash2 /> Clear Banner
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Search for Videos */}
+              <div className="banner-search-section">
+                <h3>Search Videos to Set as Banner</h3>
+                <div className="banner-search-input">
+                  <FiSearch />
+                  <input
+                    type="text"
+                    placeholder="Search videos by title..."
+                    value={bannerVideoSearch}
+                    onChange={(e) => setBannerVideoSearch(e.target.value)}
+                    onKeyDown={async (e) => {
+                      if (e.key === 'Enter' && bannerVideoSearch.trim()) {
+                        setSearchingVideos(true);
+                        try {
+                          const res = await api.get(`/videos/search?q=${encodeURIComponent(bannerVideoSearch)}&limit=10`);
+                          setBannerSearchResults(res.data.data || []);
+                        } catch (err) {
+                          setError('Search failed');
+                          setTimeout(() => setError(''), 3000);
+                        } finally {
+                          setSearchingVideos(false);
+                        }
+                      }
+                    }}
+                  />
+                  <button
+                    className="search-btn"
+                    onClick={async () => {
+                      if (!bannerVideoSearch.trim()) return;
+                      setSearchingVideos(true);
+                      try {
+                        const res = await api.get(`/videos/search?q=${encodeURIComponent(bannerVideoSearch)}&limit=10`);
+                        setBannerSearchResults(res.data.data || []);
+                      } catch (err) {
+                        setError('Search failed');
+                        setTimeout(() => setError(''), 3000);
+                      } finally {
+                        setSearchingVideos(false);
+                      }
+                    }}
+                    disabled={searchingVideos}
+                  >
+                    {searchingVideos ? 'Searching...' : 'Search'}
+                  </button>
+                </div>
+
+                {/* Search Results */}
+                {bannerSearchResults.length > 0 && (
+                  <div className="banner-search-results">
+                    {bannerSearchResults.map(video => (
+                      <div key={video._id} className="banner-search-item">
+                        <img 
+                          src={video.thumbnailUrl || video.thumbnail} 
+                          alt={video.title}
+                          className="search-item-thumbnail"
+                        />
+                        <div className="search-item-info">
+                          <h4>{video.title}</h4>
+                          <p>{video.views?.toLocaleString() || 0} views</p>
+                        </div>
+                        <button
+                          className="set-banner-btn"
+                          onClick={async () => {
+                            if (!window.confirm(`Set "${video.title}" as banner video?`)) return;
+                            setSavingBanner(true);
+                            try {
+                              await api.put('/admin/settings/banner-video', { videoId: video._id });
+                              setBannerVideo(video);
+                              setBannerSearchResults([]);
+                              setBannerVideoSearch('');
+                              setSuccess('Banner video updated!');
+                              setTimeout(() => setSuccess(''), 3000);
+                            } catch (err) {
+                              setError(err.response?.data?.message || 'Failed to set banner');
+                              setTimeout(() => setError(''), 3000);
+                            } finally {
+                              setSavingBanner(false);
+                            }
+                          }}
+                          disabled={savingBanner}
+                        >
+                          <FiStar /> Set as Banner
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
             </div>
           )}
 

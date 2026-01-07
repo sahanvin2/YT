@@ -44,6 +44,13 @@ export const getSearchSuggestions = (query, limit = 5) => api.get(`${API_URL}/vi
 export const getTrendingVideos = () => api.get(`${API_URL}/videos/trending`);
 export const getTopCreators = (params) => api.get(`${API_URL}/videos/creators`, { params });
 export const getDownloadUrl = (id, quality = 'orig') => api.get(`${API_URL}/videos/${id}/download?quality=${quality}`);
+export const getBannerVideo = () => api.get(`${API_URL}/videos/banner`);
+
+// Admin Settings
+export const getAdminSettings = () => api.get(`${API_URL}/admin/settings`);
+export const setBannerVideo = (videoId) => api.put(`${API_URL}/admin/settings/banner-video`, { videoId });
+export const clearBannerVideo = () => api.delete(`${API_URL}/admin/settings/banner-video`);
+export const setMaintenanceMode = (enabled, message) => api.put(`${API_URL}/admin/settings/maintenance`, { enabled, message });
 
 // Processing
 export const getProcessingStatus = (id) => api.get(`${API_URL}/processing/${id}/status`);

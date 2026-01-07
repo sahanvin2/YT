@@ -20,6 +20,8 @@ const {
   downloadVideoProxy
 } = require('../controllers/videoController');
 const { protect, optionalAuth, requireUploadAdmin } = require('../middleware/auth');
+const SiteSettings = require('../models/SiteSettings');
+const Video = require('../models/Video');
 
 const router = express.Router();
 
@@ -45,6 +47,46 @@ router.get('/search', searchVideos);
 router.get('/search/suggestions', getSearchSuggestions);
 router.get('/trending', getTrendingVideos);
 router.get('/creators', getTopCreators);
+
+// Get banner video (public - for homepage)
+router.get('/banner', async (req, res) => {
+  try {
+    // First check if admin has set a specific banner video
+    const bannerVideoId = await SiteSettings.getSetting('banner_video');
+    
+    if (bannerVideoId) {
+      const video = await Video.findById(bannerVideoId)
+        .populate('user', 'username avatar channelName subscriberCount')
+        .select('title description thumbnailUrl views likes duration createdAt category');
+      
+      if (video) {
+        return res.status(200).json({
+          success: true,
+          data: video,
+          source: 'admin_selected'
+        });
+      }
+    }
+    
+    // Fallback to most viewed/trending video
+    const trendingVideo = await Video.findOne({ status: 'ready' })
+      .sort({ views: -1, createdAt: -1 })
+      .populate('user', 'username avatar channelName subscriberCount')
+      .select('title description thumbnailUrl views likes duration createdAt category');
+    
+    res.status(200).json({
+      success: true,
+      data: trendingVideo,
+      source: 'trending'
+    });
+  } catch (error) {
+    console.error('Get banner video error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to get banner video'
+    });
+  }
+});
 router.get('/:id/stream', streamVideo);
 router.get('/:id/download', getDownloadUrl);
 router.get('/:id/download-file', downloadVideoProxy);

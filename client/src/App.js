@@ -30,6 +30,7 @@ const Clips = lazy(() => import('./pages/Library/Clips'));
 const Subscriptions = lazy(() => import('./pages/Library/Subscriptions'));
 const AdminPanel = lazy(() => import('./pages/AdminPanel/AdminPanel'));
 const Notifications = lazy(() => import('./pages/Notifications/Notifications'));
+const Maintenance = lazy(() => import('./pages/Maintenance/Maintenance'));
 
 // Loading component for Suspense
 const PageLoader = () => <LoadingAnimation message="Loading amazing content" />;
@@ -145,6 +146,7 @@ function App() {
                     <Route path="/profile/edit" element={<ProfileEdit />} />
                     <Route path="/admin" element={<AdminPanel />} />
                     <Route path="/notifications" element={<Notifications />} />
+                    <Route path="/maintenance" element={<Maintenance />} />
                   </Routes>
                   </Suspense>
                 </main>
